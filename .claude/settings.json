@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "shell": "bash",
+            "timeout": 10,
+            "statusMessage": "Checking handoff docs",
+            "command": "s=$(git status --porcelain 2>/dev/null); echo \"$s\" | grep -qE '(index\\.html|styles\\.css|app\\.js)$' && ! echo \"$s\" | grep -qE '(PROJECT_MEMORY\\.md|NOTES\\.md)$' && printf '%s' '{\"systemMessage\":\"Reminder: source files (index.html/styles.css/app.js) changed but PROJECT_MEMORY.md / NOTES.md were not updated - refresh the handoff docs (status + any new gotcha) before wrapping up.\"}' || true"
+          }
+        ]
+      }
+    ]
+  }
+}

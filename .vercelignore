@@ -16,7 +16,11 @@ debug.log
 # Internal planning/harness docs — not for public hosting
 CLAUDE.md
 PROJECT_MEMORY.md
+NOTES.md
 PRODUCT_SPEC.md
 DESIGN.md
 PLATFORM_ROADMAP.md
 README.md
+
+# Claude Code config (hooks) — internal, not for public hosting
+.claude

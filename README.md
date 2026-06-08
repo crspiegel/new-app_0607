@@ -5,8 +5,9 @@ Adventures). Vanilla HTML/CSS/JS served by Vite, with Playwright smoke tests.
 
 ## Where to start
 
-- **`CLAUDE.md`** — entry point: document map, commands, key decisions, working protocol.
-- **`PROJECT_MEMORY.md`** — current status, backlog, and open questions (read when resuming).
+- **`CLAUDE.md`** — entry point / document map (start here).
+- **`PROJECT_MEMORY.md`** — current status, workflow, backlog, open questions (read when resuming).
+- **`NOTES.md`** — engineering gotchas & past mistakes to avoid.
 - **`PRODUCT_SPEC.md`** / **`DESIGN.md`** — product/build spec and visual direction.
 - **`PLATFORM_ROADMAP.md`** — long-term login/admin/Supabase/app-packaging direction.
 

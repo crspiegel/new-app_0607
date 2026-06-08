@@ -1,109 +1,97 @@
-# Project Memory
+# Project Memory — Resume State
 
-Use this file first when resuming after a reboot, VS Code restart, or a new Claude Code session.
+**Read this first when starting a new session.** It captures where we are, how we work, and
+what's next, so any new session can continue without losing prior context.
+(Document map → `CLAUDE.md`. Engineering gotchas → `NOTES.md`.)
 
-## Project Snapshot
+## Snapshot
 
-- Project: kindergarten English learning static SPA prototype.
-- Short-term goal: finish the current static SPA prototype before any Next.js/Supabase rebuild.
+- Kindergarten English learning **static SPA** prototype (Cambridge Reading Adventures).
+- Stack: HTML5 + CSS3 + Vanilla JS, served by Vite (dev only), Playwright smoke tests.
 - Core files: `index.html`, `styles.css`, `app.js`.
-- Supporting docs: `PRODUCT_SPEC.md` (product/build spec), `DESIGN.md` (visual), `PLATFORM_ROADMAP.md` (long-term platform).
+- Supporting docs: `PRODUCT_SPEC.md`, `DESIGN.md`, `PLATFORM_ROADMAP.md`, `NOTES.md`.
+- The later Next.js/Supabase/Capacitor rebuild is out of scope for now (`PLATFORM_ROADMAP.md`).
 
-## Source Of Truth
+## Current phase: DESIGN ITERATION (live for client review)
 
-See `CLAUDE.md` for the full document map and priority order — it is the auto-loaded entry
-point. This file (`PROJECT_MEMORY.md`) holds the live working state: current decisions,
-status, backlog, and open questions.
+We are polishing the visual design per the user's requests — one change at a time — and
+deploying for client review. The app is **live**: https://new-app0607.vercel.app
 
-Current user decisions override older document text. In particular, any `Sun-Sat` or 7-column calendar requirement is overridden by the current `Mon-Fri` 5-column calendar decision.
+### How we work in this phase
 
-## Current Operating Protocol
+1. Make the requested change in `index.html` / `styles.css` / `app.js`.
+2. Verify locally: `npx prettier --write` the edited files → `npm.cmd run check`; for visual
+   changes, screenshot via Playwright (local static server) and check computed values.
+3. Report changed files + verification. **Do NOT commit or deploy unless the user asks.**
+4. When asked to commit/deploy: `npm.cmd run qa` → commit → `git push` (Vercel auto-deploys).
+   Then verify the live site.
 
-- Plan-first workflow is active.
-- Non-trivial user requests should be designed in Claude Code Plan mode and approved before implementation.
-- Implementation proceeds only after scope, priority, risks, and verification are clear.
-- Report changed files, verification results, and remaining issues after each change.
-- Update this file briefly after meaningful planning, implementation, or verification changes.
+- User preference: work locally; commit & deploy only on request. Keep approved visuals exactly
+  as-is unless a change is requested.
+- Small, specific design tweaks → just execute + verify. Non-trivial/architectural work →
+  use Plan mode first.
 
-## Confirmed Decisions
+## Infrastructure
 
-- Short-term direction: `A`, continue and complete the current static SPA.
-- Calendar layout: `Mon-Fri` 5-column learning calendar only.
-- Weekend columns should not be shown.
-- Content URLs are not ready yet.
-- Use sample Vimeo embed video URLs for modal/player implementation.
-- Default verification command: `npm.cmd run qa`.
-- PowerShell may block `npm`; use `npm.cmd`.
+- **GitHub:** https://github.com/crspiegel/new-app_0607 (public, branch `master`, remote `origin`).
+- **Vercel:** project `new-app_0607`, connected to the GitHub repo → `git push` = auto production
+  deploy. **Static, no build** (`vercel.json` + `.vercelignore`; see `NOTES.md` for why no Vite build).
+- **Accounts:** GitHub + Vercel are **`crspiegel` / crspiegel@gmail.com** (NOT any `wechange2023*`
+  account). `git push` works (gh is the credential helper via `gh auth setup-git`).
 
-## Current Implementation Status
+## Design changes done so far
 
-- Main page exists.
-- Level 1-4 selection works.
-- March-December month selection works.
-- Hash routing works:
-  - `#months/Level%201`
-  - `#content/Level%201/March`
-- Current content screen is still a temporary `Book A/B x 2 weeks x Mon-Fri` board.
-- Required `Mon-Fri` monthly learning calendar is implemented as a separate V3 candidate, but it is not yet the default content route.
-- `contentData.js`, `calendarData.js`, and `modal.js` do not exist yet.
-- Vimeo/video modal is not implemented yet.
-- `contentScreenV2` still exists as a duplicate/alternate screen and needs a decision.
-- `contentScreenV3` has been added as a separate design candidate at `#content-v3/Level%201/March`.
-- `contentScreenV2` remains preserved and available at `#content-v2/Level%201/March`.
-- `contentScreenV3` is now a weekday-only learning board: 4 learning weeks x `Mon-Fri` buttons, with no date numbers.
-- V3 buttons use future-ready attributes for modal playback: `data-content-type`, `data-week`, and `data-day`.
+- **Repo hygiene (early):** docs consolidated 9→6, dead code removed, git initialized, deployed.
+- **Header:** level icons 70×50, radius 24, numbers Sniglet 22px; `scrollbar-gutter: stable`
+  (consistent cross-page alignment); nav drops to its own centered row at ≤1023px.
+- **Month-select page:** labels show "March" (removed "MONTH"); per-level theme color aligned to
+  each level's own color (L1 yellow / L2 red / L3 blue / L4 purple); book-band labels (e.g.
+  "Pink A/B, Red, Yellow") under the level chip; box numbers Concert One 52px; box radius 39px.
+- **Content (month detail) page:** title "March Reading Plan" matches the main section title
+  (Nunito 900 / 33px); background changed from solid green to a **light per-level tint**
+  (L1 ivory `#fff3cc`, L2 `#ffe8e8`, L3 `#e8f6ff`, L4 `#f4e3ff`), with text colors adjusted
+  for readability (scoped to `#contentScreen`).
+- **Main page section titles:** Nunito 900 / 33px; "Choose Your LEVEL" capitalized.
 
-## Harness / Verification
+## Confirmed product decisions
 
-Harness has been added.
+- Continue/complete the static SPA (no frontend framework yet).
+- Calendar: **Mon-Fri 5-column** only; no weekend columns. (Overrides any Sun-Sat/7-col text.)
+- English UI, no italics, child-friendly, touch targets ≥56px.
+- Content URLs not ready → use sample Vimeo embeds when wiring modals.
+- Default verification: `npm.cmd run qa`. On Windows PowerShell use `npm.cmd`.
 
-- `npm.cmd run dev`: run Vite local server.
-- `npm.cmd run check:assets`: verify asset path case.
-- `npm.cmd run lint`: run ESLint.
-- `npm.cmd run format:check`: run Prettier check.
-- `npm.cmd run test:e2e`: run Playwright smoke tests.
-- `npm.cmd run qa`: run all checks and browser smoke tests.
+## Implementation status
 
-Last known status:
+- Main page, Level 1-4 selection, March-December month selection, and hash routing all work
+  (`#months/Level%201`, `#content/Level%201/March`).
+- Three content-screen variants exist:
+  - **V1 `#content/...`** — default; temporary `Book A/B × 2 weeks × Mon-Fri` board. Design
+    changes target this (and shared `.content-v2-*` classes).
+  - **V2 `#content-v2/...`** — alternate, preserved (kept on the green styling).
+  - **V3 `#content-v3/...`** — Mon-Fri weekday-board candidate; uses `data-content-type`,
+    `data-week`, `data-day` for future modal playback.
+- Not built yet: `contentData.js`, `calendarData.js`, `modal.js`, the Vimeo/video modal.
 
-- `npm.cmd run check`: passed.
-- `npm.cmd run test:e2e`: passed.
-- `npm.cmd run qa`: passed.
-- Documentation alignment pass completed: current source-of-truth order and Mon-Fri override notices were added to planning/reference docs.
+## Backlog (feature work, after design)
 
-## Active Backlog
+1. Decide whether V3 (Mon-Fri calendar) should replace the default `#content/...` route.
+2. Add `contentData.js` (sample Vimeo embeds), `calendarData.js` (Mon-Fri events), `modal.js`.
+3. Wire top content buttons + calendar buttons to sample Vimeo modal playback.
+4. Extend Playwright tests for modal open/close behavior.
+5. Responsive + accessibility QA pass.
 
-1. Review `contentScreenV3` and decide whether it should become the default content screen.
-2. Add `contentData.js` with sample Vimeo embed data.
-3. Add `calendarData.js` with Mon-Fri sample learning events.
-4. Add `modal.js` for Vimeo iframe modal behavior.
-5. Connect top content buttons to sample Vimeo modal playback.
-6. Connect calendar weekday/activity buttons to sample Vimeo modal playback.
-7. Extend Playwright tests for modal open/close behavior.
-8. Run responsive and accessibility QA.
-9. Update handoff notes after calendar/modal implementation.
+## Open questions
 
-## Next Implementation Task
-
-Recommended next implementation ticket:
-
-- Review `contentScreenV3` at `#content-v3/Level%201/March`.
-- Decide whether V3 should replace the default `#content/...` route.
-- Then connect V3 buttons to sample Vimeo modal playback using data files.
-
-## Open Questions
-
-- Should `contentScreenV2` be deleted, or kept as an archived/reference section?
-- Should sample Vimeo use one video for all buttons, or different sample URLs by content type?
-- Should Story use Vimeo only for now, or include an E-book placeholder?
-- Should Level 2-4 reuse Level 1 sample data until real content is ready?
+- Delete `contentScreenV2`, or keep it as an archived/reference section?
+- One sample Vimeo for all buttons, or different URLs per content type?
+- Story: Vimeo only for now, or include an E-book placeholder?
+- Levels 2-4 reuse Level 1 sample data until real content is ready?
 - Should V3 become the default `#content/...` route after client review?
 
-## Session Resume Checklist
+## Resume checklist
 
-1. Read this file.
-2. Read `README.md` for commands.
-3. Read `PRODUCT_SPEC.md` and `DESIGN.md` for product/design constraints.
-4. Run `npm.cmd run check` if files changed since last session.
-5. Before implementation, design non-trivial requests in Plan mode (Plan-first workflow).
-6. After implementation, run `npm.cmd run qa` unless the plan scopes verification differently.
+1. Read this file (status + workflow), then `CLAUDE.md` (doc map) and `NOTES.md` (gotchas).
+2. Skim `PRODUCT_SPEC.md` + `DESIGN.md` for product/visual constraints relevant to the task.
+3. Design phase: make the change locally + verify; commit/deploy only on request.
+4. Run `npm.cmd run qa` before committing; `git push` auto-deploys to production.
