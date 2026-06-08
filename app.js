@@ -16,6 +16,13 @@ const months = [
   "December",
 ];
 
+const levelStrands = {
+  "Level 1": "Pink A/B, Red, Yellow",
+  "Level 2": "Blue, Green, Orange",
+  "Level 3": "Turquoise, Purple, Gold",
+  "Level 4": "White and Adventure Strands",
+};
+
 const lessonTypes = [
   "Opening Song",
   "Story",
@@ -83,6 +90,7 @@ const monthGrid = document.querySelector("#monthGrid");
 const lessonGrid = document.querySelector("#lessonGrid");
 const lessonGridV2 = document.querySelector("#lessonGridV2");
 const monthLevelTag = document.querySelector("#monthLevelTag");
+const monthStrandTag = document.querySelector("#monthStrandTag");
 const contentPathTag = document.querySelector("#contentPathTag");
 const contentTitle = document.querySelector("#contentTitle");
 const contentMainMonthNumber = document.querySelector(
@@ -116,6 +124,7 @@ function levelToThemeClass(level) {
 }
 
 function applyLevelTheme() {
+  monthStrandTag.textContent = levelStrands[state.level] || "";
   [
     screens.months,
     screens.content,
@@ -189,7 +198,7 @@ function renderMonths() {
     const button = document.createElement("button");
     button.className = "month-button";
     button.type = "button";
-    button.innerHTML = `<span>MONTH ${month}</span><strong>${index + 3}</strong>`;
+    button.innerHTML = `<span>${month}</span><strong>${index + 3}</strong>`;
     button.addEventListener("click", () => {
       state.month = month;
       updateContentMonthNumber();

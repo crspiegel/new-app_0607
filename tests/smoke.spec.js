@@ -18,7 +18,7 @@ test("main level-to-month-to-content flow renders", async ({ page }) => {
     page.getByRole("heading", { name: "Choose a Month" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: /MONTH March/i }).click();
+  await page.getByRole("button", { name: /March/i }).click();
   await expect(page).toHaveURL(/#content\/Level%201\/March$/);
   await expect(
     page.getByRole("heading", { name: "March Reading Plan" }),

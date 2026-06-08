@@ -40,6 +40,9 @@
 html {
   font-style: normal !important;
   font-synthesis: none;
+  /* Always reserve scrollbar space so header logo/nav/icons stay in the
+     exact same position across pages, whether or not a page scrolls. */
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -88,13 +91,13 @@ button {
   min-width: 0;
   align-items: center;
   justify-content: center;
-  gap: 26px;
+  gap: 18px;
 }
 
 .top-nav-link {
   display: grid;
-  width: 58px;
-  min-width: 58px;
+  width: 70px;
+  min-width: 70px;
   min-height: 62px;
   align-content: center;
   justify-items: center;
@@ -119,14 +122,14 @@ button {
 .nav-book {
   position: relative;
   display: grid;
-  width: 50px;
+  width: 70px;
   height: 50px;
   align-content: center;
   justify-items: center;
   gap: 0;
   place-items: center;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: 24px;
   box-shadow: 0 5px 0 rgba(60, 60, 60, 0.16);
   color: var(--canvas);
   transform: none;
@@ -139,8 +142,8 @@ button {
   position: relative;
   z-index: 1;
   color: var(--canvas);
-  font-family: var(--font-nav);
-  font-size: 19px;
+  font-family: var(--font-sniglet);
+  font-size: 22px;
   font-weight: 700;
   line-height: 1;
 }
@@ -289,31 +292,31 @@ main {
 
 #contentScreen.screen-active {
   min-height: calc(100vh - 185px);
-  background: var(--owl-green);
+  background: var(--level-accent-soft, var(--canvas));
 }
 
 .level-theme-1 {
+  --level-accent: var(--sunny-yellow);
+  --level-accent-shadow: var(--sunny-yellow-shadow);
+  --level-accent-soft: #fff3cc;
+}
+
+.level-theme-2 {
   --level-accent: var(--alert-red);
   --level-accent-shadow: var(--alert-red-shadow);
   --level-accent-soft: #ffe8e8;
 }
 
-.level-theme-2 {
+.level-theme-3 {
   --level-accent: var(--macaw-blue);
   --level-accent-shadow: var(--macaw-blue-shadow);
   --level-accent-soft: #e8f6ff;
 }
 
-.level-theme-3 {
+.level-theme-4 {
   --level-accent: var(--purple-accent);
   --level-accent-shadow: var(--purple-shadow);
   --level-accent-soft: #f4e3ff;
-}
-
-.level-theme-4 {
-  --level-accent: #b9793f;
-  --level-accent-shadow: #8a5527;
-  --level-accent-soft: #f6eadf;
 }
 
 .section-box {
@@ -965,6 +968,16 @@ p {
   color: var(--level-accent-shadow, var(--ink));
 }
 
+#monthScreen .month-strand {
+  display: block;
+  margin-top: 8px;
+  color: var(--level-accent-shadow, var(--muted-ink));
+  font-family: var(--font-nav);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
 #monthScreen .back-button {
   background: #f1f1f1;
   box-shadow: 0 4px 0 #d8d8d8;
@@ -979,7 +992,7 @@ p {
   padding: 28px 18px;
   background: var(--canvas);
   border: 2px solid var(--hairline);
-  border-radius: 22px;
+  border-radius: 39px;
   box-shadow:
     0 7px 0 var(--hairline-strong),
     0 12px 18px rgba(60, 60, 60, 0.08);
@@ -998,10 +1011,10 @@ p {
   align-self: center;
   margin-top: 8px;
   color: var(--level-accent-shadow, var(--ink));
-  font-family: var(--font-display);
-  font-size: 42px;
+  font-family: "Concert One", var(--font-display);
+  font-size: 52px;
   font-style: normal !important;
-  font-weight: 700;
+  font-weight: 400;
   line-height: 1;
 }
 
@@ -1063,6 +1076,32 @@ p {
   background: #f1f1f1;
   box-shadow: 0 4px 0 #d8d8d8;
   color: var(--muted-ink);
+}
+
+/* Month detail page: light per-level tinted background (replaces green).
+   Text colors flip to dark/themed so they stay readable on the light tint.
+   Scoped to #contentScreen so the V2 candidate page keeps its green styling. */
+#contentScreen .section-blue {
+  background: var(--level-accent-soft, var(--canvas));
+  color: var(--ink);
+}
+
+#contentScreen .content-v2-title-block h2 {
+  color: var(--ink);
+}
+
+#contentScreen .content-v2-level {
+  color: var(--level-accent-shadow, var(--muted-ink));
+}
+
+#contentScreen .content-v2-month-pill {
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--level-accent-shadow, var(--ink));
+}
+
+#contentScreen .content-v2-month-pill strong {
+  background: var(--level-accent, var(--macaw-blue));
+  color: var(--canvas);
 }
 
 .content-type:nth-child(1) {
@@ -1230,8 +1269,9 @@ p {
 
 .content-v2-title-block h2 {
   color: var(--canvas);
-  font-size: clamp(34px, 3.4vw, 54px);
-  line-height: 0.98;
+  font-family: "Nunito", var(--font-ui);
+  font-size: 33px;
+  font-weight: 900;
 }
 
 .content-v2-level {
@@ -1994,8 +2034,9 @@ p {
   }
 
   .nav-book {
-    width: 34px;
-    height: 38px;
+    width: 50px;
+    height: 36px;
+    border-radius: 17px;
   }
 
   .nav-book-number {
@@ -2046,6 +2087,26 @@ p {
   }
 }
 
+@media (max-width: 1023px) {
+  /* Tablet/mobile: move the level nav to its own centered row so the wider
+     icons never collide with the brand logo. */
+  .topbar {
+    flex-wrap: wrap;
+  }
+
+  .top-nav {
+    position: static;
+    left: auto;
+    order: 3;
+    width: 100%;
+    flex-basis: 100%;
+    margin: 8px 0 0;
+    transform: none;
+    gap: 16px;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 767px) {
   :root {
     --hero-height: 380px;
@@ -2088,14 +2149,15 @@ p {
   }
 
   .top-nav-link {
-    width: 52px;
-    min-width: 52px;
+    width: 50px;
+    min-width: 50px;
     min-height: 56px;
   }
 
   .nav-book {
-    width: 34px;
-    height: 38px;
+    width: 50px;
+    height: 36px;
+    border-radius: 17px;
   }
 
   .nav-book-number {
@@ -2224,10 +2286,6 @@ p {
   .content-v2-header {
     align-items: flex-start;
     margin-bottom: 24px;
-  }
-
-  .content-v2-title-block h2 {
-    font-size: 32px;
   }
 
   .content-v2-tabs,
