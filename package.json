@@ -1,0 +1,21 @@
+{
+  "name": "kindergarten-english-learning-spa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "check:assets": "node scripts/check-assets-case.mjs",
+    "lint": "eslint app.js",
+    "format:check": "prettier --check index.html styles.css app.js scripts tests *.md",
+    "check": "npm run check:assets && npm run lint && npm run format:check",
+    "test:e2e": "node scripts/run-playwright.mjs",
+    "qa": "npm run check && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.3.0",
+    "vite": "^5.4.0"
+  }
+}

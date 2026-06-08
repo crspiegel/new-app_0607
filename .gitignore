@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Test / build output
+test-results/
+playwright-report/
+playwright/.cache/
+dist/
+
+# Logs
+debug.log
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
