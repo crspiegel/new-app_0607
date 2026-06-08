@@ -7,20 +7,13 @@ Use this file first when resuming after a reboot, VS Code restart, or a new Clau
 - Project: kindergarten English learning static SPA prototype.
 - Short-term goal: finish the current static SPA prototype before any Next.js/Supabase rebuild.
 - Core files: `index.html`, `styles.css`, `app.js`.
-- Supporting docs: `AGENT.md`, `DESIGN.md`, `README.md`, `CODEX_BUILD_GUIDE.md`, `PRD_v1.0.md`.
-- Note: `PRD_v1.0.md` and `CODEX_BUILD_GUIDE.md` may contain encoding issues; prefer `AGENT.md`, `DESIGN.md`, and this file for current working direction.
+- Supporting docs: `PRODUCT_SPEC.md` (product/build spec), `DESIGN.md` (visual), `PLATFORM_ROADMAP.md` (long-term platform).
 
 ## Source Of Truth
 
-Use documents in this order for the current static SPA phase:
-
-1. `CLAUDE.md`: Claude Code auto-loaded entry point and quick orientation.
-2. `PROJECT_MEMORY.md`: session resume state, current decisions, next work.
-3. `README.md`: commands and verification.
-4. `AGENT.md`: current product scope, IA, implementation plan, acceptance criteria.
-5. `DESIGN.md`: visual direction.
-6. `PRD_v1.0.md`: original v1.0 reference only.
-7. `CODEX_BUILD_GUIDE.md`: long-term platform reference only.
+See `CLAUDE.md` for the full document map and priority order — it is the auto-loaded entry
+point. This file (`PROJECT_MEMORY.md`) holds the live working state: current decisions,
+status, backlog, and open questions.
 
 Current user decisions override older document text. In particular, any `Sun-Sat` or 7-column calendar requirement is overridden by the current `Mon-Fri` 5-column calendar decision.
 
@@ -110,7 +103,7 @@ Recommended next implementation ticket:
 
 1. Read this file.
 2. Read `README.md` for commands.
-3. Read `AGENT.md` and `DESIGN.md` for product/design constraints.
+3. Read `PRODUCT_SPEC.md` and `DESIGN.md` for product/design constraints.
 4. Run `npm.cmd run check` if files changed since last session.
 5. Before implementation, design non-trivial requests in Plan mode (Plan-first workflow).
 6. After implementation, run `npm.cmd run qa` unless the plan scopes verification differently.

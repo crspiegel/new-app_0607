@@ -1,39 +1,22 @@
-# AGENT.md
+# Product Spec — Kindergarten English Learning SPA
 
-## Current Working Priority
+This is the product and build reference for the kindergarten English learning web/app
+(Cambridge Reading Adventures): information architecture, navigation flow, content menus,
+main-page content, components, data model, implementation plan, and acceptance criteria.
 
-For the current phase, follow documents in this order:
-
-1. `CLAUDE.md` as the Claude Code auto-loaded entry point
-2. `PROJECT_MEMORY.md`
-3. `README.md`
-4. `AGENT.md`
-5. `DESIGN.md`
-6. `PRD_v1.0.md` as original v1.0 reference only
-7. `CODEX_BUILD_GUIDE.md` as long-term platform reference only
-
-Current user decisions override older document text. The active short-term goal is to complete the current static SPA prototype. The active calendar requirement is a `Mon-Fri` 5-column learning calendar. Older `Sun-Sat` or 7-column calendar references are not current.
+See `CLAUDE.md` for the document map, commands, working protocol, and key decisions — it is
+the auto-loaded entry point and the single source for those. Current user decisions override
+older text: the short-term goal is to complete the static SPA prototype, and the calendar is
+a **Mon-Fri 5-column** learning calendar (older Sun-Sat / 7-column references are not current).
 
 ## Project Context
 
-This project is a kindergarten English learning web/app for classroom use. The primary operator is the teacher, and the primary audience is children aged 5-7 watching on a TV, projector, tablet, or mobile device.
+This project is a kindergarten English learning web/app for classroom use. The primary
+operator is the teacher, and the primary audience is children aged 5-7 watching on a TV,
+projector, tablet, or mobile device.
 
-The current working direction is documented in `PROJECT_MEMORY.md`, `README.md`, this file, and `DESIGN.md`. `PRD_v1.0.md` remains the original planning source. `CODEX_BUILD_GUIDE.md` remains the long-term platform source for login, admin, Supabase, Vercel, and app packaging direction.
-
-Latest architecture note:
-
-- The product should be treated as a login-based learning platform, not only a static content site.
-- Web and Android/iOS app content must be managed from one Web admin page.
-- The preferred direction is a Web App plus hybrid mobile app packaging.
-- Admin, member, member group, content URL, and access-control requirements are defined in `CODEX_BUILD_GUIDE.md`.
-- These architecture notes are long-term direction and are not part of the current static SPA completion scope unless the user explicitly changes the short-term target.
-
-## Operating Protocol
-
-- Plan-first workflow is active.
-- Non-trivial user requests should be designed in Claude Code Plan mode and approved before implementation.
-- Implementation changes should report changed files, verification results, and remaining questions.
-- Default verification command after meaningful changes is `npm.cmd run qa`, unless the plan scopes verification differently.
+Longer-term architecture (login, members, admin, Supabase, Vercel, hybrid app packaging) is
+out of the current static-SPA scope and is documented in `PLATFORM_ROADMAP.md`.
 
 ## Product Goal
 
@@ -72,31 +55,11 @@ Target total page model from the PRD:
 - 40 monthly calendar pages
 - 5 content action types
 
-Implementation may use a single-page app pattern in HTML/CSS/Vanilla JS as long as the user-facing structure and navigation match the PRD.
-
-## Current Scope Boundary
-
-Do not implement or modify the website until the user explicitly asks for the next build step. Planning/documentation requests should only update planning or guidance documents.
-
-Allowed for planning/documentation work:
-
-- Read `PRD_v1.0.md`
-- Read `DESIGN.md`
-- Read and update `CODEX_BUILD_GUIDE.md`
-- Update planning documents when requested
-
-Not allowed during planning-only requests:
-
-- Modify `index.html`
-- Modify `styles.css`
-- Modify `app.js`
-- Add new runtime features
-- Refactor current implementation
-- Start a dev server unless explicitly requested later
+Implementation may use a single-page app pattern in HTML/CSS/Vanilla JS as long as the user-facing structure and navigation match this spec.
 
 ## Design Requirements
 
-Follow `DESIGN.md` first for visual direction, with these PRD constraints:
+Follow `DESIGN.md` first for visual direction, with these constraints:
 
 - No italic text anywhere.
 - Use large, readable labels.
@@ -177,6 +140,56 @@ Calendar requirement:
 - Date number plus learning event text/icon
 - Event colors map to content menu colors
 - Weekend columns are not shown.
+
+## Main Landing Page Content
+
+The main page introduces Cambridge Reading Adventures and provides Level 1-4 entry. Section
+order: Header → Hero → Level Selection → Program Intro → Key Features → Footer. Excluded from
+the main page: reading-band progression detail, the complete book list, and any monthly
+calendar or content-entry UI. (Absorbed from the former `MAIN_PAGE_CONTENT.md`; source PDF:
+`CRA _시안2_수정_220706.pdf`.)
+
+### Hero Section
+
+- Eyebrow: `Brighter Thinking Better Learning`
+- Title: `Cambridge Reading Adventures`
+- Subtitle: `A colorful leveled reading program that helps young English learners build confidence through stories, nonfiction, and guided classroom activities.`
+- Brand note: `Cambridge University Press`
+- Background: blue `#2b70c9`, ~420px desktop height; the hero image fills top and bottom and
+  slowly pans/zooms/floats to feel video-like. Primary image: `assets/cra-hero.jpg`.
+
+### Level Selection
+
+Title: `Choose Your Level`. Description: `Select a level to begin monthly lessons with songs,
+stories, chants, and reading activities.`
+
+| Button  | Subtitle          |
+| ------- | ----------------- |
+| Level 1 | Starter Readers   |
+| Level 2 | Growing Readers   |
+| Level 3 | Confident Readers |
+| Level 4 | Fluent Explorers  |
+
+The top navigation also exposes text-form Level 1-4 menus that link to the same flow.
+
+### Program Intro
+
+Title: `A Reading Journey for Every Young Learner`. Body: `Cambridge Reading Adventures is a
+leveled reading program designed to guide children from first words and simple sentence
+patterns to richer stories, nonfiction topics, and independent reading.` Image:
+`assets/cra-books.jpg`.
+
+### Key Features
+
+Title: `Why Cambridge Reading Adventures Works`. Image: `assets/cra-band-samples.jpg`.
+
+| Feature                | Copy                                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------- |
+| Leveled Reading Path   | Color bands make reading progression visible and easy to guide.                     |
+| Stories and Nonfiction | Learners meet illustrated stories, real-world topics, animals, places, and people.  |
+| Classroom Ready        | Short, structured reading supports vocabulary, listening, speaking, guided reading. |
+
+Language policy: user-facing UI is English; Korean explanations may accompany planning docs only.
 
 ## Content Menu System
 

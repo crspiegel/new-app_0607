@@ -20,11 +20,12 @@ Read these in order. Current user decisions override older document text.
 
 1. `CLAUDE.md` (this file) — auto-loaded entry point and quick orientation
 2. `PROJECT_MEMORY.md` — session-resume state, current decisions, next work, open questions
-3. `README.md` — commands and verification
-4. `AGENT.md` — product scope, information architecture, implementation plan, acceptance criteria
-5. `DESIGN.md` — visual direction
-6. `PRD_v1.0.md` — original v1.0 reference only
-7. `CODEX_BUILD_GUIDE.md` — long-term platform reference (login/admin/Supabase/Vercel/app packaging)
+3. `PRODUCT_SPEC.md` — product scope, IA, navigation, main-page content, components, data model, acceptance criteria
+4. `DESIGN.md` — visual direction
+5. `PLATFORM_ROADMAP.md` — long-term platform reference (login/admin/Supabase/Vercel/app packaging)
+
+(`README.md` is a short pointer to this file. Commands and verification live here under
+"Commands".)
 
 ## Commands
 
@@ -43,7 +44,7 @@ or `check`/`qa` will fail. Playwright browsers may need `npx playwright install`
 ## Key Decisions & Constraints
 
 - Calendar: **Mon-Fri 5-column** monthly learning calendar only. Older Sun-Sat / 7-column
-  references in `PRD_v1.0.md` and elsewhere are overridden.
+  references are overridden.
 - User-facing UI is in **English**. No italic text anywhere. Bright, child-friendly colors,
   large readable labels, touch targets >= 56px.
 - Content URLs are not finalized; use sample Vimeo embeds for modal/player work.
