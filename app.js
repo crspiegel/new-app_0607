@@ -153,10 +153,6 @@ function setHash(view) {
   window.location.hash = `content/${encodeURIComponent(state.level)}/${encodeURIComponent(state.month)}`;
 }
 
-function updateStatus() {
-  return undefined;
-}
-
 function updateContentMonthNumber() {
   const monthIndex = months.indexOf(state.month);
   contentMainMonthNumber.textContent =
@@ -197,7 +193,6 @@ function renderMonths() {
     button.addEventListener("click", () => {
       state.month = month;
       updateContentMonthNumber();
-      updateStatus();
       setHash("content");
       showScreen("content");
     });
@@ -311,7 +306,6 @@ document.querySelectorAll("[data-level]").forEach((button) => {
     state.month = "";
     monthLevelTag.textContent = state.level;
     applyLevelTheme();
-    updateStatus();
     setHash("months");
     showScreen("months");
   });
@@ -323,11 +317,9 @@ document.querySelectorAll("[data-view]").forEach((button) => {
     if (target === "home") {
       state.level = "";
       state.month = "";
-      updateStatus();
     }
     if (target === "months") {
       state.month = "";
-      updateStatus();
     }
     setHash(target);
     showScreen(target);
@@ -371,12 +363,10 @@ if (view === "months" && hashLevel) {
   state.level = decodeURIComponent(hashLevel);
   monthLevelTag.textContent = state.level;
   applyLevelTheme();
-  updateStatus();
   showScreen("months");
 }
 
 if (view === "overview") {
-  updateStatus();
   showScreen("overview");
 }
 
@@ -386,7 +376,6 @@ if (view === "content" && hashLevel && hashMonth) {
   monthLevelTag.textContent = state.level;
   updateContentMonthNumber();
   applyLevelTheme();
-  updateStatus();
   showScreen("content");
 }
 
@@ -396,7 +385,6 @@ if (view === "content-v2" && hashLevel && hashMonth) {
   monthLevelTag.textContent = state.level;
   updateContentV2Header();
   applyLevelTheme();
-  updateStatus();
   showScreen("contentV2");
 }
 
@@ -407,6 +395,5 @@ if (view === "content-v3" && hashLevel && hashMonth) {
   updateContentV3Header();
   renderCalendarV3();
   applyLevelTheme();
-  updateStatus();
   showScreen("contentV3");
 }
