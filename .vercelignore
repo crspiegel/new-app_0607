@@ -1,0 +1,22 @@
+# Only the static site (index.html, styles.css, app.js, assets/, vercel.json)
+# should be deployed. Everything below is dev tooling or internal docs.
+node_modules
+dist
+test-results
+playwright-report
+tests
+scripts
+package.json
+package-lock.json
+eslint.config.mjs
+playwright.config.mjs
+debug.log
+.gitignore
+
+# Internal planning/harness docs — not for public hosting
+CLAUDE.md
+PROJECT_MEMORY.md
+PRODUCT_SPEC.md
+DESIGN.md
+PLATFORM_ROADMAP.md
+README.md
