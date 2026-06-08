@@ -692,13 +692,15 @@ p {
 }
 
 .level-section h2 {
-  font-family: "Quicksand", var(--font-ui);
-  font-weight: 700;
+  font-family: "Nunito", var(--font-ui);
+  font-weight: 900;
+  font-size: 33px;
 }
 
 .intro-section h2 {
-  font-family: "Quicksand", var(--font-ui);
-  font-weight: 700;
+  font-family: "Nunito", var(--font-ui);
+  font-weight: 900;
+  font-size: 33px;
 }
 
 .feature-section-inner h2,
@@ -708,8 +710,9 @@ p {
 }
 
 .feature-section-inner h2 {
-  font-family: "Quicksand", var(--font-ui);
-  font-weight: 700;
+  font-family: "Nunito", var(--font-ui);
+  font-weight: 900;
+  font-size: 33px;
 }
 
 .level-section .section-heading p {
