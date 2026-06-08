@@ -20,9 +20,8 @@ test("main level-to-month-to-content flow renders", async ({ page }) => {
 
   await page.getByRole("button", { name: /March/i }).click();
   await expect(page).toHaveURL(/#content\/Level%201\/March$/);
-  await expect(
-    page.getByRole("heading", { name: "March Reading Plan" }),
-  ).toBeVisible();
+  await expect(page.locator("#contentLevelName")).toBeVisible();
+  await expect(page.locator("#contentLevelName")).toHaveText("Level 1");
   await expect(
     page.getByRole("button", { name: /Opening Song/i }).first(),
   ).toBeVisible();

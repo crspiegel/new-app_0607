@@ -1087,11 +1087,14 @@ p {
 }
 
 #contentScreen .content-v2-title-block h2 {
-  color: var(--ink);
+  font-family: "Baloo 2", var(--font-ui);
+  font-weight: 800;
+  color: var(--level-accent-shadow, var(--ink));
 }
 
+/* Level label under the title is hidden for now (to be redone separately later). */
 #contentScreen .content-v2-level {
-  color: var(--level-accent-shadow, var(--muted-ink));
+  display: none;
 }
 
 #contentScreen .content-v2-month-pill {
@@ -1102,6 +1105,74 @@ p {
 #contentScreen .content-v2-month-pill strong {
   background: var(--level-accent, var(--macaw-blue));
   color: var(--canvas);
+}
+
+/* Centered level + book-band banner at the top of the content page.
+   Text style matches the main "Start Reading" level box; color per level theme.
+   Trial: shown on the March page of each level only (pending review). */
+#contentScreen .content-level-banner {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin-bottom: 26px;
+  text-align: center;
+}
+
+#contentLevelName {
+  font-family: var(--font-sniglet);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.02;
+  color: var(--level-accent-shadow, var(--ink));
+}
+
+#contentLevelBand {
+  font-family: var(--font-nav);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--level-accent-shadow, var(--muted-ink));
+}
+
+/* Banner month pill: hidden by default; shown centered under the band on April. */
+#contentScreen .content-banner-month {
+  display: inline-flex;
+  margin-top: 8px;
+}
+
+/* Content page: title-block hidden — level + month show in the centered banner. */
+#contentScreen .content-v2-title-block {
+  display: none;
+}
+
+/* Content page: the nav row (Back/Next) sits just below the top header,
+   above the centered banner, with a small margin. */
+#contentScreen[data-month] .section-inner {
+  display: flex;
+  flex-direction: column;
+  padding-top: 20px;
+}
+
+#contentScreen[data-month] .content-main-header {
+  order: -1;
+  margin-bottom: 8px;
+}
+
+/* Month navigation buttons: Next styled like Back. Back is hidden on the first
+   month (March) and Next on the last (December); they keep their slot so the
+   remaining button stays in place. */
+#contentScreen .content-v2-next {
+  background: #f1f1f1;
+  box-shadow: 0 4px 0 #d8d8d8;
+  color: var(--muted-ink);
+}
+
+#contentScreen[data-month="March"] .content-v2-back {
+  visibility: hidden;
+}
+
+#contentScreen[data-month="December"] .content-v2-next {
+  visibility: hidden;
 }
 
 .content-type:nth-child(1) {

@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cherry+Bomb+One&family=Concert+One&family=Fredoka:wght@600;700&family=Inter:wght@600;700;800&family=Nunito:wght@500;700;800;900&family=Sniglet:wght@400;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&family=Cherry+Bomb+One&family=Concert+One&family=Fredoka:wght@600;700&family=Inter:wght@600;700;800&family=Nunito:wght@500;700;800;900&family=Sniglet:wght@400;800&display=swap"
       rel="stylesheet"
     />
     <link
@@ -373,6 +373,13 @@
         >
           <div class="section-box section-blue">
             <div class="section-inner">
+              <div class="content-level-banner">
+                <strong id="contentLevelName"></strong>
+                <span id="contentLevelBand"></span>
+                <span class="content-v2-month-pill content-banner-month"
+                  >Month <strong id="contentBannerMonthNumber"></strong
+                ></span>
+              </div>
               <div class="content-v2-header content-main-header">
                 <div class="content-v2-title-block">
                   <span class="content-v2-month-pill"
@@ -384,11 +391,18 @@
                   >
                 </div>
                 <button
-                  class="back-button content-v2-back"
+                  class="back-button content-v2-back content-nav-prev"
                   type="button"
-                  data-view="months"
+                  aria-label="Previous month"
                 >
                   Back
+                </button>
+                <button
+                  class="back-button content-v2-next content-nav-next"
+                  type="button"
+                  aria-label="Next month"
+                >
+                  Next
                 </button>
               </div>
 

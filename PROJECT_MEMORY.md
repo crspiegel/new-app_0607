@@ -47,10 +47,19 @@ deploying for client review. The app is **live**: https://new-app0607.vercel.app
 - **Month-select page:** labels show "March" (removed "MONTH"); per-level theme color aligned to
   each level's own color (L1 yellow / L2 red / L3 blue / L4 purple); book-band labels (e.g.
   "Pink A/B, Red, Yellow") under the level chip; box numbers Concert One 52px; box radius 39px.
-- **Content (month detail) page:** title "March Reading Plan" matches the main section title
-  (Nunito 900 / 33px); background changed from solid green to a **light per-level tint**
-  (L1 ivory `#fff3cc`, L2 `#ffe8e8`, L3 `#e8f6ff`, L4 `#f4e3ff`), with text colors adjusted
-  for readability (scoped to `#contentScreen`).
+- **Content (month detail) page** (V1 `#contentScreen`, all levels + all months):
+  - Background = a light per-level tint (L1 ivory `#fff3cc`, L2 `#ffe8e8`, L3 `#e8f6ff`,
+    L4 `#f4e3ff`); text uses the readable dark theme shade (`--level-accent-shadow`).
+  - **Centered top banner**: Level name (Sniglet 40px) + book band (Inter 16px) + Month pill,
+    all in the level's theme color. Matches the main "Start Reading" level-box text style.
+  - The "X Reading Plan" h2 title is **hidden** (the whole `.content-v2-title-block`); its font
+    trial had settled on Baloo 2 / 800 before it was hidden.
+  - **Month navigation**: a header row just below the topbar with **Back = previous month (left)**
+    and **Next = next month (right)**. Back hidden on March (first), Next hidden on December
+    (last) via `#contentScreen[data-month="..."]`. `app.js` sets `#contentScreen` `data-month`
+    (used for the layout + first/last logic) and `goToMonth(±1)` drives the buttons.
+  - ⚠ Back no longer returns to the month-select screen — to change level/month otherwise, use
+    the top-nav level icons (→ `#months`) or the brand logo (→ home).
 - **Main page section titles:** Nunito 900 / 33px; "Choose Your LEVEL" capitalized.
 
 ## Confirmed product decisions

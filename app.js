@@ -93,6 +93,11 @@ const monthLevelTag = document.querySelector("#monthLevelTag");
 const monthStrandTag = document.querySelector("#monthStrandTag");
 const contentPathTag = document.querySelector("#contentPathTag");
 const contentTitle = document.querySelector("#contentTitle");
+const contentLevelName = document.querySelector("#contentLevelName");
+const contentLevelBand = document.querySelector("#contentLevelBand");
+const contentBannerMonthNumber = document.querySelector(
+  "#contentBannerMonthNumber",
+);
 const contentMainMonthNumber = document.querySelector(
   "#contentMainMonthNumber",
 );
@@ -170,6 +175,22 @@ function updateContentMonthNumber() {
     ? `${state.month} Reading Plan`
     : "Reading Plan";
   contentPathTag.textContent = state.level || "Level";
+  screens.content.dataset.month = state.month;
+  contentLevelName.textContent = state.level;
+  contentLevelBand.textContent = levelStrands[state.level] || "";
+  contentBannerMonthNumber.textContent =
+    monthIndex >= 0 ? String(monthIndex + 3) : "";
+}
+
+function goToMonth(offset) {
+  const index = months.indexOf(state.month);
+  if (index < 0) return;
+  const next = index + offset;
+  if (next < 0 || next >= months.length) return;
+  state.month = months[next];
+  updateContentMonthNumber();
+  setHash("content");
+  showScreen("content");
 }
 
 function updateContentV2Header() {
@@ -333,6 +354,14 @@ document.querySelectorAll("[data-view]").forEach((button) => {
     setHash(target);
     showScreen(target);
   });
+});
+
+document.querySelectorAll(".content-nav-prev").forEach((button) => {
+  button.addEventListener("click", () => goToMonth(-1));
+});
+
+document.querySelectorAll(".content-nav-next").forEach((button) => {
+  button.addEventListener("click", () => goToMonth(1));
 });
 
 document.querySelectorAll(".content-type").forEach((button) => {

@@ -70,6 +70,11 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   `#contentScreenV2`). **Scope content-page changes to `#contentScreen`** so V2/V3 aren't affected.
 - Watch specificity: e.g. `.section-white p` (0,1,1) beats a bare `.foo` (0,1,0). Scope with an
   id (`#monthScreen .foo`) when a shared element rule out-specifies yours.
+- "Applies to all content months" rules that must beat the responsive `#contentScreen
+.section-inner` padding (set in a media query) can select `#contentScreen[data-month] ...` —
+  the attribute-presence raises specificity to (1,2,0), above the media rule (1,1,0), and
+  `app.js` always sets `data-month` on `#contentScreen` when the content page shows. Use
+  `[data-month="April"]` for one month, `[data-month]` for any.
 
 ## Verification & tooling
 
@@ -81,6 +86,10 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   installed). Remember `b` = browser, `p` = page (`p.screenshot`, not `b.screenshot`).
 - Navigating only the URL **hash** on the same Playwright page does NOT re-run `app.js` init
   (theme/state not re-applied). Use a **fresh page per level/route** when measuring.
+- If you `display:none` an element a smoke test asserts visible (e.g. the content `#contentTitle`
+  heading), the test breaks — update it to assert a now-visible element (e.g. `#contentLevelName`).
+  Note `getByRole` ignores `display:none` nodes (out of the a11y tree), so duplicate-text headings
+  on inactive screens don't trigger strict-mode conflicts.
 - `npm.cmd run qa` runs Prettier over `*.md` too — run `npx prettier --write` on edited markdown
   or `check`/`qa` fails. Playwright browsers need `npx playwright install chromium` once.
 - Always delete temp verification files (`_*.mjs`, `_*.png`) afterward — they are not gitignored.
