@@ -14,6 +14,114 @@ For this project, use Duolingo ABC only as a style reference for color, spacing,
 - Generous padding, centered content, and clear reading hierarchy
 - Rectangular section bands only; no diagonal, slanted, wave, blob, or scalloped section dividers
 
+---
+
+## Implemented Design System (current build — source of truth)
+
+> The sections **above and below** this block describe the original Duolingo-ABC
+> _inspiration_. **This block reflects what is actually built** in
+> `styles.css` / `app.js` and **supersedes the legacy reference wherever values
+> differ** (fonts, radii, the per-level theme system). When in doubt, trust this
+> section and the code.
+
+### Global tokens (`:root`)
+
+| Token              | Value                                                                                   | Notes                                     |
+| ------------------ | --------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `--radius-control` | `16px`                                                                                  | buttons / controls (legacy doc said 12px) |
+| `--radius-card`    | `18px`                                                                                  | cards                                     |
+| `--site-max-width` | `1600px`                                                                                | outer shell cap                           |
+| `--content-width`  | `min(80%, 1600px)`                                                                      | centered content column                   |
+| `--hero-height`    | `620px`                                                                                 | home hero                                 |
+| `--ink`            | `#3c3c3c`                                                                               | primary text (legacy doc said `#4B4B4B`)  |
+| Base palette       | owl-green / macaw-blue / sunny-yellow / alert-red / purple-accent (+ `-shadow` of each) | unchanged from reference                  |
+
+### Fonts actually loaded
+
+- **Display:** `Fredoka` → Nunito → Segoe UI (`--font-display`).
+- **UI / body:** `Nunito` → Segoe UI → Noto Sans (`--font-ui`).
+- **Nav / structural:** `Inter` (`--font-nav`).
+- **Special-purpose:** `Sniglet` (level names / level-icon numbers), `Manrope 800`
+  (month-select & content month numbers), `Concert One` (month-select fallback
+  number rule), `Baloo 2` (content H2 — currently hidden).
+- Global hard rule: **no italics anywhere** (`font-style: normal !important` +
+  `font-synthesis: none` on `*`, `html`, `body`, `button`).
+
+### Per-level theme system (the core of the current design)
+
+Each level screen (`#monthScreen`, `#contentScreen`, V2, V3) gets a
+`level-theme-N` class on the screen element; `app.js` also mirrors it onto
+`<body>` so the footer can pick it up. All per-level color comes from these CSS
+variables — components reference the tokens, never hard-coded level colors, so a
+treatment built for one level rolls out to all four for free.
+
+| Level  | `--level-accent` (base)  | `--level-accent-shadow` | `--level-accent-soft` (page tint) | `--content-day-bg` (weekday btn) | `--content-day-shadow` | `--content-day-text` (label) | `--content-week-tint` (week card) |
+| ------ | ------------------------ | ----------------------- | --------------------------------- | -------------------------------- | ---------------------- | ---------------------------- | --------------------------------- |
+| **L1** | `#ffc800` (sunny-yellow) | `#d49a00`               | `#fff3cc`                         | `#ffd43b`                        | `#c78f00`              | `#8a6400`                    | `#ffe9a8`                         |
+| **L2** | `#ff4b4b` (alert-red)    | `#d83434`               | `#ffe8e8`                         | `#ff7676`                        | `#e85555`              | `#a83838`                    | `#ffcfcf`                         |
+| **L3** | `#1cb0f6` (macaw-blue)   | `#1899d6`               | `#e8f6ff`                         | `#45c0f7`                        | `#2aa6e3`              | `#135f95`                    | `#c6e7ff`                         |
+| **L4** | `#ce82ff` (purple)       | `#9f55d8`               | `#f4e3ff`                         | `#da99ff`                        | `#ad6ce0`              | `#71399f`                    | `#e6c9ff`                         |
+
+L1 holds the **client-approved reference values**; L2-L4 are the analogous
+shades from each level's own palette.
+
+### Header / top navigation
+
+- Sticky bar, `min-height: 80px`, white background, `padding: 5px max(10%, …)`.
+- **Level icons:** `70×50`, radius `24`, number in **Sniglet 22px**.
+- `scrollbar-gutter: stable` on `html` so logo/nav/icons stay pixel-identical
+  across pages whether or not a page scrolls.
+- At `≤1023px` the nav drops to its own centered row.
+
+### Month-selection page (`#monthScreen`, all levels)
+
+- Body/section background = the level's `--level-accent-soft` tint.
+- **Month buttons:** `min-height: 137px`, label shows the month name (no "MONTH"
+  word), tactile 3D in the level accent.
+- **Box number:** **Manrope 800 / 52px**, white fill with a thin outline in the
+  level's `--level-accent-shadow`; box radius `39px`.
+- Layout prototyped on L4, then rolled out identically to L1-L3.
+
+### Content (month-detail) page — V1 `#content/...` (all levels, all months)
+
+- Background = level `--level-accent-soft` tint; text uses the readable
+  `--level-accent-shadow` dark shade.
+- **Centered top banner:** level name (**Sniglet 40px**) + book-band
+  (**Inter 16px**) + a **month badge = bare number in a 60px circle** filled with
+  `--level-accent`, number in **Manrope 800 / 36px** white. The literal "Month"
+  text is hidden via `font-size:0`.
+- **Month navigation row** below the topbar: **Back = previous month (left)**,
+  **Next = next month (right)**. Back hidden on March (first), Next hidden on
+  December (last), driven by `#contentScreen[data-month="…"]` + `app.js`
+  `goToMonth(±1)`. Back no longer returns to month-select — use the nav level
+  icons or the brand logo for that.
+- **Lesson board (client-approved on L1/April, rolled out to all levels/months):**
+  - Toolbar reduced to **Opening Song + Ending Song only**, centered (other three
+    content types hidden); Opening Song's active accent dropped to match Ending.
+  - Weeks numbered **continuously 1–4** across both books (in `renderLessons`).
+  - **Weekday buttons (Mon–Fri):** flat tactile 3D in `--content-day-bg`, radius
+    `16px` (`--radius-control`), drop shadow
+    `0 7px 0 --content-day-shadow, 0 12px 18px rgba(30,90,0,.16)`; **label
+    24px** in `--content-day-text`. Rules are un-scoped (`#contentScreen …`) so
+    every level/month inherits them.
+  - **Week-label cards (1–4 week):** **flat (2D)** on the `--content-week-tint`
+    light tint (no shadow), sitting between page bg and the buttons.
+  - The "X Reading Plan" `h2` (`.content-v2-title-block`) is **hidden**.
+- V2 (`#content-v2/…`) and V3 (`#content-v3/…`) variants are preserved untouched.
+
+### Footer
+
+- Shared `.site-footer`: green (`--owl-green`) on home/overview; on any level
+  screen it takes that level's `--level-accent` (via
+  `body[class*="level-theme-"] .site-footer`).
+- Footer text stays white (`--canvas`), `Inter 13px / 800`. ⚠ **Open item:** low
+  contrast on L1 yellow.
+
+### Standing constraints (unchanged, enforced)
+
+- Calendar is **Mon–Fri 5-column only** (no weekend columns).
+- **English UI**, **no italics**, child-friendly, touch targets ≥56px.
+
 ## Colors
 
 > Source reference: `abc.duolingo.com/how-we-teach` CSS and page bundle, including Duolingo ABC brand tokens and page-specific teacher/ABC styles.

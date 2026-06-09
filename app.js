@@ -78,6 +78,7 @@ const screens = {
   content: document.querySelector("#contentScreen"),
   contentV2: document.querySelector("#contentScreenV2"),
   contentV3: document.querySelector("#contentScreenV3"),
+  login: document.querySelector("#loginScreen"),
 };
 
 const levelThemeClasses = [
@@ -126,6 +127,8 @@ function showScreen(name) {
   // Mirror the current level's theme onto <body> so the shared footer can pick
   // up the level color; cleared on home/overview/unknown for the green default.
   document.body.classList.remove(...levelThemeClasses);
+  // The login page recolors the shared footer to white (see styles.css).
+  document.body.classList.toggle("login-active", name === "login");
   if (!screens[name]) {
     document.body.classList.remove("subpage-active");
     screens.home.classList.add("screen-active");
@@ -180,6 +183,11 @@ function setHash(view) {
 
   if (view === "overview") {
     window.location.hash = "overview";
+    return;
+  }
+
+  if (view === "login") {
+    window.location.hash = "login";
     return;
   }
 
@@ -430,6 +438,10 @@ if (view === "months" && hashLevel) {
 
 if (view === "overview") {
   showScreen("overview");
+}
+
+if (view === "login") {
+  showScreen("login");
 }
 
 if (view === "content" && hashLevel && hashMonth) {

@@ -432,6 +432,143 @@ body[class*="level-theme-"] .site-footer {
   line-height: 1.35;
 }
 
+/* Main (home) page only: drop the footer copyright to a plain regular weight.
+   Home is the only screen without `subpage-active` on <body> (app.js adds it to
+   every other screen), so this scopes to the main page; all other pages keep
+   the fully bold line (HOLD). */
+body:not(.subpage-active) .site-footer p {
+  font-weight: 400;
+}
+
+/* Login page recolors the shared footer to a clean white band with a hairline
+   top border and muted dark text (the white/green default would be unreadable).
+   `login-active` is toggled on <body> in app.js showScreen(). */
+body.login-active .site-footer {
+  background: var(--canvas);
+  border-top: 1px solid var(--hairline);
+  color: var(--muted-ink);
+}
+
+/* Login page only: drop the footer's all-bold weight to a plain regular.
+   Other pages keep the fully bold line (HOLD). */
+body.login-active .site-footer p {
+  font-weight: 400;
+}
+
+/* ── Login page ──────────────────────────────────────────────────────────
+   Frontend-only sign-in screen. Reuses the design system: Fredoka display
+   title, soft-gray rounded inputs, the macaw-blue tactile primary button, and
+   stroke buttons for social sign-in. No sign-up entry by request. */
+/* Center the login card both ways in the space between header and footer.
+   main grows to fill that space (app-shell flex column), the login screen
+   fills main, and the section centers the card within it. */
+body.login-active main {
+  display: flex;
+  flex-direction: column;
+}
+
+#loginScreen.screen-active {
+  display: flex;
+  flex: 1 1 auto;
+}
+
+.login-section {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.login-card {
+  width: min(100%, 416px);
+}
+
+.login-title {
+  margin: 0 0 28px;
+  color: var(--ink);
+  font-family: "Cal Sans", var(--font-display);
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.login-form {
+  display: grid;
+  gap: 14px;
+}
+
+.login-field {
+  position: relative;
+}
+
+.login-input {
+  width: 100%;
+  height: 58px;
+  padding: 0 20px;
+  background: #f7f7f7;
+  border: 2px solid var(--hairline);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 600;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.login-input::placeholder {
+  color: var(--muted-ink);
+  font-weight: 500;
+}
+
+.login-input:focus {
+  background: var(--canvas);
+  border-color: var(--macaw-blue);
+  outline: none;
+}
+
+.login-submit {
+  width: 100%;
+  height: 75px;
+  margin-top: 6px;
+  background: var(--macaw-blue);
+  border: 0;
+  border-radius: var(--radius-control);
+  box-shadow: 0 4px 0 var(--macaw-blue-shadow);
+  color: var(--canvas);
+  cursor: pointer;
+  font-family: var(--font-nav);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.login-submit:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+.login-legal {
+  margin: 28px 0 0;
+  color: var(--muted-ink);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.login-legal strong {
+  font-weight: 800;
+}
+
 .section-blue {
   background: var(--owl-green);
   color: var(--canvas);

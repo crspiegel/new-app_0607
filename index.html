@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&family=Cherry+Bomb+One&family=Concert+One&family=Fredoka:wght@600;700&family=Inter:wght@600;700;800&family=Manrope:wght@800&family=Nunito:wght@500;700;800;900&family=Sniglet:wght@400;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&family=Cal+Sans&family=Cherry+Bomb+One&family=Concert+One&family=Fredoka:wght@600;700&family=Inter:wght@400;600;700;800&family=Manrope:wght@800&family=Nunito:wght@500;700;800;900&family=Sniglet:wght@400;800&display=swap"
       rel="stylesheet"
     />
     <link
@@ -76,7 +76,12 @@
             </span>
           </button>
         </nav>
-        <button class="login-button" type="button" aria-label="Login">
+        <button
+          class="login-button"
+          type="button"
+          data-view="login"
+          aria-label="Login"
+        >
           <svg
             class="login-icon"
             aria-hidden="true"
@@ -603,10 +608,51 @@
             </div>
           </div>
         </section>
+
+        <section class="screen" id="loginScreen" aria-labelledby="loginTitle">
+          <div class="section-box section-white login-section">
+            <div class="login-card">
+              <h1 class="login-title" id="loginTitle">Log in</h1>
+
+              <form class="login-form" novalidate>
+                <div class="login-field">
+                  <input
+                    class="login-input"
+                    type="text"
+                    id="loginId"
+                    name="loginId"
+                    autocomplete="username"
+                    placeholder="user ID"
+                    aria-label="user ID"
+                  />
+                </div>
+
+                <div class="login-field">
+                  <input
+                    class="login-input"
+                    type="password"
+                    id="loginPassword"
+                    name="loginPassword"
+                    autocomplete="current-password"
+                    placeholder="Password"
+                    aria-label="Password"
+                  />
+                </div>
+
+                <button class="login-submit" type="submit">Log in</button>
+              </form>
+
+              <p class="login-legal">
+                By signing in, you agree to our <strong>Terms</strong> and
+                <strong>Privacy Policy</strong>.
+              </p>
+            </div>
+          </div>
+        </section>
       </main>
 
       <footer class="site-footer" aria-label="Copyright">
-        <p>Copyright 2025 TPS EDUCATION. All Rights Reserved.</p>
+        <p>Copyright 2026 TPS EDUCATION. All Rights Reserved.</p>
       </footer>
     </div>
 
