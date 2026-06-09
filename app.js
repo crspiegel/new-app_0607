@@ -109,16 +109,35 @@ const contentV3Title = document.querySelector("#contentV3Title");
 const contentV3Level = document.querySelector("#contentV3Level");
 const calendarGridV3 = document.querySelector("#calendarGridV3");
 
+// Screens that belong to a specific level — used to theme the shared footer
+// (and any body-level styling) with that level's color. Home/overview are not
+// level pages, so they keep the default (green) footer.
+const levelPageScreens = new Set([
+  "months",
+  "content",
+  "contentV2",
+  "contentV3",
+]);
+
 function showScreen(name) {
   Object.values(screens).forEach((screen) =>
     screen.classList.remove("screen-active"),
   );
+  // Mirror the current level's theme onto <body> so the shared footer can pick
+  // up the level color; cleared on home/overview/unknown for the green default.
+  document.body.classList.remove(...levelThemeClasses);
   if (!screens[name]) {
     document.body.classList.remove("subpage-active");
     screens.home.classList.add("screen-active");
     return;
   }
   document.body.classList.toggle("subpage-active", name !== "home");
+  if (levelPageScreens.has(name)) {
+    const themeClass = levelToThemeClass(state.level);
+    if (themeClass) {
+      document.body.classList.add(themeClass);
+    }
+  }
   screens[name].classList.add("screen-active");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -233,6 +252,10 @@ function renderMonths() {
 function renderLessons() {
   lessonGrid.innerHTML = "";
 
+  // Number weeks continuously 1–4 across both books (instead of restarting at
+  // 1 per book) on every content page.
+  let weekNumber = 0;
+
   monthlyBooks.forEach((book) => {
     const titleCard = document.createElement("div");
     titleCard.className = "book-title-card";
@@ -241,9 +264,10 @@ function renderLessons() {
     lessonGrid.append(titleCard);
 
     for (let week = 1; week <= 2; week += 1) {
+      weekNumber += 1;
       const weekLabel = document.createElement("div");
       weekLabel.className = "week-label";
-      weekLabel.textContent = `${week} week`;
+      weekLabel.textContent = `${weekNumber} week`;
       lessonGrid.append(weekLabel);
 
       weekdays.forEach((day, dayIndex) => {
@@ -252,7 +276,7 @@ function renderLessons() {
         button.type = "button";
         button.setAttribute(
           "aria-label",
-          `${book.title}, ${week} week, ${lessonTypes[dayIndex]}`,
+          `${book.title}, ${weekNumber} week, ${lessonTypes[dayIndex]}`,
         );
         button.innerHTML = `<strong>${day}</strong>`;
         lessonGrid.append(button);

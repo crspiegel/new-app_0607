@@ -246,6 +246,18 @@ body.subpage-active .brand-adventures {
   color: #b0b0b0;
 }
 
+/* On subpages the logo is grayed out; on hover, restore its full main-page
+   colors. Gated to hover-capable pointers so it doesn't stick on touch. */
+@media (hover: hover) {
+  body.subpage-active .brand:hover .brand-accent {
+    color: #16b8ad;
+  }
+
+  body.subpage-active .brand:hover .brand-adventures {
+    color: #f0643f;
+  }
+}
+
 body.subpage-active .brand-name {
   font-size: 20px;
   font-weight: 600;
@@ -295,28 +307,101 @@ main {
   background: var(--level-accent-soft, var(--canvas));
 }
 
+/* Month-selection pages — shared treatment for ALL levels (1-4). The layout,
+   tactile button styling, centered Manrope numbers, and theme-tinted body are
+   identical across levels (prototyped on Level 4, then rolled out to 1-3).
+   Per-level colors come from the .level-theme-N CSS variables below.
+   DESIGN.md grounding: saturated accent fill + white text for strong
+   child-facing contrast (Learning Content Button); a thick bottom lip and no
+   soft drop shadow (Tactile Depth); centered content; rounded rectangle (39px,
+   from the base .month-button) per "rounded rectangles over pills". */
+#monthScreen[class*="level-theme-"].screen-active {
+  min-height: calc(100vh - 185px);
+  background: var(--level-accent-soft, var(--canvas));
+}
+
+#monthScreen[class*="level-theme-"] .section-white {
+  background: var(--level-accent-soft, var(--canvas));
+}
+
+#monthScreen[class*="level-theme-"] .month-button {
+  align-items: center;
+  justify-content: center;
+  min-height: 137px;
+  background: var(--level-accent, var(--canvas));
+  border-color: var(--level-accent-shadow, var(--hairline));
+  box-shadow: 0 7px 0 var(--level-accent-shadow, var(--hairline-strong));
+}
+
+#monthScreen[class*="level-theme-"] .month-button span,
+#monthScreen[class*="level-theme-"] .month-button strong {
+  color: var(--canvas);
+}
+
+/* Pin the month label top-left so the number can sit dead-center. */
+#monthScreen[class*="level-theme-"] .month-button span {
+  position: absolute;
+  top: 28px;
+  left: 18px;
+}
+
+#monthScreen[class*="level-theme-"] .month-button strong {
+  align-self: center;
+  margin-top: 0;
+  font-family: "Manrope", sans-serif;
+  font-weight: 800;
+  /* Keep the number white but add a thin outline in each level's own theme
+     color — the accent-shadow token, a slightly deeper shade of the button
+     background. paint-order draws the stroke behind the fill so the white
+     weight is preserved. */
+  -webkit-text-stroke: 1.25px var(--level-accent-shadow, rgba(0, 0, 0, 0.4));
+  paint-order: stroke fill;
+}
+
+/* --content-* variables drive the V1 content-page design (weekday buttons +
+   flat week-label cards). Level 1 holds the client-approved April values
+   exactly; Levels 2-4 use the analogous shades from their own theme palette:
+   --content-day-bg/-shadow = the theme-colored weekday button (3D),
+   --content-day-text       = dark theme shade for the Mon–Fri label,
+   --content-week-tint      = light theme tint for the flat week-label card. */
 .level-theme-1 {
   --level-accent: var(--sunny-yellow);
   --level-accent-shadow: var(--sunny-yellow-shadow);
   --level-accent-soft: #fff3cc;
+  --content-day-bg: #ffd43b;
+  --content-day-shadow: #c78f00;
+  --content-day-text: #8a6400;
+  --content-week-tint: #ffe9a8;
 }
 
 .level-theme-2 {
   --level-accent: var(--alert-red);
   --level-accent-shadow: var(--alert-red-shadow);
   --level-accent-soft: #ffe8e8;
+  --content-day-bg: #ff7676;
+  --content-day-shadow: #e85555;
+  --content-day-text: #a83838;
+  --content-week-tint: #ffcfcf;
 }
 
 .level-theme-3 {
   --level-accent: var(--macaw-blue);
   --level-accent-shadow: var(--macaw-blue-shadow);
   --level-accent-soft: #e8f6ff;
+  --content-day-bg: #45c0f7;
+  --content-day-shadow: #2aa6e3;
+  --content-day-text: #135f95;
+  --content-week-tint: #c6e7ff;
 }
 
 .level-theme-4 {
   --level-accent: var(--purple-accent);
   --level-accent-shadow: var(--purple-shadow);
   --level-accent-soft: #f4e3ff;
+  --content-day-bg: #da99ff;
+  --content-day-shadow: #ad6ce0;
+  --content-day-text: #71399f;
+  --content-week-tint: #e6c9ff;
 }
 
 .section-box {
@@ -330,6 +415,13 @@ main {
   border-top: 0;
   color: var(--canvas);
   text-align: center;
+}
+
+/* On a level page, the footer takes that level's theme color (L1 yellow,
+   L2 red, L3 blue, L4 purple). Home/overview keep the default green above.
+   --level-accent is set on the body's .level-theme-N class (see app.js). */
+body[class*="level-theme-"] .site-footer {
+  background: var(--level-accent);
 }
 
 .site-footer p {
@@ -916,11 +1008,6 @@ p {
   margin-bottom: 30px;
 }
 
-.month-back-row {
-  display: flex;
-  margin-top: 14px;
-}
-
 .month-heading {
   margin-bottom: 0;
 }
@@ -951,14 +1038,14 @@ p {
   display: grid;
   grid-template-columns: 1fr;
   column-gap: 12px;
-  row-gap: 19px;
+  row-gap: 29px;
 }
 
 #monthScreen .eyebrow.blue {
   min-height: 38px;
   padding-right: 22px;
   padding-left: 22px;
-  background: var(--level-accent-soft, #e8f6ff);
+  background: var(--canvas);
   color: var(--level-accent, var(--macaw-blue));
   font-family: var(--font-nav);
   font-size: 15px;
@@ -978,15 +1065,11 @@ p {
   line-height: 1.3;
 }
 
-#monthScreen .back-button {
-  background: #f1f1f1;
-  box-shadow: 0 4px 0 #d8d8d8;
-  color: var(--muted-ink);
-}
-
 .month-button {
   display: flex;
+  width: 90%;
   min-height: 112px;
+  justify-self: center;
   flex-direction: column;
   justify-content: center;
   padding: 28px 18px;
@@ -1140,6 +1223,25 @@ p {
   margin-top: 8px;
 }
 
+/* All content pages: show the banner month as a bare number in a circle.
+   Drop the "Month" label (font-size:0 hides the text node) and the pill
+   background; the circle keeps its per-level theme color (var(--level-accent),
+   set on .content-v2-month-pill strong). 60px circle, Manrope 800 / 36px. */
+#contentScreen .content-banner-month {
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 0;
+}
+
+#contentScreen .content-banner-month strong {
+  width: 60px;
+  height: 60px;
+  font-family: "Manrope", sans-serif;
+  font-size: 36px;
+  font-weight: 800;
+}
+
 /* Content page: title-block hidden — level + month show in the centered banner. */
 #contentScreen .content-v2-title-block {
   display: none;
@@ -1193,6 +1295,77 @@ p {
 
 .content-type:nth-child(5) {
   grid-column: 7;
+}
+
+/* ----------------------------------------------------------------------
+   V1 content-page design — applied to ALL levels (1-4) and ALL months.
+   Rolled out from the client-approved Level 1 / April page. Per-level colors
+   come from the .level-theme-N --content-* variables. Toolbar is reduced to
+   Opening + Ending Song (centered); the weekday board uses theme-colored 3D
+   buttons with flat, tinted week-label cards.
+   ---------------------------------------------------------------------- */
+
+/* Hide Story / Word Chant / Sentence Chant, leaving Opening + Ending Song. */
+#contentScreen .content-type:nth-child(2),
+#contentScreen .content-type:nth-child(3),
+#contentScreen .content-type:nth-child(4) {
+  display: none;
+}
+
+/* Center the remaining Opening / Ending Song buttons in the screen
+   instead of leaving them left-aligned in the toolbar grid. */
+/* All content pages: center Opening/Ending Song and tighten the gap to the
+   weekday board (~50% of the original). The board's top padding is halved in
+   the >=768px block (desktop) so mobile keeps its smaller padding. */
+#contentScreen .content-toolbar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+  padding-bottom: 7px;
+}
+
+/* Opening + Ending Song buttons: keep the 3D depth (the 0 6px bevel) but drop
+   the soft drop shadow, and bump the label 15->17px (the button is
+   content-sized, so its width grows proportionally with the text). */
+#contentScreen .content-type {
+  box-shadow: 0 6px 0 #d8d8d8;
+  font-size: 17px;
+}
+
+/* Drop Opening Song's yellow "active" accent so it matches Ending Song's
+   default white/blue style (same bevel-only shadow). */
+#contentScreen .content-type.active {
+  background: var(--canvas);
+  box-shadow: 0 6px 0 #d8d8d8;
+  color: #0878c8;
+}
+
+#contentScreen .content-type.active .content-type-icon {
+  background: #e8f6ff;
+  color: #0878c8;
+}
+
+/* Unify every weekday button (Mon–Fri, all weeks) to the level theme color,
+   overriding the per-day day-3 / day-5 / base colors. */
+#contentScreen .lesson-button {
+  background: var(--content-day-bg);
+  box-shadow:
+    0 7px 0 var(--content-day-shadow),
+    0 12px 18px rgba(30, 90, 0, 0.16);
+  color: #2f2f2f;
+}
+
+/* Weekday label (Mon–Fri): larger text in the dark theme shade. */
+#contentScreen .lesson-button strong {
+  font-size: 24px;
+  color: var(--content-day-text);
+}
+
+/* Week-label cards (1 week–4 week): flat (2D) on a light theme tint that sits
+   between the page background and the weekday buttons so they stay visible. */
+#contentScreen .week-label {
+  background: var(--content-week-tint);
+  box-shadow: none;
 }
 
 .lesson-board {
@@ -2032,12 +2205,6 @@ p {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
-  #monthScreen .month-back-row {
-    align-self: center;
-    justify-content: flex-end;
-    margin-top: 0;
-  }
-
   #monthScreen .month-header {
     display: flex;
     align-items: center;
@@ -2066,6 +2233,12 @@ p {
 
   .lesson-board {
     padding: 50px;
+  }
+
+  /* All content pages: halve the board's top padding (50->25) so the weekday
+     group sits closer to the toolbar (paired with the toolbar rule above). */
+  #contentScreen .lesson-board {
+    padding-top: 25px;
   }
 
   .lesson-button {

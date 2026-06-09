@@ -46,12 +46,19 @@ deploying for client review. The app is **live**: https://new-app0607.vercel.app
   (consistent cross-page alignment); nav drops to its own centered row at ≤1023px.
 - **Month-select page:** labels show "March" (removed "MONTH"); per-level theme color aligned to
   each level's own color (L1 yellow / L2 red / L3 blue / L4 purple); book-band labels (e.g.
-  "Pink A/B, Red, Yellow") under the level chip; box numbers Concert One 52px; box radius 39px.
+  "Pink A/B, Red, Yellow") under the level chip; box numbers **Manrope 800 / 52px** (white fill +
+  theme-shadow stroke — the `[class*="level-theme-"]` rule overrides the base Concert One rule);
+  box radius 39px.
 - **Content (month detail) page** (V1 `#contentScreen`, all levels + all months):
   - Background = a light per-level tint (L1 ivory `#fff3cc`, L2 `#ffe8e8`, L3 `#e8f6ff`,
     L4 `#f4e3ff`); text uses the readable dark theme shade (`--level-accent-shadow`).
-  - **Centered top banner**: Level name (Sniglet 40px) + book band (Inter 16px) + Month pill,
-    all in the level's theme color. Matches the main "Start Reading" level-box text style.
+  - **Centered top banner**: Level name (Sniglet 40px) + book band (Inter 16px) + a month
+    badge, all in the level's theme color. The month badge is a **bare number in a circle**
+    (no "Month" label, no pill) — `60px` circle filled with the level theme color
+    (`var(--level-accent)`), white **Manrope 800 / 36px** number (matches the month-select page
+    typeface). The "Month" text node is hidden via `font-size:0` on `.content-banner-month`.
+  - **Toolbar ↔ weekday board gap** tightened to ~50% (toolbar `margin-bottom:12` /
+    `padding-bottom:7`; board `padding-top:25` in the ≥768px block so mobile keeps its padding).
   - The "X Reading Plan" h2 title is **hidden** (the whole `.content-v2-title-block`); its font
     trial had settled on Baloo 2 / 800 before it was hidden.
   - **Month navigation**: a header row just below the topbar with **Back = previous month (left)**
@@ -60,7 +67,21 @@ deploying for client review. The app is **live**: https://new-app0607.vercel.app
     (used for the layout + first/last logic) and `goToMonth(±1)` drives the buttons.
   - ⚠ Back no longer returns to the month-select screen — to change level/month otherwise, use
     the top-nav level icons (→ `#months`) or the brand logo (→ home).
+  - **Lesson board redesign (client-approved on L1/April, then rolled out to ALL levels +
+    ALL months):** toolbar reduced to **Opening + Ending Song only** (other three hidden),
+    centered; weeks numbered **continuously 1–4** (across both books, in `renderLessons`);
+    weekday buttons are **3D in the level theme color**; weekday text **24px** in a dark theme
+    shade; **week-label cards are flat (2D) on a light theme tint**. Per-level colors come from
+    new `.level-theme-N` vars `--content-day-bg/-shadow/-text` and `--content-week-tint`; the
+    rules themselves are un-scoped (`#contentScreen ...`) so every level/month inherits them.
+    L1 keeps the exact approved values (`#ffd43b` / `#8a6400` / `#ffe9a8`). (V2/V3 untouched.)
 - **Main page section titles:** Nunito 900 / 33px; "Choose Your LEVEL" capitalized.
+- **Footer color per level:** the shared `.site-footer` is green (`--owl-green`) on home/overview,
+  but takes the active level's theme color on level pages (L1 yellow / L2 red / L3 blue /
+  L4 purple). `app.js` `showScreen()` mirrors the level-theme class onto `<body>` for the four
+  level screens (months/content/contentV2/contentV3); CSS:
+  `body[class*="level-theme-"] .site-footer { background: var(--level-accent) }`. Footer text is
+  still white (`--canvas`) — fine on red/blue/purple; ⚠ low contrast on L1 yellow (open item).
 
 ## Confirmed product decisions
 
