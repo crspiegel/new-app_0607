@@ -76,6 +76,40 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   `app.js` always sets `data-month` on `#contentScreen` when the content page shows. Use
   `[data-month="April"]` for one month, `[data-month]` for any.
 
+## Video player modal (Vimeo)
+
+- The custom video modal (Level 1 / March) drives a Vimeo iframe via the **Vimeo Player SDK**
+  (`<script src="https://player.vimeo.com/api/player.js">`, loaded before `app.js`). It's an
+  external CDN script — fine for the static no-build deploy, but make sure `.vercelignore`
+  doesn't exclude anything it needs (it doesn't; the SDK is remote).
+- **ESLint `no-undef`:** reference the SDK as `window.Vimeo` (e.g. `new window.Vimeo.Player(...)`),
+  not the bare `Vimeo` global, or `eslint app.js` fails. Always guard with `window.Vimeo &&
+window.Vimeo.Player` since the SDK loads async and may be absent (offline / headless).
+- Vimeo has no "stop": emulate with `pause()` + `setCurrentTime(0)`. With `controls:0` the native
+  fullscreen button is gone too, so the **Maximize** button uses the browser Fullscreen API on the
+  player card. Progress comes from the `timeupdate` event (`data.percent`, `data.duration`).
+- **Play/Pause is one toggle** synced off the Vimeo `play`/`pause`/`ended` events (not optimistic),
+  so the icon is always correct. **Clicking the video** must go through a transparent overlay
+  (`.vp-click-layer`, `z-index` above `.vp-frame`) — the cross-origin Vimeo iframe swallows clicks,
+  so a bare click handler on the stage never fires.
+- **Rounded-corner dark seam:** Chrome won't clip a child `<iframe>` by an ancestor's
+  `border-radius`, leaving a thin dark arc at the stage corners. Fix = (1) promote the clipping box
+  to its own layer (`transform: translateZ(0)` on `.vp-stage`, `overflow:hidden`, `border-radius`),
+  and (2) keep the **iframe SQUARE (no border-radius) and overscan it 1px beyond the stage**
+  (`top/left:-1px; width/height:calc(100% + 2px)`) so the rounded clip always cuts through solid
+  video. ⚠ Do NOT round the iframe itself — that's what _caused_ the dark seam (the iframe's own
+  rounded corner exposed the dark stage background underneath). Headless can't reproduce the seam
+  (no real playback), so verify the geometry (square + overscan), not pixels.
+- **Headless can't actually play Vimeo:** Playwright synthetic clicks aren't a user-activation
+  gesture for media, and even with `--autoplay-policy=no-user-gesture-required` the video stays
+  buffering (spinner), so `play` never fires and the toggle won't flip in headless. Verify the
+  play↔pause icon swap by setting `#vpToggle[data-playing]` directly and checking the icon
+  `display`; trust the SDK events for real-browser playback.
+- The modal opens **only** on Level 1 / March — gated at click time by `isLevel1March()`, because
+  `#contentScreen` + the 20 `renderLessons()` buttons are shared by all levels/months. When
+  testing scope, use a **fresh Playwright page per route** (hash-only navigation doesn't re-run
+  `app.js`, so `state.level` leaks and the gate looks broken — see the hash-nav note below).
+
 ## Verification & tooling
 
 - For visual-fidelity work, screenshot via Playwright and compare. `toHaveScreenshot({ animations:

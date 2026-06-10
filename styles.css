@@ -2912,3 +2912,591 @@ p {
     min-height: 68px;
   }
 }
+
+/* ----------------------------------------------------------------------
+   Video player modal (Level 1 / March only)
+   A custom shell matching the site's tactile design. The modal is opened
+   from app.js only on the Level 1 / March content page; markup is shared
+   but inert elsewhere. Controls (Play/Pause/Stop/Repeat/Maximize) +
+   progress bar drive a Vimeo video via the Vimeo Player SDK. Themed off
+   the active level via --level-accent (yellow on Level 1), with a
+   macaw-blue fallback.
+   ---------------------------------------------------------------------- */
+
+.video-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.video-modal[hidden] {
+  display: none;
+}
+
+body.video-open {
+  overflow: hidden;
+}
+
+.video-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 28, 28, 0.62);
+  backdrop-filter: blur(2px);
+  animation: vp-fade 0.18s ease both;
+}
+
+.video-player-card {
+  position: relative;
+  width: 50vw;
+  max-width: 1100px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background: var(--canvas);
+  border-radius: var(--radius-card);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  animation: vp-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+
+@keyframes vp-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes vp-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-modal-overlay,
+  .video-player-card {
+    animation: none;
+  }
+}
+
+/* Context title — what is playing (e.g. "Opening Song · Week 2 · Wed"), led by
+   a small aqua accent dot to tie it to the player's controls. Hidden if empty. */
+.vp-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 44px 10px 4px;
+  font-family: "Readex Pro", var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+  color: #9a9a9a;
+}
+
+.vp-title::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  background: var(--macaw-blue);
+  border-radius: 50%;
+}
+
+.vp-title:empty {
+  display: none;
+}
+
+/* Round "x" close button, top-right, slightly overlapping the card corner.
+   Flat aqua (no border, no shadow); thick white "x". */
+.vp-close {
+  position: absolute;
+  top: -16px;
+  right: -16px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  background: var(--macaw-blue);
+  border: 0;
+  border-radius: 50%;
+  color: var(--canvas);
+  cursor: pointer;
+}
+
+.vp-close svg {
+  width: 24px;
+  height: 24px;
+}
+
+.vp-close:hover {
+  background: var(--macaw-blue-shadow);
+}
+
+/* 16:9 video stage. translateZ(0) promotes the stage to its own layer so the
+   rounded corners actually clip the Vimeo iframe (Chrome won't clip a child
+   iframe by an ancestor's border-radius otherwise). */
+.vp-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  /* Soft dark-aqua wash instead of flat black, so the buffering state reads as
+     "loading" rather than "broken"; the video covers it once it plays. */
+  background: radial-gradient(circle at center, #15303d 0%, #000 75%);
+  border-radius: 12px;
+  overflow: hidden;
+  transform: translateZ(0);
+}
+
+.vp-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The iframe is SQUARE (no radius) and overscans the stage by 1px on every
+   side, so the stage's rounded clip always cuts through solid video — never
+   the dark stage background. (Rounding the iframe itself left a thin dark
+   antialiased seam where the stage bg peeked through at the corners.) */
+.vp-frame iframe {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  border: 0;
+}
+
+/* Transparent layer over the video to capture play/pause clicks (the
+   cross-origin Vimeo iframe would otherwise swallow them). */
+.vp-click-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+/* End-of-video overlay — covers Vimeo's related-videos end screen with our own
+   scene + a Replay button. Sits above the click layer; matches the stage wash. */
+.vp-end-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at center, #15303d 0%, #000 80%);
+}
+
+.vp-end-overlay[hidden] {
+  display: none;
+}
+
+.vp-replay {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 26px 14px 20px;
+  background: var(--macaw-blue);
+  border: 0;
+  border-radius: 999px;
+  color: var(--canvas);
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.vp-replay svg {
+  width: 26px;
+  height: 26px;
+}
+
+.vp-replay:hover {
+  background: var(--macaw-blue-shadow);
+}
+
+.vp-replay:focus-visible {
+  outline: 3px solid var(--canvas);
+  outline-offset: 3px;
+}
+
+/* Control bar — two tiers: full-width progress row on top, transport row below
+   (so the seek bar stays usable, especially on mobile). */
+.vp-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 6px 4px;
+}
+
+.vp-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Three zones: Repeat (left) · Play+Stop (center) · Maximize (right). */
+.vp-transport {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.vp-transport-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: start;
+}
+
+.vp-transport-center {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: center;
+}
+
+.vp-transport-right {
+  justify-self: end;
+}
+
+/* Monospaced-feel time labels, fixed width so the bar doesn't jitter. */
+.vp-time {
+  flex: 0 0 auto;
+  min-width: 40px;
+  font-family: var(--font-nav);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #555555;
+  text-align: center;
+}
+
+/* Flat aqua control buttons — no bevel, no drop shadow, white icons. */
+.vp-btn {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  flex: 0 0 auto;
+  padding: 0;
+  background: var(--macaw-blue);
+  border: 0;
+  border-radius: 50%;
+  color: var(--canvas);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.vp-btn svg {
+  width: 24px;
+  height: 24px;
+}
+
+.vp-btn:hover {
+  background: var(--macaw-blue-shadow);
+}
+
+/* Play/Pause is the primary action — make it a touch larger than the rest. */
+.vp-toggle {
+  width: 58px;
+  height: 58px;
+}
+
+.vp-toggle svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* Repeat button pressed/active state: filled deeper aqua. */
+.vp-btn[aria-pressed="true"] {
+  background: var(--deep-blue);
+}
+
+/* Play / Pause toggle: show the icon matching the current state. */
+.vp-toggle .vp-icon-pause {
+  display: none;
+}
+
+.vp-toggle[data-playing="true"] .vp-icon-play {
+  display: none;
+}
+
+.vp-toggle[data-playing="true"] .vp-icon-pause {
+  display: block;
+}
+
+/* Mute toggle: swap volume/muted icon, and show an active (deep-blue) state. */
+.vp-mute .vp-icon-muted {
+  display: none;
+}
+
+.vp-mute[data-muted="true"] .vp-icon-volume {
+  display: none;
+}
+
+.vp-mute[data-muted="true"] .vp-icon-muted {
+  display: block;
+}
+
+.vp-mute[data-muted="true"] {
+  background: var(--deep-blue);
+}
+
+/* Inline volume control: mute button + a compact slider beside it. Reuses the
+   progress bar's visual language (aqua fill + white thumb) at a smaller scale. */
+.vp-volume {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* The slider floats to the RIGHT of the sound icon and is revealed on
+   hover/focus, so it neither sits permanently next to the progress bar nor
+   overlaps it (floating above the icon overlapped the play bar). */
+.vp-volume-slider {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  width: 116px;
+  height: 13px;
+  padding: 0;
+  background: var(--hairline);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: none;
+  opacity: 0;
+  transform: translate(-6px, -50%);
+  transform-origin: left center;
+  pointer-events: none;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+  z-index: 4;
+}
+
+/* Invisible bridge over the gap so moving the pointer from the icon across to
+   the floating slider doesn't drop the hover. */
+.vp-volume-slider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 16px;
+}
+
+.vp-volume:hover .vp-volume-slider,
+.vp-volume:focus-within .vp-volume-slider {
+  opacity: 1;
+  transform: translate(0, -50%);
+  pointer-events: auto;
+}
+
+.vp-volume-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--macaw-blue);
+  border-radius: 999px;
+}
+
+.vp-volume-thumb {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 21px;
+  height: 21px;
+  transform: translate(-50%, -50%);
+  background: var(--canvas);
+  border: 5px solid var(--macaw-blue);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  transition: transform 0.1s ease;
+}
+
+.vp-volume-slider:hover .vp-volume-thumb,
+.vp-volume-slider.is-dragging .vp-volume-thumb {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.vp-volume-slider:focus-visible {
+  outline: 3px solid var(--deep-blue);
+  outline-offset: 3px;
+}
+
+/* Narrow screens: hide the inline slider, keep just the mute toggle. */
+@media (max-width: 560px) {
+  .vp-volume-slider {
+    display: none;
+  }
+}
+
+/* Keyboard focus ring (buttons are shadowless flat aqua, so this matters). */
+.vp-btn:focus-visible,
+.vp-close:focus-visible,
+.vp-progress:focus-visible {
+  outline: 3px solid var(--deep-blue);
+  outline-offset: 3px;
+}
+
+/* Progress bar: full-width track + aqua fill + draggable thumb. */
+.vp-progress {
+  position: relative;
+  flex: 1 1 auto;
+  height: 16px;
+  min-width: 80px;
+  padding: 0;
+  background: var(--hairline);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* Buffered (loaded) portion — a lighter aqua behind the played fill. */
+.vp-progress-buffer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0%;
+  height: 100%;
+  background: rgba(28, 176, 246, 0.32);
+  border-radius: 999px;
+}
+
+.vp-progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0%;
+  height: 100%;
+  background: var(--macaw-blue);
+  border-radius: 999px;
+}
+
+.vp-progress-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  background: var(--canvas);
+  border: 4px solid var(--macaw-blue);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  transition: transform 0.1s ease;
+}
+
+.vp-progress:hover .vp-progress-thumb,
+.vp-progress.is-dragging .vp-progress-thumb {
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+/* Fullscreen: the card fills the screen and the video grows; the title and
+   controls become YouTube-style auto-hiding overlays. Keyed on both the
+   :fullscreen pseudo (real fullscreen) and a .vp-fullscreen class that app.js
+   toggles on fullscreenchange (so the behaviour is testable). :is() parses
+   forgivingly, so an unsupported :fullscreen never invalidates the rule. */
+.video-player-card:is(:fullscreen, .vp-fullscreen) {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  justify-content: center;
+  padding: 0;
+  border-radius: 0;
+  background: #000;
+}
+
+.video-player-card:is(:fullscreen, .vp-fullscreen) .vp-stage {
+  width: auto;
+  height: 100%;
+  max-width: 100vw;
+  max-height: 100vh;
+  aspect-ratio: 16 / 9;
+  border-radius: 0;
+}
+
+/* Title overlays the top, controls overlay the bottom — each over a readability
+   scrim — instead of sitting in flow above/below the video. */
+.video-player-card:is(:fullscreen, .vp-fullscreen) .vp-title {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 18px 24px;
+  color: var(--canvas);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.55), transparent);
+  z-index: 5;
+}
+
+.video-player-card:is(:fullscreen, .vp-fullscreen) .vp-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 32px 24px 18px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), transparent);
+  z-index: 5;
+}
+
+.video-player-card:is(:fullscreen, .vp-fullscreen) .vp-time {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.video-player-card:is(:fullscreen, .vp-fullscreen) .vp-close {
+  top: 18px;
+  right: 18px;
+  z-index: 6;
+}
+
+/* Auto-hide: the chrome fades out by default and is revealed on pointer/tap
+   activity (app.js adds .vp-controls-visible, then removes it after a pause). */
+.video-player-card:is(:fullscreen, .vp-fullscreen) .vp-title,
+.video-player-card:is(:fullscreen, .vp-fullscreen) .vp-controls,
+.video-player-card:is(:fullscreen, .vp-fullscreen) .vp-close {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.video-player-card:is(:fullscreen, .vp-fullscreen).vp-controls-visible
+  .vp-title,
+.video-player-card:is(:fullscreen, .vp-fullscreen).vp-controls-visible
+  .vp-controls,
+.video-player-card:is(:fullscreen, .vp-fullscreen).vp-controls-visible
+  .vp-close {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Hide the cursor too while the chrome is hidden. */
+.video-player-card:is(:fullscreen, .vp-fullscreen):not(.vp-controls-visible) {
+  cursor: none;
+}
+
+/* Narrow screens: honor a wider share of the viewport so the player stays
+   usable (the 50vw spec is for typical desktop/tablet widths). */
+@media (max-width: 760px) {
+  .video-player-card {
+    width: 92vw;
+  }
+}

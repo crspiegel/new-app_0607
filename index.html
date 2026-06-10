@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&family=Cal+Sans&family=Cherry+Bomb+One&family=Concert+One&family=Fredoka:wght@600;700&family=Inter:wght@400;600;700;800&family=Manrope:wght@800&family=Nunito:wght@500;700;800;900&family=Sniglet:wght@400;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&family=Cal+Sans&family=Cherry+Bomb+One&family=Concert+One&family=Fredoka:wght@600;700&family=Inter:wght@400;600;700;800&family=Manrope:wght@800&family=Nunito:wght@500;700;800;900&family=Readex+Pro:wght@600&family=Sniglet:wght@400;800&display=swap"
       rel="stylesheet"
     />
     <link
@@ -656,6 +656,233 @@
       </footer>
     </div>
 
+    <!-- Video player modal (Level 1 / March only). Hidden until a lesson or
+         Opening/Ending Song button is clicked on that page. Custom shell with
+         our own Play / Pause / Stop / Repeat / Maximize controls + progress
+         bar driving a Vimeo video via the Vimeo Player SDK. -->
+    <div class="video-modal" id="videoModal" hidden>
+      <div class="video-modal-overlay" data-vp-close></div>
+      <div
+        class="video-player-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Video player"
+      >
+        <button
+          type="button"
+          class="vp-close"
+          data-vp-close
+          aria-label="Close video"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M6 6l12 12M18 6L6 18"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="4"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+
+        <p class="vp-title" id="vpTitle"></p>
+
+        <div class="vp-stage">
+          <div class="vp-frame" id="vpFrame"></div>
+          <button
+            type="button"
+            class="vp-click-layer"
+            id="vpClickLayer"
+            aria-label="Play or pause"
+          ></button>
+          <!-- Shown on the Vimeo "ended" event to cover its related-videos end
+               screen with our own scene + Replay. -->
+          <div class="vp-end-overlay" id="vpEndOverlay" hidden>
+            <button type="button" class="vp-replay" id="vpReplay">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path
+                  d="M7 7h8a4 4 0 0 1 4 4v1M17 17H9a4 4 0 0 1-4-4v-1"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+                <path d="M15 4l3 3-3 3M9 20l-3-3 3-3" fill="currentColor" />
+              </svg>
+              <span>Replay</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="vp-controls" aria-label="Video controls">
+          <div class="vp-progress-row">
+            <span class="vp-time" id="vpCurrent">0:00</span>
+            <button
+              type="button"
+              class="vp-progress"
+              id="vpProgress"
+              aria-label="Seek"
+              role="slider"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <span class="vp-progress-buffer" id="vpProgressBuffer"></span>
+              <span class="vp-progress-fill" id="vpProgressFill"></span>
+              <span class="vp-progress-thumb" id="vpProgressThumb"></span>
+            </button>
+            <span class="vp-time" id="vpDurationLabel">0:00</span>
+          </div>
+
+          <div class="vp-transport">
+            <div class="vp-transport-left">
+              <button
+                type="button"
+                class="vp-btn"
+                id="vpLoop"
+                aria-label="Repeat"
+                aria-pressed="false"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path
+                    d="M7 7h8a4 4 0 0 1 4 4v1M17 17H9a4 4 0 0 1-4-4v-1"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path d="M15 4l3 3-3 3M9 20l-3-3 3-3" fill="currentColor" />
+                </svg>
+              </button>
+              <div class="vp-volume">
+                <button
+                  type="button"
+                  class="vp-btn vp-mute"
+                  id="vpMute"
+                  aria-label="Mute"
+                  data-muted="false"
+                >
+                  <svg
+                    class="vp-icon-volume"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
+                    <path
+                      d="M16 8.5a4 4 0 0 1 0 7"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                  <svg
+                    class="vp-icon-muted"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
+                    <path
+                      d="M16 9.5l5 5M21 9.5l-5 5"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="vp-volume-slider"
+                  id="vpVolume"
+                  aria-label="Volume"
+                  role="slider"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow="100"
+                >
+                  <span class="vp-volume-fill" id="vpVolumeFill"></span>
+                  <span class="vp-volume-thumb" id="vpVolumeThumb"></span>
+                </button>
+              </div>
+            </div>
+
+            <div class="vp-transport-center">
+              <button
+                type="button"
+                class="vp-btn vp-toggle"
+                id="vpToggle"
+                aria-label="Play"
+                data-playing="false"
+              >
+                <svg
+                  class="vp-icon-play"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path d="M8 5v14l11-7z" fill="currentColor" />
+                </svg>
+                <svg
+                  class="vp-icon-pause"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  <path
+                    d="M7 5h3.2v14H7zM13.8 5H17v14h-3.2z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="vp-btn"
+                id="vpStop"
+                aria-label="Stop"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <rect
+                    x="6"
+                    y="6"
+                    width="12"
+                    height="12"
+                    rx="2"
+                    fill="currentColor"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div class="vp-transport-right">
+              <button
+                type="button"
+                class="vp-btn vp-max"
+                id="vpMax"
+                aria-label="Maximize"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path
+                    d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://player.vimeo.com/api/player.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

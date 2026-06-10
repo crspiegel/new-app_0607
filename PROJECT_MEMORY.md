@@ -82,6 +82,119 @@ deploying for client review. The app is **live**: https://new-app0607.vercel.app
   level screens (months/content/contentV2/contentV3); CSS:
   `body[class*="level-theme-"] .site-footer { background: var(--level-accent) }`. Footer text is
   still white (`--canvas`) — fine on red/blue/purple; ⚠ low contrast on L1 yellow (open item).
+- **Login page (new, frontend-only — no real auth):** `#loginScreen`, routed from the header's
+  rightmost login button (`data-view="login"` → `#login` hash; `setHash`/on-load handle it).
+  Layout based on the Duolingo login screenshot but rebuilt in our design system: **'Log in'
+  title in Cal Sans** (Google Fonts; `letter-spacing:0.03em`), soft-gray rounded `user ID` +
+  `Password` inputs (focus → macaw-blue), big macaw-blue tactile **LOG IN** button (height 75px),
+  one-line legal fine print. No sign-up, no OR/Google/Facebook (removed per request). Card is
+  centered both axes between header/footer (`body.login-active main{display:flex}` +
+  `#loginScreen.screen-active{flex:1;display:flex}` + section centers). **Footer turns white**
+  on login (`body.login-active .site-footer`, hairline top, muted dark text). app.js toggles
+  `login-active` on `<body>` in `showScreen()`.
+- **Footer copyright:** year is now **2026** on all pages (was 2025). Copyright text **bold
+  removed on the main/home page and the login page only** (others stay 800/bold — HOLD): home
+  via `body:not(.subpage-active) .site-footer p{font-weight:400}`, login via
+  `body.login-active .site-footer p`. Inter `400` weight added to the font import for a true
+  regular.
+- **Video player modal (Level 1 / March ONLY — `2026-06-10`):** clicking **Opening Song**,
+  **Ending Song**, or any of the **20 weekday lesson buttons** opens a custom-shelled video
+  modal. Scope is enforced at click time (`isLevel1March()` = `state.level === "Level 1" &&
+state.month === "March"`), so the shared `#contentScreen` markup stays inert on every other
+  level/month and on V2/V3. Built from scratch in our design system: centered overlay, **50vw**
+  white card (`92vw` under 760px), 16:9 black stage, and a control row — **Play/Pause (single
+  toggle) · Stop · Repeat · progress bar · Maximize**. Style (revised `2026-06-10`): **flat aqua**
+  (`--macaw-blue`) circular buttons — no bevel/drop shadow, white icons, hover → `--macaw-blue-shadow`,
+  Repeat-active → `--deep-blue`. Round **X** close is also flat aqua with a **thick white "x"**
+  (`stroke-width:4`), top-right corner-overlap. Driven by the **Vimeo Player SDK** (`player.js`,
+  before `app.js`; `controls:0` so our UI is the only UI). **One Play/Pause toggle**
+  (`#vpToggle[data-playing]`) swaps icon via the Vimeo `play`/`pause`/`ended` events; **clicking the
+  video** (transparent `.vp-click-layer` over the iframe — the cross-origin frame would otherwise
+  eat the click) toggles play/pause too. Stop = `pause()` + `setCurrentTime(0)`; Repeat = `setLoop()`
+  (`aria-pressed`); Maximize = Fullscreen API on the card (Vimeo's native fullscreen is hidden with
+  its controls). Progress via `timeupdate`, click-to-seek. Close via X / overlay / **Esc**. The
+  stage clips the iframe cleanly via layer promotion (`transform:translateZ(0)`) + matching
+  `border-radius` on the iframe — fixes the thin black corner seam Chrome leaves when an ancestor's
+  `border-radius` doesn't clip a child iframe. Sample video for all 22 buttons: Vimeo id `210024645`.
+  Markup `#videoModal` lives before `app.js`; styles are a new self-contained block (no existing
+  rules touched). _Not yet wired:_ per-button distinct URLs, other levels/months.
+- **Video player design pass (`2026-06-10`):** kept the flat-aqua/toggle/thick-X direction, polished
+  within it. **Two-tier control bar** — full-width **progress row** (`current · bar · duration`) on
+  top, **transport row** below (toggle/stop/repeat left, `.vp-spacer`, maximize right) — fixes the
+  cramped mobile seek bar and the lopsided desktop layout. Added **time labels** (`formatTime`,
+  tabular-nums) from `timeupdate`/`getDuration`; a **draggable thumb** with pointer drag-to-seek
+  (`vpDragging` ignores `timeupdate` mid-drag; `is-dragging`/`:hover` grow the thumb); a **context
+  title** `#vpTitle` (lesson buttons carry `data-vp-title` = `"<lessonType> · Week N"` set in
+  `renderLessons`; toolbar passes "Opening/Ending Song"); **bigger primary toggle** (58 vs 50px);
+  `:focus-visible` deep-blue rings (buttons are shadowless); a **pop-in** card animation +
+  overlay fade (guarded by `prefers-reduced-motion`); a soft **dark-aqua radial** stage background
+  so buffering reads as loading not broken; and `:fullscreen` light title/time text. ⚠ Headless
+  can't load Vimeo duration/playback, so live time + drag-seek are verified by inspection (guarded
+  on `vpDuration`), not headless run — see `NOTES.md`.
+- **Video player controls reflow + end overlay (`2026-06-10`):** transport row is now a 3-zone grid
+  (`grid-template-columns:1fr auto 1fr`) — **Repeat left** (`.vp-transport-left`), **Play/Pause +
+  Stop centered** (`.vp-transport-center`), **Maximize right** (`.vp-transport-right`); replaced the
+  old left-clustered + spacer layout. **End-of-video overlay** (`#vpEndOverlay`, inside `.vp-stage`,
+  `z-index:2` above the click layer, opaque dark-aqua radial + a **Replay** pill) shows on the Vimeo
+  `ended` event to **cover Vimeo's related-videos end screen** (no reliable cross-account embed param
+  to disable it, so we overlay instead). Hidden on open/close and on the `play` event; Replay =
+  `setCurrentTime(0)` + `play()` + hide. (Loop on → `ended` never fires → no overlay, as intended.)
+- **Video player design-review pass 2 (`2026-06-10`):** (1) **title separator unified to `·`** —
+  lesson buttons now `"<lessonType> · Week N · <day>"` (e.g. `Story · Week 1 · Tue`); dropped the
+  earlier `-` between week/day. (2) **On-brand title** — 18px + a small aqua accent dot
+  (`.vp-title::before`). (3) **Mute/volume toggle** (`#vpMute`, left zone next to Repeat) — Vimeo has
+  no mute, so `setVolume(0)` / restore `vpLastVolume`; persists across opens, applied on player
+  create; deep-blue active state + volume/muted icon swap. (5) **Buffered indicator**
+  (`#vpProgressBuffer`, light aqua) driven by the Vimeo `progress` event. (6) **Darker time labels**
+  (`#555`). (7) **Slider a11y** — progress bar is `role="slider"` with `aria-valuenow`, plus keyboard
+  seeking (←/→ ±5s, Home/End). **Stop kept** (it's an original required control; the review's
+  "reconsider" resolved to keep). `.vp-transport-left` is `display:flex` so Repeat+Mute sit in a row.
+  ⚠ Live time / drag / keyboard-seek / mute audio still can't be exercised headless (no Vimeo
+  duration/playback there) — verified by structure + inspection.
+- **Video player inline volume slider (`2026-06-10`):** added a compact horizontal **volume slider**
+  (`#vpVolume`, `role="slider"`) next to the mute button, wrapped together in `.vp-volume` in the
+  left transport zone. Reuses the progress bar's aqua fill + white thumb at a smaller scale (84px).
+  State is `vpVolumeLevel` (0–1) + `vpLastVolume`; **`applyVolume()`** is the single entry point
+  (slider drag/click, keyboard ±10% via ←/→/↑/↓ + Home/End, and the mute button which toggles
+  between 0 and the last non-zero level). `reflectVolumeUI()` keeps the slider fill/thumb +
+  `aria-valuenow` + mute icon (muted = volume 0) in sync; a Vimeo `volumechange` listener mirrors
+  external changes. Volume persists across opens and is applied on player create
+  (`setVolume(vpVolumeLevel)`). **Responsive:** the slider is hidden under `560px`
+  (`@media max-width:560px`) so phones keep just the mute toggle (no row overflow); the slider's UI
+  is fully testable headless since `applyVolume` updates the DOM independently of Vimeo playback.
+  ⚠ Naming gotcha: the DOM ref is `vpVolume` (element), the volume value is `vpVolumeLevel` — don't
+  collide them (a `const`/`let` of the same name is a SyntaxError).
+- **Video player title font + chunkier volume bar (`2026-06-10`):** the `.vp-title` is now
+  **Readex Pro 600** (added `Readex+Pro:wght@600` to the Google Fonts `<link>`) in a readable light
+  gray **`#9a9a9a`** (was Nunito 800 / `--ink`). The inline **volume slider is larger/plumper** —
+  `104×13px` track (was 84×8) with a `21px` thumb (was 16) — per the request that it felt too small.
+- **Video player title size + hover volume (`2026-06-10`):** title font reduced `18px → 15px`.
+  The volume slider no longer sits permanently next to the progress bar (looked cluttered) — it's
+  now a **hover/focus-revealed floating popover above the sound icon** (`.vp-volume` is the
+  `position:relative` anchor; `.vp-volume-slider` is absolute, `opacity:0`/`pointer-events:none` by
+  default, revealed via `.vp-volume:hover`/`:focus-within`, with a `::after` bridge over the gap so
+  the hover doesn't drop). Still hidden under 560px (mute only). Floats to the **right of the sound
+  icon** (`left:calc(100% + 12px); top:50%`) — the earlier above-the-icon position overlapped the
+  progress bar; right placement sits in the empty gap between mute and the play buttons, clear of
+  both. **Corner seam re-fix (`2026-06-10`):** the thin dark band at the video's rounded corners
+  was the iframe's _own_ `border-radius` exposing the dark stage background. Fix = iframe is now
+  **square (no radius) and overscans the stage 1px on every side** (`top/left:-1px;
+width/height:calc(100% + 2px)`), so the stage's rounded `overflow:hidden` clip always cuts through
+  solid video. See `NOTES.md`. **Fullscreen auto-hiding chrome (`2026-06-10`):** in fullscreen the
+  title + controls + close become **YouTube-style auto-hiding overlays** — title overlays the top,
+  controls the bottom (each over a scrim), hidden by default and revealed on pointer-move/tap, then
+  re-hidden after 2.5s of inactivity (cursor hidden too). `app.js` toggles a **`.vp-fullscreen`
+  class** on `fullscreenchange` (so the CSS keys off `:is(:fullscreen, .vp-fullscreen)` and the
+  behaviour is testable without real fullscreen); `revealFsControls()` adds `.vp-controls-visible` +
+  a `window.setTimeout` hide timer; `pointermove`/`pointerdown` on the card re-reveal. Non-fullscreen
+  mode is untouched (chrome always visible). ⚠ ESLint has no `setTimeout`/`clearTimeout` globals —
+  use `window.setTimeout`/`window.clearTimeout`. **Title week/day:** confirmed the
+  20 weekday lesson buttons already show `"<type> · Week N · <day>"`; the toolbar Opening/Ending
+  Song are month-level (no week/day) and the user chose to **keep them as just the song name**.
+- **DESIGN.md updated:** added an authoritative **"Implemented Design System (current build —
+  source of truth)"** section documenting the real as-built values (tokens, fonts, the per-level
+  theme token table, header/month/content specs, footer) — supersedes the legacy Duolingo-ABC
+  reference where they differ.
 
 ## Confirmed product decisions
 
@@ -94,14 +207,20 @@ deploying for client review. The app is **live**: https://new-app0607.vercel.app
 ## Implementation status
 
 - Main page, Level 1-4 selection, March-December month selection, and hash routing all work
-  (`#months/Level%201`, `#content/Level%201/March`).
+  (`#months/Level%201`, `#content/Level%201/March`, `#login`).
+- **Login page** (`#login` / `#loginScreen`) — frontend-only, linked from the header login
+  button (see "Design changes done so far"). No backend/auth yet.
 - Three content-screen variants exist:
   - **V1 `#content/...`** — default; temporary `Book A/B × 2 weeks × Mon-Fri` board. Design
     changes target this (and shared `.content-v2-*` classes).
   - **V2 `#content-v2/...`** — alternate, preserved (kept on the green styling).
   - **V3 `#content-v3/...`** — Mon-Fri weekday-board candidate; uses `data-content-type`,
     `data-week`, `data-day` for future modal playback.
-- Not built yet: `contentData.js`, `calendarData.js`, `modal.js`, the Vimeo/video modal.
+- **Video modal** is built inline (markup in `index.html` `#videoModal`, logic in `app.js`,
+  styles in `styles.css`) and wired on **Level 1 / March only** with one sample Vimeo
+  (`210024645`) — see "Design changes done so far". No separate `modal.js` was created.
+- Not built yet: `contentData.js`, `calendarData.js`; per-button distinct video URLs; rolling
+  the modal out to other levels/months once real content is ready.
 
 ## Backlog (feature work, after design)
 
