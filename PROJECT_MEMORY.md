@@ -213,6 +213,80 @@ width/height:calc(100% + 2px)`), so the stage's rounded `overflow:hidden` clip a
   theme token table, header/month/content specs, footer) — supersedes the legacy Duolingo-ABC
   reference where they differ.
 
+## Platform build — approved 3-phase plan (`2026-06-10`)
+
+Plan file: `C:\Users\dupy2\.claude\plans\steady-roaming-yao.md`. Adds the video
+player to **all levels/months**, an **admin content manager**, and **login + 3
+permission grades**. **Backend = Supabase** (Auth + Postgres + Storage) added to
+the **current static SPA via the CDN UMD build** (`window.supabase`) — NO Next.js
+rewrite, NO build step. Reads public (anon key), **writes admin-only via RLS**.
+Delivery is **phased**; content access gate is **UI-level** (grade 3 → cute popup).
+
+- **Phase 1 — DONE (`2026-06-10`):** player rolled out to all 40 pages; no Supabase yet.
+  - `app.js` `contentData` map + `getVideoUrl/getCover(level, month, slot|book)` — the
+    single data source; Phase 2 swaps the backing store to Supabase with no caller change.
+    Seeded only with L1/March covers; everything else falls back to the sample video.
+  - **Slot keys** (22/page): toolbar `data-slot="opening"/"ending"`; weekday buttons
+    `data-slot="w{1..4}-{Mon..Fri}"` set in `renderLessons`.
+  - `isLevel1March()` gate **removed**. New `openSlot(slot, label)` → grade-3 check →
+    `getVideoUrl` → `openVideoPlayer(label, source)`. `openVideoPlayer` now takes a source
+    (`resolveVimeoSource`: numeric id / id-string / Vimeo URL, else sample fallback).
+  - **Covers are data-driven now:** the 3 hard-coded `#contentScreen.level-theme-1[data-month="March"]`
+    CSS rules were replaced by a generic `.book-title-card.has-cover` rule; `refreshCovers()`
+    (called in `updateContentMonthNumber`) sets/clears `has-cover` + inline `background-image`
+    from `getCover` per current level/month. L1/March visuals unchanged.
+  - **`#noAccessModal`** popup (markup + styles + `showNoAccessPopup`/`hideNoAccessPopup`,
+    Esc/overlay/OK close) built and wired — **dormant until Phase 3** sets `state.grade`.
+  - Verified: player opens on L2/May & L3/September (rollout); L1/March covers intact; other
+    pages keep empty placeholder; month-nav clears covers; `npm.cmd run qa` green. ⚠ Vimeo
+    playback still un-testable headless (modal visibility is set before the SDK call, so the
+    open/close is verifiable; playback is not).
+- **Phase 2 — DONE (`2026-06-10`):** Supabase wired into the static SPA; admin content manager live.
+  - **Provisioned (user, project `jguuexcgyvyljbcqfpib`):** ran `supabase/migration.sql`
+    (tables `content_pages`/`members`/`admins`/`site_settings`, `is_admin()`, RLS, pgcrypto RPCs),
+    created public `covers` bucket, created first admin (Auth user + `admins` row). Keys live in
+    **`supabase-config.js`** (`window.SUPABASE_URL` + anon key; ships — NOT in `.vercelignore`).
+    `SUPABASE_SETUP.md` + `supabase/` are git-tracked but `.vercelignore`'d.
+  - **Client:** `<script @supabase/supabase-js@2>` (CDN UMD, `window.supabase`) + `supabase-config.js`
+    load before `app.js`. `const sb = window.supabase.createClient(...)` (null-guarded).
+  - **Data source swap:** `contentCache` (keyed `level||month`) hydrated on load via
+    `sb.from('content_pages').select('*')`; `getVideoUrl/getCover` read cache → fall back to the
+    local seed. `refreshCovers()` re-runs after hydrate if a content page is showing.
+  - **Admin auth (Phase 2 = admin only):** login form (`#loginForm`) → `sb.auth.signInWithPassword`
+    ({email: idField}) → `sb.rpc('is_admin')`; admin session reveals header **Admin** + **Log out**
+    buttons (`body.is-admin`). `#admin` route guarded (non-admins bounce to login). Member-grade
+    login is **Phase 3**.
+  - **Gray mirror editor** (`#adminScreen`, built by `renderAdminBoard`): level/month `<select>`s;
+    songs row + 2 books × (cover card + 2 weeks × 5 day slots). Slot button → `#adminSlotModal`
+    (prefilled current URL) → `savePage` upserts whole `content_pages` row (videos+covers together).
+    Cover card = drag-drop/click → `sb.storage.from('covers').upload(path,{upsert})` →
+    `getPublicUrl` + `?t=Date.now()` cache-bust → stored in `covers[book]`. `slugify(level)/slugify(month)/book-N`.
+  - Verified headless: Supabase lib+config load, anon hydrate, admin UI hidden when logged out,
+    `#admin`→login bounce, bad login reaches Supabase Auth and shows error; `npm.cmd run qa` green.
+    ⚠ Real admin login + URL edit + cover upload + cross-device reflection need the admin's
+    credentials → **manual test** (can't run headless).
+- **Phase 3 — TODO:** login wiring (admin = real Auth, members = `verify_member_login` RPC),
+  activate grade-3 gate, admin member management, hidden signup (`site_settings.signup_visible`),
+  ID/pw rule `/^[\x21-\x7E]{4,}$/` (≥4, ASCII only, no Korean), logout.
+
+### ▶ RESUME HERE (next session — `2026-06-10` end of day)
+
+- **Done & committed:** Phase 1 (player on all 40 pages) + Phase 2 (Supabase admin manager).
+  Header layout fix applied (`.topbar-actions` wrapper groups Admin/Log out/Login at the right).
+- **User-tested OK so far:** admin login, admin page, **cover image upload + drag-drop reflects
+  on the user page**. ✅
+- **NOT yet user-tested (do first tomorrow):** (1) video **URL registration** via the slot
+  modal → plays on the user content page; (2) **cross-device** reflection (phone/other browser).
+  If these work, Phase 2 is fully signed off.
+- **Then start Phase 3** (login + 3 grades). Note for Phase 3: the login form currently sends the
+  `user ID` field as an **email** to Supabase Auth (admin path). Phase 3 must add the member
+  branch: if Auth fails, try `sb.rpc('verify_member_login', {p_id, p_password})` → set
+  `state.grade` → grade-3 click shows `#noAccessModal` (already built, dormant). Member admin UI +
+  signup toggle still to build.
+- **Infra reminders:** Supabase project `jguuexcgyvyljbcqfpib`; keys in `supabase-config.js`
+  (ships; anon key is public-safe). `SUPABASE_SETUP.md` + `supabase/migration.sql` are the
+  provisioning record (`.vercelignore`'d). Live site auto-deploys on push to `master`.
+
 ## Confirmed product decisions
 
 - Continue/complete the static SPA (no frontend framework yet).

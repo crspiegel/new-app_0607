@@ -71,6 +71,50 @@ const monthlyBooks = [
   },
 ];
 
+/* ---- Content data source (Phase 1: local map) --------------------------
+   Single source of truth for per-slot video URLs and per-book cover images,
+   keyed by level → month. Phase 2 swaps the backing store to Supabase
+   WITHOUT changing the getVideoUrl / getCover callers below.
+
+   Slot keys (22 per page): "opening", "ending", and the 20 weekday buttons
+   "w{1..4}-{Mon..Fri}". Cover keys: "book-1", "book-2". */
+const contentData = {
+  "Level 1": {
+    March: {
+      videos: {},
+      covers: {
+        "book-1": "assets/l1-march-book-1.jpg",
+        "book-2": "assets/l1-march-book-2.jpg",
+      },
+    },
+  },
+};
+
+function getPageData(level, month) {
+  return (contentData[level] && contentData[level][month]) || null;
+}
+
+// Live content loaded from Supabase (Phase 2), keyed "level||month". Any slot or
+// cover not set in the database falls back to the local contentData seed.
+const contentCache = {};
+function pageKey(level, month) {
+  return `${level}||${month}`;
+}
+
+function getVideoUrl(level, month, slot) {
+  const live = contentCache[pageKey(level, month)];
+  if (live && live.videos && live.videos[slot]) return live.videos[slot];
+  const page = getPageData(level, month);
+  return (page && page.videos && page.videos[slot]) || "";
+}
+
+function getCover(level, month, book) {
+  const live = contentCache[pageKey(level, month)];
+  if (live && live.covers && live.covers[book]) return live.covers[book];
+  const page = getPageData(level, month);
+  return (page && page.covers && page.covers[book]) || "";
+}
+
 const screens = {
   home: document.querySelector("#homeScreen"),
   overview: document.querySelector("#overviewScreen"),
@@ -79,6 +123,7 @@ const screens = {
   contentV2: document.querySelector("#contentScreenV2"),
   contentV3: document.querySelector("#contentScreenV3"),
   login: document.querySelector("#loginScreen"),
+  admin: document.querySelector("#adminScreen"),
 };
 
 const levelThemeClasses = [
@@ -191,7 +236,32 @@ function setHash(view) {
     return;
   }
 
+  if (view === "admin") {
+    window.location.hash = "admin";
+    return;
+  }
+
   window.location.hash = `content/${encodeURIComponent(state.level)}/${encodeURIComponent(state.month)}`;
+}
+
+// Paint (or clear) the two book-cover title cards from the content data for
+// the current level/month. The cards are static markup (rendered once by
+// renderLessons); only their cover art depends on the page, so this runs on
+// every content-page show / month change. Pages with no cover keep the empty
+// white placeholder.
+function refreshCovers() {
+  ["book-1", "book-2"].forEach((bookKey) => {
+    const card = lessonGrid.querySelector(`.book-title-card.${bookKey}`);
+    if (!card) return;
+    const url = getCover(state.level, state.month, bookKey);
+    if (url) {
+      card.classList.add("has-cover");
+      card.style.backgroundImage = `url("${url}")`;
+    } else {
+      card.classList.remove("has-cover");
+      card.style.backgroundImage = "";
+    }
+  });
 }
 
 function updateContentMonthNumber() {
@@ -207,6 +277,7 @@ function updateContentMonthNumber() {
   contentLevelBand.textContent = levelStrands[state.level] || "";
   contentBannerMonthNumber.textContent =
     monthIndex >= 0 ? String(monthIndex + 3) : "";
+  refreshCovers();
 }
 
 function goToMonth(offset) {
@@ -288,9 +359,11 @@ function renderLessons() {
           "aria-label",
           `${book.title}, ${weekNumber} week, ${lessonTypes[dayIndex]}`,
         );
-        // Context label shown in the video player title (Level 1 / March),
-        // e.g. "Story · Week 1 · Tue".
+        // Context label shown in the video player title, e.g.
+        // "Story · Week 1 · Tue".
         button.dataset.vpTitle = `${lessonTypes[dayIndex]} · Week ${weekNumber} · ${day}`;
+        // Stable per-page slot key for the content data lookup (w1-Mon .. w4-Fri).
+        button.dataset.slot = `w${weekNumber}-${day}`;
         button.innerHTML = `<strong>${day}</strong>`;
         lessonGrid.append(button);
       });
@@ -409,8 +482,33 @@ let vpCurrentSeconds = 0;
 let vpDragging = false;
 let vpHideTimer = null;
 
-function isLevel1March() {
-  return state.level === "Level 1" && state.month === "March";
+// Resolve a stored video value into Vimeo Player options. Accepts a numeric id,
+// a numeric-string id, or a full Vimeo URL; falls back to the sample video when
+// a slot has no URL yet so every page stays playable during rollout.
+function resolveVimeoSource(source) {
+  if (!source) return { id: SAMPLE_VIMEO_ID };
+  if (typeof source === "number") return { id: source };
+  const str = String(source).trim();
+  if (/^\d+$/.test(str)) return { id: Number(str) };
+  return { url: str };
+}
+
+// Current viewer grade. Phase 3 sets state.grade on login; until then everyone
+// has full access (undefined !== 3).
+function isBlockedByGrade() {
+  return state.grade === 3;
+}
+
+// Single entry point for opening a content slot's video. Grade 3 is screen-
+// gated with the cute popup; everyone else plays the slot's URL (or the sample
+// fallback). Works on every level/month.
+function openSlot(slot, label) {
+  if (isBlockedByGrade()) {
+    showNoAccessPopup();
+    return;
+  }
+  const url = getVideoUrl(state.level, state.month, slot);
+  openVideoPlayer(label, url);
 }
 
 function formatTime(seconds) {
@@ -514,7 +612,7 @@ function togglePlayback() {
   }
 }
 
-function openVideoPlayer(label) {
+function openVideoPlayer(label, source) {
   if (!videoModal) return;
   videoModal.hidden = false;
   document.body.classList.add("video-open");
@@ -534,7 +632,7 @@ function openVideoPlayer(label) {
     }
     vpFrame.innerHTML = "";
     vimeoPlayer = new window.Vimeo.Player(vpFrame, {
-      id: SAMPLE_VIMEO_ID,
+      ...resolveVimeoSource(source),
       controls: false,
       loop: vpLoopOn,
       responsive: false,
@@ -757,11 +855,40 @@ if (videoModal) {
   });
 
   // The 20 weekday lesson buttons live in #lessonGrid (shared by all levels
-  // and months); open the player only on Level 1 / March.
+  // and months); each carries its own slot key, so the player opens with that
+  // slot's URL on every page.
   lessonGrid.addEventListener("click", (event) => {
     const button = event.target.closest(".lesson-button");
-    if (button && isLevel1March()) {
-      openVideoPlayer(button.dataset.vpTitle || "");
+    if (button && button.dataset.slot) {
+      openSlot(button.dataset.slot, button.dataset.vpTitle || "");
+    }
+  });
+}
+
+/* ---- "No access" popup (grade 3) ---------------------------------------
+   A small child-friendly modal shown when a grade-3 viewer clicks a video
+   button. Built now; activated by the grade gate in Phase 3. */
+const noAccessModal = document.querySelector("#noAccessModal");
+
+function showNoAccessPopup() {
+  if (!noAccessModal) return;
+  noAccessModal.hidden = false;
+  document.body.classList.add("noaccess-open");
+}
+
+function hideNoAccessPopup() {
+  if (!noAccessModal) return;
+  noAccessModal.hidden = true;
+  document.body.classList.remove("noaccess-open");
+}
+
+if (noAccessModal) {
+  noAccessModal.querySelectorAll("[data-noaccess-close]").forEach((el) => {
+    el.addEventListener("click", hideNoAccessPopup);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !noAccessModal.hidden) {
+      hideNoAccessPopup();
     }
   });
 }
@@ -807,10 +934,11 @@ document.querySelectorAll(".content-type").forEach((button) => {
       .forEach((item) => item.classList.remove("active"));
     button.classList.add("active");
     // Only Opening Song / Ending Song are clickable on #contentScreen (the
-    // middle three are hidden); open the player on Level 1 / March only.
-    if (isLevel1March()) {
+    // middle three are hidden); they carry data-slot ("opening" / "ending").
+    const slot = button.dataset.slot;
+    if (slot) {
       const label = button.querySelector("span:last-child");
-      openVideoPlayer(label ? label.textContent.trim() : "");
+      openSlot(slot, label ? label.textContent.trim() : "");
     }
   });
 });
@@ -832,6 +960,408 @@ document.querySelectorAll(".content-v3-type").forEach((button) => {
     button.classList.add("active");
   });
 });
+
+/* ---- Supabase: content hydration, admin editor, auth -------------------
+   The site reads content URLs/covers from Supabase (public, anon key). Only
+   authenticated admins can write. Admins are real Supabase Auth users; member
+   (grade 1-3) login arrives in Phase 3. */
+
+const sb =
+  window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY
+    ? window.supabase.createClient(
+        window.SUPABASE_URL,
+        window.SUPABASE_ANON_KEY,
+      )
+    : null;
+
+let isAdmin = false;
+const adminState = { level: "Level 1", month: "March" };
+const levels = ["Level 1", "Level 2", "Level 3", "Level 4"];
+
+const adminBoard = document.querySelector("#adminBoard");
+const adminLevelSelect = document.querySelector("#adminLevel");
+const adminMonthSelect = document.querySelector("#adminMonth");
+const adminStatus = document.querySelector("#adminStatus");
+const adminNavBtn = document.querySelector("#adminNavBtn");
+const logoutBtn = document.querySelector("#logoutBtn");
+const adminSlotModal = document.querySelector("#adminSlotModal");
+const adminSlotTitle = document.querySelector("#adminSlotTitle");
+const adminSlotSub = document.querySelector("#adminSlotSub");
+const adminSlotInput = document.querySelector("#adminSlotInput");
+const adminSlotSave = document.querySelector("#adminSlotSave");
+const adminSlotClear = document.querySelector("#adminSlotClear");
+const loginForm = document.querySelector("#loginForm");
+const loginId = document.querySelector("#loginId");
+const loginPassword = document.querySelector("#loginPassword");
+const loginError = document.querySelector("#loginError");
+
+function setAdminStatus(text) {
+  if (adminStatus) adminStatus.textContent = text || "";
+}
+
+// Human label for a slot key, e.g. "Week 1 · Mon · Story".
+function slotLabel(slot) {
+  if (slot === "opening") return "Opening Song";
+  if (slot === "ending") return "Ending Song";
+  const m = slot.match(/^w(\d)-(\w+)$/);
+  if (m) {
+    const dayIndex = weekdays.indexOf(m[2]);
+    return `Week ${m[1]} · ${m[2]} · ${lessonTypes[dayIndex] || ""}`;
+  }
+  return slot;
+}
+
+// Load every content_pages row into the cache so user pages reflect saved data.
+async function hydrateContent() {
+  if (!sb) return;
+  const { data, error } = await sb.from("content_pages").select("*");
+  if (error || !data) return;
+  data.forEach((row) => {
+    contentCache[pageKey(row.level, row.month)] = {
+      videos: row.videos || {},
+      covers: row.covers || {},
+    };
+  });
+  if (screens.content.classList.contains("screen-active")) refreshCovers();
+}
+
+// Mutable working copy of a page's data (for editing/saving).
+function pageEntry(level, month) {
+  const key = pageKey(level, month);
+  if (!contentCache[key]) contentCache[key] = { videos: {}, covers: {} };
+  if (!contentCache[key].videos) contentCache[key].videos = {};
+  if (!contentCache[key].covers) contentCache[key].covers = {};
+  return contentCache[key];
+}
+
+// Upsert the whole row so videos and covers never clobber each other.
+async function savePage(level, month) {
+  if (!sb) return { error: new Error("no client") };
+  const entry = pageEntry(level, month);
+  return sb
+    .from("content_pages")
+    .upsert({ level, month, videos: entry.videos, covers: entry.covers });
+}
+
+function updateAdminUI() {
+  document.body.classList.toggle("is-admin", isAdmin);
+  if (adminNavBtn) adminNavBtn.hidden = !isAdmin;
+  if (logoutBtn) logoutBtn.hidden = !isAdmin;
+}
+
+async function refreshAdminStatus() {
+  if (!sb) {
+    isAdmin = false;
+    updateAdminUI();
+    return;
+  }
+  const {
+    data: { session },
+  } = await sb.auth.getSession();
+  if (!session) {
+    isAdmin = false;
+  } else {
+    const { data, error } = await sb.rpc("is_admin");
+    isAdmin = !error && data === true;
+  }
+  updateAdminUI();
+}
+
+function setLoginError(text) {
+  if (!loginError) return;
+  loginError.textContent = text || "";
+  loginError.hidden = !text;
+}
+
+if (loginForm) {
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setLoginError("");
+    const id = loginId ? loginId.value.trim() : "";
+    const pw = loginPassword ? loginPassword.value : "";
+    if (!id || !pw) {
+      setLoginError("Enter your ID and password.");
+      return;
+    }
+    if (!sb) {
+      setLoginError("Login is not available right now.");
+      return;
+    }
+    // Phase 2: admin login via Supabase Auth (email = the admin's email).
+    // Phase 3 adds the member (grade 1-3) branch here.
+    const { error } = await sb.auth.signInWithPassword({
+      email: id,
+      password: pw,
+    });
+    if (error) {
+      setLoginError("Login failed. Check your ID and password.");
+      return;
+    }
+    await refreshAdminStatus();
+    if (loginPassword) loginPassword.value = "";
+    if (isAdmin) {
+      openAdmin();
+    } else {
+      setHash("home");
+      showScreen("home");
+    }
+  });
+}
+
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", async () => {
+    if (sb) await sb.auth.signOut();
+    isAdmin = false;
+    updateAdminUI();
+    setHash("home");
+    showScreen("home");
+  });
+}
+
+function populateAdminSelectors() {
+  if (adminLevelSelect && !adminLevelSelect.options.length) {
+    levels.forEach((lvl) => {
+      const opt = document.createElement("option");
+      opt.value = lvl;
+      opt.textContent = lvl;
+      adminLevelSelect.append(opt);
+    });
+  }
+  if (adminMonthSelect && !adminMonthSelect.options.length) {
+    months.forEach((m) => {
+      const opt = document.createElement("option");
+      opt.value = m;
+      opt.textContent = m;
+      adminMonthSelect.append(opt);
+    });
+  }
+  if (adminLevelSelect) adminLevelSelect.value = adminState.level;
+  if (adminMonthSelect) adminMonthSelect.value = adminState.month;
+}
+
+function openAdmin() {
+  if (!isAdmin) {
+    setHash("login");
+    showScreen("login");
+    return;
+  }
+  populateAdminSelectors();
+  renderAdminBoard();
+  setHash("admin");
+  showScreen("admin");
+}
+
+if (adminNavBtn) adminNavBtn.addEventListener("click", openAdmin);
+
+if (adminLevelSelect) {
+  adminLevelSelect.addEventListener("change", () => {
+    adminState.level = adminLevelSelect.value;
+    renderAdminBoard();
+  });
+}
+if (adminMonthSelect) {
+  adminMonthSelect.addEventListener("change", () => {
+    adminState.month = adminMonthSelect.value;
+    renderAdminBoard();
+  });
+}
+
+// One editable slot button reflecting its current URL.
+function adminSlotButton(slot) {
+  const url = getVideoUrl(adminState.level, adminState.month, slot);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "admin-slot";
+  button.dataset.slot = slot;
+  button.dataset.filled = String(Boolean(url));
+  const name = document.createElement("span");
+  name.className = "admin-slot-name";
+  name.textContent = slotLabel(slot);
+  const value = document.createElement("span");
+  value.className = "admin-slot-url";
+  value.textContent = url || "Not set";
+  button.append(name, value);
+  button.addEventListener("click", () => openSlotEditor(slot));
+  return button;
+}
+
+// One editable cover dropzone card reflecting the current cover.
+function adminCoverCard(book) {
+  const url = getCover(adminState.level, adminState.month, book);
+  const card = document.createElement("div");
+  card.className = "admin-cover";
+  card.dataset.book = book;
+  if (url) {
+    card.classList.add("has-cover");
+    card.style.backgroundImage = `url("${url}")`;
+  }
+  const label = document.createElement("span");
+  label.className = "admin-cover-label";
+  label.textContent = `${book === "book-1" ? "Book 1" : "Book 2"} cover`;
+  const hint = document.createElement("span");
+  hint.className = "admin-cover-hint";
+  hint.textContent = url ? "Drop / click to replace" : "Drop image or click";
+  card.append(label, hint);
+  wireCoverCard(card, book);
+  return card;
+}
+
+function renderAdminBoard() {
+  if (!adminBoard) return;
+  setAdminStatus("");
+  if (adminLevelSelect) adminLevelSelect.value = adminState.level;
+  if (adminMonthSelect) adminMonthSelect.value = adminState.month;
+  adminBoard.innerHTML = "";
+
+  const songs = document.createElement("div");
+  songs.className = "admin-songs";
+  songs.append(adminSlotButton("opening"), adminSlotButton("ending"));
+  adminBoard.append(songs);
+
+  const grid = document.createElement("div");
+  grid.className = "admin-grid";
+  let weekNumber = 0;
+  for (let book = 1; book <= 2; book += 1) {
+    const bookBlock = document.createElement("div");
+    bookBlock.className = "admin-book";
+    bookBlock.append(adminCoverCard(`book-${book}`));
+
+    const weeks = document.createElement("div");
+    weeks.className = "admin-weeks";
+    for (let w = 0; w < 2; w += 1) {
+      weekNumber += 1;
+      const row = document.createElement("div");
+      row.className = "admin-week-row";
+      const label = document.createElement("span");
+      label.className = "admin-week-label";
+      label.textContent = `${weekNumber} week`;
+      row.append(label);
+      weekdays.forEach((day) => {
+        row.append(adminSlotButton(`w${weekNumber}-${day}`));
+      });
+      weeks.append(row);
+    }
+    bookBlock.append(weeks);
+    grid.append(bookBlock);
+  }
+  adminBoard.append(grid);
+}
+
+// --- Slot URL editor modal ---
+let editingSlot = null;
+
+function openSlotEditor(slot) {
+  editingSlot = slot;
+  const url = getVideoUrl(adminState.level, adminState.month, slot);
+  if (adminSlotTitle) adminSlotTitle.textContent = slotLabel(slot);
+  if (adminSlotSub)
+    adminSlotSub.textContent = `${adminState.level} · ${adminState.month}`;
+  if (adminSlotInput) adminSlotInput.value = url || "";
+  if (adminSlotModal) adminSlotModal.hidden = false;
+  document.body.classList.add("admin-modal-open");
+  if (adminSlotInput) adminSlotInput.focus();
+}
+
+function closeSlotEditor() {
+  editingSlot = null;
+  if (adminSlotModal) adminSlotModal.hidden = true;
+  document.body.classList.remove("admin-modal-open");
+}
+
+async function commitSlot(value) {
+  if (!editingSlot) return;
+  const slot = editingSlot;
+  const entry = pageEntry(adminState.level, adminState.month);
+  if (value) entry.videos[slot] = value;
+  else delete entry.videos[slot];
+  setAdminStatus("Saving…");
+  const { error } = await savePage(adminState.level, adminState.month);
+  if (error) {
+    setAdminStatus("Save failed.");
+    return;
+  }
+  setAdminStatus("Saved.");
+  closeSlotEditor();
+  renderAdminBoard();
+}
+
+if (adminSlotModal) {
+  adminSlotModal.querySelectorAll("[data-admin-close]").forEach((el) => {
+    el.addEventListener("click", closeSlotEditor);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !adminSlotModal.hidden) closeSlotEditor();
+  });
+}
+if (adminSlotSave) {
+  adminSlotSave.addEventListener("click", () => {
+    commitSlot(adminSlotInput ? adminSlotInput.value.trim() : "");
+  });
+}
+if (adminSlotClear) {
+  adminSlotClear.addEventListener("click", () => commitSlot(""));
+}
+
+// --- Cover upload (drag-drop / click) ---
+function slugify(text) {
+  return String(text)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-");
+}
+
+async function uploadCover(book, file) {
+  if (!sb || !file) return;
+  setAdminStatus("Uploading…");
+  const path = `${slugify(adminState.level)}/${slugify(adminState.month)}/${book}`;
+  const { error: upErr } = await sb.storage
+    .from("covers")
+    .upload(path, file, { upsert: true, contentType: file.type });
+  if (upErr) {
+    setAdminStatus("Upload failed.");
+    return;
+  }
+  const { data } = sb.storage.from("covers").getPublicUrl(path);
+  // Cache-bust so a replaced cover shows immediately everywhere.
+  const url = `${data.publicUrl}?t=${Date.now()}`;
+  const entry = pageEntry(adminState.level, adminState.month);
+  entry.covers[book] = url;
+  const { error: saveErr } = await savePage(adminState.level, adminState.month);
+  if (saveErr) {
+    setAdminStatus("Save failed.");
+    return;
+  }
+  setAdminStatus("Cover updated.");
+  renderAdminBoard();
+}
+
+function wireCoverCard(card, book) {
+  card.addEventListener("click", () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.addEventListener("change", () => {
+      if (input.files && input.files[0]) uploadCover(book, input.files[0]);
+    });
+    input.click();
+  });
+  card.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    card.classList.add("is-dragover");
+  });
+  card.addEventListener("dragleave", () =>
+    card.classList.remove("is-dragover"),
+  );
+  card.addEventListener("drop", (event) => {
+    event.preventDefault();
+    card.classList.remove("is-dragover");
+    const file =
+      event.dataTransfer &&
+      event.dataTransfer.files &&
+      event.dataTransfer.files[0];
+    if (file) uploadCover(book, file);
+  });
+}
 
 renderMonths();
 renderLessons();
@@ -881,3 +1411,19 @@ if (view === "content-v3" && hashLevel && hashMonth) {
   applyLevelTheme();
   showScreen("contentV3");
 }
+
+// Restore any admin session, load saved content from Supabase, then honor an
+// #admin deep link (admins only — others are bounced to login).
+(async () => {
+  await refreshAdminStatus();
+  await hydrateContent();
+  if (view === "admin") {
+    if (isAdmin) {
+      populateAdminSelectors();
+      renderAdminBoard();
+      showScreen("admin");
+    } else {
+      showScreen("login");
+    }
+  }
+})();

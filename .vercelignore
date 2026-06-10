@@ -21,6 +21,10 @@ PRODUCT_SPEC.md
 DESIGN.md
 PLATFORM_ROADMAP.md
 README.md
+SUPABASE_SETUP.md
+
+# Supabase migration SQL — dev/provisioning only, not for public hosting
+supabase
 
 # Claude Code config (hooks) — internal, not for public hosting
 .claude

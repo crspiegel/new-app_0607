@@ -76,23 +76,43 @@
             </span>
           </button>
         </nav>
-        <button
-          class="login-button"
-          type="button"
-          data-view="login"
-          aria-label="Login"
-        >
-          <svg
-            class="login-icon"
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            focusable="false"
+        <div class="topbar-actions">
+          <button
+            class="admin-nav-button"
+            type="button"
+            id="adminNavBtn"
+            aria-label="Admin page"
+            hidden
           >
-            <path d="m10 17 5-5-5-5"></path>
-            <path d="M15 12H3"></path>
-            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
-          </svg>
-        </button>
+            Admin
+          </button>
+          <button
+            class="admin-logout-button"
+            type="button"
+            id="logoutBtn"
+            aria-label="Log out"
+            hidden
+          >
+            Log out
+          </button>
+          <button
+            class="login-button"
+            type="button"
+            data-view="login"
+            aria-label="Login"
+          >
+            <svg
+              class="login-icon"
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              focusable="false"
+            >
+              <path d="m10 17 5-5-5-5"></path>
+              <path d="M15 12H3"></path>
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+            </svg>
+          </button>
+        </div>
       </header>
 
       <main>
@@ -407,7 +427,11 @@
               </div>
 
               <div class="content-toolbar" aria-label="Lesson content types">
-                <button type="button" class="content-type active">
+                <button
+                  type="button"
+                  class="content-type active"
+                  data-slot="opening"
+                >
                   <span class="content-type-icon" aria-hidden="true"
                     >&#9834;</span
                   >
@@ -427,7 +451,7 @@
                   <span class="content-type-icon" aria-hidden="true">S</span>
                   <span>Sentence Chant</span>
                 </button>
-                <button type="button" class="content-type">
+                <button type="button" class="content-type" data-slot="ending">
                   <span class="content-type-icon" aria-hidden="true"
                     >&#9733;</span
                   >
@@ -614,7 +638,7 @@
             <div class="login-card">
               <h1 class="login-title" id="loginTitle">Log in</h1>
 
-              <form class="login-form" novalidate>
+              <form class="login-form" id="loginForm" novalidate>
                 <div class="login-field">
                   <input
                     class="login-input"
@@ -639,6 +663,8 @@
                   />
                 </div>
 
+                <p class="login-error" id="loginError" role="alert" hidden></p>
+
                 <button class="login-submit" type="submit">Log in</button>
               </form>
 
@@ -646,6 +672,39 @@
                 By signing in, you agree to our <strong>Terms</strong> and
                 <strong>Privacy Policy</strong>.
               </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Admin content manager (admins only). The board is a simplified
+             gray mirror of the user content page, built by app.js. -->
+        <section class="screen" id="adminScreen" aria-labelledby="adminTitle">
+          <div class="section-box section-white admin-section">
+            <div class="section-inner admin-inner">
+              <div class="admin-bar">
+                <h1 class="admin-title" id="adminTitle">Content Manager</h1>
+                <div class="admin-controls">
+                  <label class="admin-select">
+                    <span>Level</span>
+                    <select id="adminLevel"></select>
+                  </label>
+                  <label class="admin-select">
+                    <span>Month</span>
+                    <select id="adminMonth"></select>
+                  </label>
+                  <span
+                    class="admin-status"
+                    id="adminStatus"
+                    aria-live="polite"
+                  ></span>
+                </div>
+              </div>
+              <p class="admin-hint">
+                Click a button to set its video URL. Drag an image onto a cover
+                card (or click it) to upload the book cover. Current values are
+                shown in place.
+              </p>
+              <div class="admin-board admin-gray" id="adminBoard"></div>
             </div>
           </div>
         </section>
@@ -882,7 +941,76 @@
       </div>
     </div>
 
+    <!-- "No access" popup — shown when a grade-3 viewer clicks a video button
+         (activated by the grade gate in Phase 3). Child-friendly shell. -->
+    <div class="noaccess-modal" id="noAccessModal" hidden>
+      <div class="noaccess-overlay" data-noaccess-close></div>
+      <div
+        class="noaccess-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="noAccessTitle"
+      >
+        <div class="noaccess-emoji" aria-hidden="true">&#129417;</div>
+        <h2 class="noaccess-title" id="noAccessTitle">Oops!</h2>
+        <p class="noaccess-text">
+          You don't have permission to watch this yet.
+        </p>
+        <button type="button" class="noaccess-ok" data-noaccess-close>
+          OK
+        </button>
+      </div>
+    </div>
+
+    <!-- Admin: set a slot's video URL. Prefilled with the current value. -->
+    <div class="admin-modal" id="adminSlotModal" hidden>
+      <div class="admin-modal-overlay" data-admin-close></div>
+      <div
+        class="admin-modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="adminSlotTitle"
+      >
+        <h2 class="admin-modal-title" id="adminSlotTitle"></h2>
+        <p class="admin-modal-sub" id="adminSlotSub"></p>
+        <label class="admin-modal-label" for="adminSlotInput"
+          >Video URL (Vimeo)</label
+        >
+        <input
+          class="admin-modal-input"
+          id="adminSlotInput"
+          type="text"
+          placeholder="https://vimeo.com/123456789  or  123456789"
+        />
+        <div class="admin-modal-actions">
+          <button
+            type="button"
+            class="admin-btn admin-btn-ghost"
+            data-admin-close
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="admin-btn admin-btn-ghost"
+            id="adminSlotClear"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            class="admin-btn admin-btn-primary"
+            id="adminSlotSave"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="https://player.vimeo.com/api/player.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-config.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
