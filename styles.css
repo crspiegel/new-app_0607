@@ -1532,6 +1532,29 @@ p {
     0 12px 18px rgba(30, 90, 0, 0.12);
 }
 
+/* Book cover art on the two title-card placeholders — Level 1 / March ONLY.
+   The cards are shared markup (all levels/months render the white placeholder);
+   this scopes the covers to L1 March via #contentScreen's theme class +
+   data-month, so every other page keeps the empty placeholder. */
+#contentScreen.level-theme-1[data-month="March"] .book-title-card {
+  /* Fill the card with the cover — aspect ratio kept, slight crop is fine — so
+     no background shows. No 3D lip; instead a 3px white outline that sits
+     OUTSIDE the cover (outset box-shadow, not inset, so it never covers the
+     image) and follows the rounded corners. */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 3px #ffffff;
+}
+
+#contentScreen.level-theme-1[data-month="March"] .book-title-card.book-1 {
+  background-image: url("assets/l1-march-book-1.jpg");
+}
+
+#contentScreen.level-theme-1[data-month="March"] .book-title-card.book-2 {
+  background-image: url("assets/l1-march-book-2.jpg");
+}
+
 .week-label {
   display: grid;
   min-height: 86px;

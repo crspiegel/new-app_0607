@@ -191,6 +191,23 @@ width/height:calc(100% + 2px)`), so the stage's rounded `overflow:hidden` clip a
   use `window.setTimeout`/`window.clearTimeout`. **Title week/day:** confirmed the
   20 weekday lesson buttons already show `"<type> · Week N · <day>"`; the toolbar Opening/Ending
   Song are month-level (no week/day) and the user chose to **keep them as just the song name**.
+- **Book cover art on the title-card placeholders (Level 1 / March — `2026-06-10`):** the two
+  white rounded placeholders left of the weekday groups (`.book-title-card`, rendered by
+  `renderLessons`) now show real **Cambridge Reading Adventures covers** — `book-1` = "My Dad is a
+  Builder" (`assets/l1-march-book-1.jpg`), `book-2` = "The Show and Tell Day"
+  (`assets/l1-march-book-2.jpg`). `renderLessons` tags each card `book-1`/`book-2`; the covers are
+  set as `background-image` **scoped to L1 March only** via
+  `#contentScreen.level-theme-1[data-month="March"] .book-title-card.book-N`, so every other
+  level/month keeps the empty white placeholder. **Final design:** `background-size: cover` (fills
+  the card, aspect kept, slight crop accepted — no leftover background), **no 3D lip**, replaced by a
+  **3px white outline OUTSIDE the cover** (`box-shadow: 0 0 0 3px #ffffff` — outset, not inset, so it
+  never covers the image; follows the rounded corners; adds no layout box). The two cards are the
+  same size (150×202) and span exactly week1→week2 / week3→week4 (grid-row span 2; card top/bottom
+  align to the week rows at 0px). (Iterations the client rejected: `contain` + white box left
+  letterbox margins; an inset outline intruded over the image — final is outset white 3px.) Source
+  files were `e:\tps\app\9781107549739i.jpg` / `20260610_160816.jpg`. ⏳ Pending client design
+  sign-off before rolling covers out to all levels/months — when extending, scope per
+  level/month (the covers and ideally the outline color may differ per level).
 - **DESIGN.md updated:** added an authoritative **"Implemented Design System (current build —
   source of truth)"** section documenting the real as-built values (tokens, fonts, the per-level
   theme token table, header/month/content specs, footer) — supersedes the legacy Duolingo-ABC

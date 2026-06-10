@@ -264,9 +264,11 @@ function renderLessons() {
   // 1 per book) on every content page.
   let weekNumber = 0;
 
-  monthlyBooks.forEach((book) => {
+  monthlyBooks.forEach((book, bookIndex) => {
     const titleCard = document.createElement("div");
-    titleCard.className = "book-title-card";
+    // book-1 / book-2 lets per-book cover art be slotted in via CSS
+    // (currently Level 1 / March only — see styles.css).
+    titleCard.className = `book-title-card book-${bookIndex + 1}`;
     titleCard.setAttribute("role", "img");
     titleCard.setAttribute("aria-label", `${book.title} cover placeholder`);
     lessonGrid.append(titleCard);
