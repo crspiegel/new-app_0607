@@ -213,6 +213,208 @@ width/height:calc(100% + 2px)`), so the stage's rounded `overflow:hidden` clip a
   theme token table, header/month/content specs, footer) — supersedes the legacy Duolingo-ABC
   reference where they differ.
 
+- **Responsive optimization pass (`2026-06-11`, from user device testing — NOT yet committed):**
+  Four fixes across tablet-landscape and mobile-portrait, verified by Playwright screenshots at
+  360/390 (mobile) and 768/800/1024/1180/1280 (tablet→desktop); no horizontal scroll at any width.
+  - **Hero buttons under the wave:** the decorative white `.hero-wave` is `z-index:2`; the hero
+    content grid was `z-index:1`, so a tall copy column (tablet landscape) let the app-download
+    buttons sink _behind_ the white wave. Fixed by raising `.hero-grid` to **`z-index:3`** (desktop
+    unaffected — its image never reaches the wave).
+  - **Tablet-landscape hero too narrow:** in `@media (min-width:768px) and (max-width:1180px)`,
+    widened the copy column and shrank the image column + gap
+    (`grid-template-columns: minmax(0,1.1fr) minmax(280px,0.72fr)`), pushed the image to the right
+    (`.hero-stage{place-items:center end}`), and trimmed `.hero-copy` padding-bottom to 92px.
+  - **Tablet-landscape content board cut off (Thu/Fri hidden, h-scrollbar inside `.lesson-board`):**
+    root cause was `.lesson-grid{min-width:900px}` + the desktop's big content padding overflowing
+    the viewport. New block **`@media (min-width:768px) and (max-width:1249px)`** drops the min-width
+    floor, tightens the grid (`minmax(72px,150px) 60px repeat(5,minmax(54px,1fr))`, gap 16) and
+    content padding (`clamp(28px,4vw,64px)`, board 30). Hands off to the base desktop layout at
+    **≥1250px** where the 900px grid fits the default padding natively (computed: `0.88·W−200 ≥ 900`).
+  - **Mobile-portrait hero stacked:** removed the fixed `--hero-height` clamp on mobile
+    (`height:auto`), made `.hero-stage` in-flow below the copy at full opacity (was an absolute,
+    faded, off-screen background decoration), and forced the two store buttons onto one row
+    (`.app-downloads{flex-wrap:nowrap}` + `.app-download-button{flex:1 1 0;width:auto}`). Order is
+    text → 2 buttons across → image (natural DOM order in the single-column grid).
+  - **Month-select 2×5 on mobile:** base `.month-grid` is now `repeat(2,minmax(0,1fr))` (was `1fr`);
+    still widens to 5 columns at ≥768px. Mobile month-button → full cell width, 96px min-height.
+  - **Mobile-portrait content board (most severe):** restructured to a **6-column grid**
+    (`44px` week-label + `repeat(5,minmax(0,1fr))`) with **each book cover promoted to its own
+    full-width row** (`.book-title-card{grid-column:1/-1;grid-row:auto}`, `background-size:contain`
+    so the whole portrait cover shows). This removes the wide book-card column that forced the
+    h-scroll; all five weekdays fit and day text scales (`font-size:clamp(11px,3.2vw,15px)`).
+    Opening/Ending Song are bigger and side by side (`.content-type{flex:1 1 0;min-height:60px}`).
+    (The old `@media (max-width:420px)` lesson rules are now out-specified by these `#contentScreen`
+    rules — harmless dead rules.)
+
+- **Responsive pass — round 2 (`2026-06-11`, after user re-test at 320px Galaxy S9+; uncommitted):**
+  - **Image must sit BEHIND the white wave (mobile + desktop + tablet).** Round 1 raised
+    `.hero-grid` to `z-index:3` to save the buttons, which also lifted the character image above
+    the wave. Fixed by **removing the z-index from `.hero-grid`** (so it creates no stacking context)
+    and instead giving **`.hero-copy{z-index:3}`** (above the `z-index:2` wave) and leaving
+    `.hero-image`/mobile `.hero-stage` at `z-index:1` (below it). Net: characters emerge from behind
+    the white curve; the text + app buttons stay on top. Mobile `.hero-wave` shortened to 96px so the
+    in-flow image only tucks its base behind the curve.
+  - **Mobile store buttons overflowed at 320px** ("Google Play" escaped): shrank the icon (20px),
+    `small` (9px), `strong` (12px) and button padding/gap in the `≤767px` block so both fit.
+  - **Level cards 2×2 on mobile:** base `.level-grid` → `repeat(2,minmax(0,1fr))` (was 1fr); widens
+    to 4 at ≥768px. Mobile level-button shrunk (min-height 158, rows `26px 1fr 38px`, strong 26px).
+  - **Month buttons wider + title one line:** the month screen used the default 80% content width
+    (big side margins → tall buttons, wrapped title). Forced **`#monthScreen .section-inner{width:100%}`**
+    on mobile, shortened the button (min-height 84), and set `#monthTitle{white-space:nowrap;
+font-size:clamp(24px,7vw,32px)}`.
+  - **Mobile content covers:** round 1 made the book card full-width + `contain`, so the cover
+    floated in an oversized white box. Now the **card is sized to the cover** (centered,
+    `width:min(150px,46%)`, `aspect-ratio:150/202`) and uses the base `has-cover` rule
+    (`background-size:cover` + rounded 22–26px + 3px white outline) → matches the PC card. Added
+    `margin-top:12px` so book 2 doesn't butt against the week-2 row. Weekday buttons are now
+    **square** (`aspect-ratio:1/1`, `min-height:0`); week-label `min-height:0` stretches to match.
+
+- **Responsive pass — round 3 (`2026-06-11`, spacing/aspect polish; uncommitted):**
+  - **Level cards wider:** the level section still used the 80% content width (narrow, tall cards).
+    Forced `.level-section .section-inner{width:100%}` + `.level-grid{gap:14px}` on mobile and
+    trimmed the card (`min-height:146`, rows `24px 1fr 36px`) → near-square 2×2.
+  - **Content week-row spacing:** the mobile lesson grid went from uniform `gap:6px` to
+    **`column-gap:6px; row-gap:14px`** so week 1 / week 2 (and 3 / 4) rows breathe; bumped the book
+    cover `margin-top` 12→16 so book 2 clears the week-2 row above it.
+
+- **Responsive pass — round 4 (`2026-06-11`, after user landscape-phone re-test 658×320; uncommitted):**
+  - **Compact mobile header.** The `≤767px` topbar was ~135px tall: the base `.topbar{gap:16px}`
+    added ~32px of row-gaps between the three wrapped rows (brand / empty `.topbar-actions` / nav).
+    Set mobile **`.topbar{gap:2px; min-height:0; padding:8px 24px}`**, shrank the logo
+    (`.brand-name` → `clamp(18px,4.6vw,22px)`), tightened the brand→nav gap (`.top-nav{margin-top:0}`),
+    and shrank the nav icons (`.top-nav-link` 50→46/min-h 56→48, `.nav-book` 50×36→46×33,
+    number 20→18). Now ~105px. (Touch target eased 56→48 on mobile to hit the height the user asked
+    for — a small, deliberate compromise.)
+  - **Landscape content board ballooned** (width 658 hits the `≤767px` mobile board, whose
+    `aspect-ratio:1` day buttons fill 5 stretched 1fr columns → ~150px squares with tiny text).
+    Fixed by **capping + centering the board** (`#contentScreen .lesson-grid{max-width:430px;
+margin-inline:auto}`) so buttons stay phone-sized (~68px) on wide screens; portrait (<430px)
+    just shrinks to fit, unchanged. Widened the week column (`clamp(46px,13vw,60px)`) and enlarged
+    the day text (`clamp(13px,3.8vw,19px)`) + week label (`clamp(10px,2.4vw,13px)`) so text scales
+    with the button. NB: large-phone landscapes ≥768px (e.g. iPhone 844) use the _tablet_ board
+    (768–1249 block), not this one.
+
+- **Responsive pass — round 5 (`2026-06-11`, logo size + week label + landscape header; uncommitted):**
+  - **Logo halved on mobile.** ⚠ The wordmark letters are **`.brand-accent` + `.brand-adventures`**
+    spans (fixed `33px`), NOT `.brand-name` (which is just the flex wrapper) — shrinking `.brand-name`
+    did nothing. Overrode the two spans to `clamp(14px,4.2vw,17px)` in the `≤767px` block (scoped to
+    mobile, so desktop/tablet stay 33px). Header followed: ~106→~85px portrait.
+  - **Week label = number only on mobile.** `renderLessons` now emits
+    `<span class="wk-text"><span class="wk-num">N</span> <span class="wk-word">week</span></span>`;
+    mobile hides `.wk-word` (just "N"), desktop shows "N week". ⚠ The number/word MUST be wrapped in
+    one inline `.wk-text` span — `.week-label` is `display:grid; place-items:center`, so two _top-level_
+    children become separate grid rows and the label stacked "N" over "week" on desktop. Narrowed the
+    mobile week column (`clamp(24px,6.5vw,34px)`) → bigger day buttons; week-number font bumped.
+  - **Landscape phone header = one row.** New `@media (max-width:767px) and (orientation:landscape)`:
+    `.topbar{flex-wrap:nowrap}` with logo left + level nav right (`.top-nav{order:2;justify-content:
+flex-end}`), small logo + nav icons → ~55px (was a stacked ~105px). Large-phone landscapes ≥768px
+    already get the horizontal tablet header.
+
+- **Responsive pass — round 6 (`2026-06-11`, song buttons + iPad level cards + landscape months;
+  uncommitted):**
+  - **Portrait song buttons stacked.** New `@media (max-width:767px) and (orientation:portrait)`:
+    `#contentScreen .content-toolbar{flex-direction:column}` → Opening Song on top, Ending Song
+    below, each wider (`width:100%; max-width:340px; min-height:64px; font-size:18px`).
+  - **Removed a dead duplicate** `#contentScreen .content-type` (leftover) that had been re-shrinking
+    the song buttons to `10px/18px` — that was why the landscape song text looked tiny.
+  - **Landscape song/day text bumped** (in the landscape block): `.content-type` 16px / icon 26px,
+    `.lesson-button strong` 21px, `.week-label` 19px so text reads in proportion to the buttons.
+  - **iPad (1024 landscape) level cards → 1:1.** `@media (min-width:900px) and (max-width:1180px)`:
+    level section goes **full width** (was 80%, which made the 4 cards narrow), `.level-grid{align-items:start}`
+    (⚠ without this the default row **stretch** overrides `aspect-ratio`), `.level-button{min-height:0;
+aspect-ratio:1/1}` → ~206px squares at 1024. Lower bound 900px (below that 4 columns get too
+    narrow and "Level N" crowds); desktop ≥1181 untouched.
+  - **Landscape month buttons ~60%** (in the landscape block): `.month-button{width:60%}`, strong
+    40→24. ⚠ Height floor is set by the higher-specificity `#monthScreen[class*="level-theme-"]
+.month-button{min-height:137px}`, so the shrink override must reuse that exact selector
+    (`min-height:80px`) — a plain `.month-button` rule loses. Now ~179×80 (was ~305×137).
+
+- **Responsive pass — round 7 (`2026-06-11`, gaps + login icon visibility; uncommitted):**
+  - **Landscape month gap.** Round 6's `width:60%` inside full 1fr cells left a big gap between the
+    two columns. Switched to **`#monthScreen .month-grid{grid-template-columns:repeat(2,180px);
+justify-content:center;column-gap:18px}`** + `.month-button{width:100%}` so the two buttons sit
+    close together, centered (same ~180px size, much smaller gap).
+  - **Portrait song buttons −20% width.** Portrait `#contentScreen .content-type` max-width 340→272
+    (text unchanged at 18px).
+  - **Login icon shown when signed in (bug).** `.login-button` had no signed-in hide logic, so Admin +
+    Log out + Login all showed at once. Added global **`body.is-admin .login-button{display:none}`**
+    (hides on desktop/tablet/mobile when signed in).
+  - **Login icon on mobile.** The `≤767px` block had `.login-button{display:none}` (no login on
+    phones). Now shown (`display:inline-grid; 40×40`); **portrait** pins it top-right of the header
+    (`position:absolute;top:8px;right:14px`) beside the centered logo, **landscape** keeps it hidden
+    (single-row header already tight with logo + 5 nav icons). Mobile logo +20%
+    (`.brand-accent/.brand-adventures` clamp(14,4.2vw,17) → clamp(17,5vw,20)).
+
+- **Responsive pass — round 8 (`2026-06-11`, mobile header refactor + landscape board; uncommitted):**
+  Reworked the whole mobile header for both orientations and both signed-in states.
+  - **Logo now LEFT-aligned on mobile** (base `≤767px`: `.brand{width:auto;justify-content:flex-start}`,
+    `.brand-name` left) instead of centered.
+  - **Admin / Log out are circular icon buttons on mobile.** Added `<svg class="action-icon">` (user /
+    log-out glyphs) + `<span class="action-label">` to both buttons in `index.html`. Desktop hides the
+    icon and shows the text pill (unchanged); mobile hides the label and makes them 34px circles
+    (`border-radius:50%`). The login icon is also 34px, sized ~to the logo height (was 40px, "too big").
+  - **Portrait header**: row 1 = logo (left) + actions (right, `.topbar-actions{order:1;margin-left:auto}`);
+    the level nav drops to its own centered row below. Removed the old absolute-positioned login icon.
+  - **Landscape header**: single row = logo (left) · nav (center, `.top-nav{order:1;flex:1;
+justify-content:center}`) · actions (right, `order:2`). The login icon now SHOWS in landscape
+    (the round-7 `display:none` was removed). Signed in → Admin/Log out circles replace it.
+  - **#5 Landscape content board = book covers on the RIGHT.** Landscape uncaps the board
+    (`max-width:none`) and switches to a PC-style 7-col grid `[week] repeat(5,1fr) [cover]`; the cover
+    is `grid-column:7; grid-row:span 2` (spans its two week rows, like PC but right-side instead of
+    left). Portrait keeps the capped, cover-stacked-on-top layout. ⚠ The book card's base mobile
+    `aspect-ratio:150/202` + `width:min(150px,46%)` must be reset (`aspect-ratio:auto; width:100%`) in
+    landscape so it fills the cover column × 2-row height.
+
+- **Responsive pass — round 9 (`2026-06-11`, icon polish + landscape board = exactly PC; uncommitted):**
+  - **Admin / Log out → plain line icons, no circle.** Admin SVG swapped to a **key** glyph; Log out
+    keeps the standard door+arrow. Mobile drops the circular background. ⚠ The base `.admin-nav-button`
+    pill styles (background/border-radius) are declared **later** in the file at equal specificity, so
+    the mobile override had to be raised to **`.topbar-actions .admin-nav-button`** (0,2,0) to win.
+  - **Landscape board now EXACTLY like PC** (round 8 had the cover on the right; user wanted PC = cover
+    on the LEFT): grid is `[cover] [week] repeat(5,1fr)`, cover `grid-column:auto; grid-row:span 2`
+    (auto-placed in column 1 like PC).
+  - **Portrait song buttons → ~60% width** (max-width 272→164); label 18→15px, icon 28→22px so the
+    text stays inside the narrower button.
+
+- **Responsive pass — round 10 (`2026-06-11`, icon size + square month buttons; uncommitted):**
+  - **Log out / Admin icons matched in size.** Both `.action-icon` boxes were already 24px, but the
+    (horizontal) key glyph filled less of its box than the log-out glyph, so log-out looked bigger.
+    Redrew the Admin key as a **vertical key** (head + stem + teeth) that fills the box to the same
+    height as log-out → equal visual size.
+  - **Portrait month buttons → 1:1.** Added (portrait) `#monthScreen[class*="level-theme-"]
+.month-button{min-height:0; aspect-ratio:1/1}` — keeps the column width, drops the 137px height
+    floor so height = width. Now 129² at 320, 164² at 390. (Landscape month buttons keep their own
+    180×80 rule.)
+
+- **Responsive pass — round 11 (`2026-06-11`, slightly bigger portrait logo; uncommitted):**
+  Portrait header row 1 height is set by the 34px action icons; the logo (brand) was only ~19–22px
+  tall, so there was headroom. Bumped the portrait `.brand-accent/.brand-adventures` to
+  `clamp(22px,6.5vw,26px)` (brand now ~25–28px, still < 34px) → bigger logo with **no change to the
+  101px header height or the right-side icons**. Scoped to portrait (landscape logo untouched).
+
+- **Tablet (pad) pass — round 12 (`2026-06-11`, iPad / Galaxy Tab month + content; uncommitted):**
+  Scope = `@media (min-width:768px) and (max-width:1180px)` (covers iPad 1024, iPad Air 1180,
+  Galaxy Tab S4 1138, iPad/Air portrait, iPad Pro 12.9 **portrait** 1024). iPad Pro 12.9 **landscape**
+  (1366) is >1180 → uses the desktop layout and already fits (per user), so its month buttons stay
+  164×137 (not square) — the one acknowledged exception to "1:1 on all pads".
+  - **#1/#2 Month buttons square + scaled.** Were a fixed 137px tall with wildly varying widths
+    (78px iPad-portrait → 164px) so the month name overflowed and number/box ratios were random. Now:
+    `#monthScreen .section-inner{width:100%}`, `.month-grid{align-items:start}`,
+    `#monthScreen[class*="level-theme-"] .month-button{min-height:0; aspect-ratio:1/1}` → square
+    (105²–172²). Number + (absolutely-positioned) label scale with viewport: `.month-button strong
+{font-size:clamp(40px,7vw,92px)}`, label `span{top/left/font-size:clamp(...)}` so the ratio is
+    consistent across sizes.
+  - **#3/#4 Landscape tablets fit (no vertical scroll).** New `…and (orientation:landscape)` block
+    trims the desktop's heavy vertical chrome so the month page fits header→footer and ALL four week
+    rows of the content board clear the fold (Galaxy Tab S4 712-tall was cutting week 4):
+    footer padding 44→16; `#contentScreen .section-inner` top/bottom 84/96→16/18; the content banner
+    goes **horizontal** (`grid-auto-flow:column`, ~137→~60px); banner/header/toolbar margins trimmed;
+    and the row-height drivers shrunk — `.lesson-button{min-height:64}` AND
+    `#contentScreen .week-label{min-height:64}` (⚠ the **week-label's** 86px min-height was the real
+    row-height driver via the book cover's 2-row span, not the day button). Result: iPad-land 768/768,
+    Tab S4 712/712, content board lastDay@614 — all fit with no scroll. (Portrait tablets keep the
+    taller layout — they have the vertical room.)
+
 ## Platform build — approved 3-phase plan (`2026-06-10`)
 
 Plan file: `C:\Users\dupy2\.claude\plans\steady-roaming-yao.md`. Adds the video
@@ -269,8 +471,14 @@ Delivery is **phased**; content access gate is **UI-level** (grade 3 → cute po
   activate grade-3 gate, admin member management, hidden signup (`site_settings.signup_visible`),
   ID/pw rule `/^[\x21-\x7E]{4,}$/` (≥4, ASCII only, no Korean), logout.
 
-### ▶ RESUME HERE (next session — `2026-06-10` end of day)
+### ▶ RESUME HERE (next session — `2026-06-11`)
 
+- **Uncommitted local change (`2026-06-11`):** responsive optimization — **2 rounds** (`styles.css`
+  only): round 1 (tablet-landscape + mobile-portrait base fixes) + round 2 (after the user's 320px
+  Galaxy S9+ re-test: image-behind-wave z-index, 320px store-button overflow, level 2×2, month
+  width/aspect/title, mobile content covers + square day buttons). See the two "Responsive …" bullets
+  above. `npm.cmd run qa` green; verified by Playwright clips at 320/390/1024/1280.
+  **Awaiting user device re-test, then commit/deploy on request.**
 - **Done & committed:** Phase 1 (player on all 40 pages) + Phase 2 (Supabase admin manager).
   Header layout fix applied (`.topbar-actions` wrapper groups Admin/Log out/Login at the right).
 - **User-tested OK so far:** admin login, admin page, **cover image upload + drag-drop reflects

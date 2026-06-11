@@ -110,6 +110,51 @@ window.Vimeo.Player` since the SDK loads async and may be absent (offline / head
   testing scope, use a **fresh Playwright page per route** (hash-only navigation doesn't re-run
   `app.js`, so `state.level` leaks and the gate looks broken — see the hash-nav note below).
 
+## Responsive layout (hero, content board)
+
+- **The lesson/weekday board overflows _inside_ `.lesson-board`, not the document.** `.lesson-board`
+  has `overflow-x:auto` and `.lesson-grid` had `min-width:900px`, so on narrow viewports Thu/Fri get
+  cut off behind an internal scrollbar while `document.documentElement.scrollWidth` still equals
+  `clientWidth` (no page scroll). When checking for "no horizontal scroll," measure the **board's**
+  `scrollWidth` vs `clientWidth`, not just the document's.
+- **7-col board doesn't fit narrow screens.** The board is `[book card][week label][Mon–Fri]` = 7
+  columns. It fits tablet landscape only after dropping the `min-width:900` floor + tightening
+  padding/gaps (`@media 768–1249px`); it can't fit a phone at all, so on mobile (`≤767px`) the book
+  cover is promoted to its **own full-width row** (`.book-title-card{grid-column:1/-1;grid-row:auto}`)
+  leaving a 6-col `44px + repeat(5,1fr)` day grid. Full-width covers use `background-size:contain`
+  (not `cover`) so the portrait cover isn't cropped to a wide band.
+- **Breakpoint handoff math:** the base desktop board (900px grid + `clamp(106,6vw+50,146)` content
+  padding + 50px board padding) only fits when `0.88·W − 200 ≥ 900`, i.e. **W ≥ 1250px**. So the
+  tablet override must run up to **1249px** or a 1181–1249px gap still overflows. If you change the
+  padding clamp or grid min, recompute this handoff width.
+- **Hero buttons ABOVE the wave, image BEHIND it.** `.hero-wave` is `z-index:2`, a sibling of
+  `.hero-grid`. The trick: **`.hero-grid` must NOT have a z-index** (so it creates no stacking
+  context), and its children compete directly with the wave — `.hero-copy{z-index:3}` (text + app
+  buttons on top of the white curve) and `.hero-image` / mobile `.hero-stage` at `z-index:1`
+  (characters tuck behind it). ⚠ Do NOT raise `.hero-grid` itself (an earlier attempt set it to
+  `z-index:3`) — that lifts the image above the wave too, so the characters stop emerging from behind
+  the white curve. With this split, a tall copy column (tablet landscape) still keeps the buttons
+  visible because they sit above the wave by z-index, not by vertical space.
+- **Mobile hero is auto-height, not `--hero-height`.** Desktop/tablet pin the hero to a fixed
+  `--hero-height` (620/380/340px) via `height` on `.hero-section.section-blue` + its `.section-inner`.
+  On mobile that clipped the stacked content, so the `≤767px` block sets both to `height:auto` and
+  the image (`.hero-stage`) goes from an absolute faded background to an in-flow block below the copy.
+- **`.section-inner` is `min(80%, …)` wide by default** — on a phone that's only 80% of the viewport
+  with big side margins. `#contentScreen .section-inner` is forced to `width:100%` (≥768 block); the
+  mobile hero now does the same so the copy isn't needlessly narrow.
+
+## Logo & week-label markup gotchas
+
+- **The wordmark letters are NOT in `.brand-name`.** `.brand-name` is the flex wrapper; the visible
+  "Reading"/"Adventure" letters are the child spans **`.brand-accent` / `.brand-adventures`**, each
+  with a fixed `font-size: 33px`. To resize the logo you must target those two spans (e.g. scoped to
+  a mobile media query) — changing `.brand-name` font-size only moves the inter-word gap, not the
+  letters.
+- **`.week-label` is `display:grid; place-items:center`** — every _top-level_ child becomes its own
+  grid row. So `renderLessons` must wrap the week number + word in a SINGLE inline span
+  (`.wk-text`); two sibling spans directly under `.week-label` stack vertically ("1" over "week")
+  instead of reading "1 week". Mobile hides `.wk-word` to show just the number.
+
 ## Verification & tooling
 
 - For visual-fidelity work, screenshot via Playwright and compare. `toHaveScreenshot({ animations:

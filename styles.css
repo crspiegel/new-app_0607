@@ -279,6 +279,12 @@ body.subpage-active .brand-name {
     transform 160ms ease;
 }
 
+/* Once signed in, the header shows Log out (and Admin) — hide the login icon so
+   both aren't shown at once (applies on desktop, tablet, and mobile). */
+body.is-admin .login-button {
+  display: none;
+}
+
 .login-icon {
   width: 30px;
   height: 30px;
@@ -628,7 +634,11 @@ body.login-active main {
 
 .hero-grid {
   position: relative;
-  z-index: 1;
+  /* No z-index here on purpose: the grid must NOT create a stacking context,
+     so .hero-copy (z-index:3) can sit ABOVE the white wave (z-index:2) while
+     .hero-stage / .hero-image (z-index:1) sit BELOW it — i.e. the characters
+     emerge from behind the white curve, but the app-download buttons stay on
+     top of it. */
   height: 100%;
   min-height: 0;
   align-items: stretch;
@@ -649,6 +659,10 @@ body.login-active main {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  /* Above the white wave (z-index:2) so the text + app buttons are never
+     covered; the image (z-index:1) stays behind the wave. */
+  position: relative;
+  z-index: 3;
   padding-top: 24px;
   padding-bottom: 130px;
 }
@@ -964,7 +978,9 @@ p {
 
 .level-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  /* Two-up from the smallest screens (2x2 for the four levels); widens to 4
+     columns at >=768px. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px;
   justify-content: center;
 }
@@ -1173,9 +1189,11 @@ p {
 
 .month-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  /* Two columns from the smallest screens up (2x5 for Mar–Dec) so the month
+     list isn't a single very tall column on phones; widens to 5 at >=768px. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   column-gap: 12px;
-  row-gap: 29px;
+  row-gap: 20px;
 }
 
 #monthScreen .eyebrow.blue {
@@ -2441,6 +2459,27 @@ p {
   .login-button {
     margin-left: auto;
   }
+
+  /* Hero: the desktop 360px image column + huge gap squeezes the copy on
+     tablet landscape (text wraps tall and the buttons sink into the wave).
+     Give the copy more room, shrink the gap, and push the image to the right
+     edge of its cell. */
+  .hero-grid {
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.72fr);
+    gap: clamp(28px, 4vw, 60px);
+  }
+
+  .hero-copy {
+    padding-bottom: 92px;
+  }
+
+  .hero-stage {
+    place-items: center end;
+  }
+
+  .hero-image {
+    width: min(330px, 100%);
+  }
 }
 
 @media (min-width: 768px) and (max-width: 960px) {
@@ -2465,6 +2504,149 @@ p {
   .login-button {
     width: 44px;
     height: 44px;
+  }
+}
+
+/* Tablet month page (iPad / Galaxy Tab, both orientations): full-width, square
+   (1:1) buttons whose number + month label scale with the button size, so they
+   read consistently across sizes. Was a fixed 137px height with widely varying
+   widths (e.g. 78px on iPad portrait, where the month name overflowed). */
+@media (min-width: 768px) and (max-width: 1180px) {
+  #monthScreen .section-inner {
+    width: 100%;
+  }
+
+  .month-grid {
+    align-items: start;
+  }
+
+  #monthScreen[class*="level-theme-"] .month-button {
+    min-height: 0;
+    aspect-ratio: 1 / 1;
+  }
+
+  .month-button strong {
+    font-size: clamp(40px, 7vw, 92px);
+  }
+
+  #monthScreen[class*="level-theme-"] .month-button span {
+    top: clamp(12px, 1.8vw, 26px);
+    left: clamp(12px, 1.6vw, 20px);
+    font-size: clamp(13px, 1.6vw, 21px);
+  }
+}
+
+/* Short landscape tablets (iPad / Galaxy Tab landscape, ~712–820px tall): the
+   desktop's 84–96px section padding + banner/toolbar margins push the month grid
+   and the weekday board past the fold. Trim the vertical whitespace so the whole
+   page (header→footer) and all four week rows fit without a vertical scrollbar.
+   iPad Pro 12.9 (1366 wide) uses the desktop layout (>1180) and already fits. */
+@media (min-width: 768px) and (max-width: 1180px) and (orientation: landscape) {
+  /* Shorter footer (was 44px top/bottom padding = ~106px tall) reclaims room on
+     both the month and content pages. */
+  .site-footer {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  #monthScreen .section-inner {
+    padding-top: 24px;
+    padding-bottom: 24px;
+  }
+
+  #contentScreen .section-inner {
+    padding-top: 16px;
+    padding-bottom: 18px;
+  }
+
+  /* Banner laid out in a single row (level name · band · month badge) instead of
+     stacked — drops its height ~137→~60px so all four week rows fit. */
+  #contentScreen .content-level-banner {
+    grid-auto-flow: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+
+  #contentScreen .content-banner-month {
+    margin-top: 0;
+  }
+
+  #contentScreen .content-main-header {
+    margin-bottom: 6px;
+  }
+
+  #contentScreen .content-toolbar {
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+  }
+
+  #contentScreen .lesson-board {
+    padding-top: 6px;
+    padding-bottom: 10px;
+  }
+
+  /* Slightly shorter weekday buttons + week labels so all four week rows clear
+     the fold. (The week-label's 86px min-height was the actual row-height driver,
+     spanning into the book cover's 2-row height.) */
+  .lesson-button {
+    min-height: 64px;
+  }
+
+  #contentScreen .week-label {
+    min-height: 64px;
+  }
+}
+
+/* Tablet landscape (and iPad portrait): the weekday board's 900px min-width +
+   the desktop's large content padding overflow the viewport, leaving a
+   horizontal scrollbar inside .lesson-board so Thu/Fri get cut off. Drop the
+   min-width floor, tighten the grid (smaller gap + column mins), and trim the
+   content padding so all five weekday columns fit with no horizontal scroll.
+   Handed off to the base desktop layout at >=1250px, where it fits natively. */
+@media (min-width: 768px) and (max-width: 1249px) {
+  #contentScreen .section-inner {
+    padding-right: clamp(28px, 4vw, 64px);
+    padding-left: clamp(28px, 4vw, 64px);
+  }
+
+  .lesson-board {
+    padding: 30px;
+    overflow-x: visible;
+  }
+
+  .lesson-grid {
+    min-width: 0;
+    grid-template-columns: minmax(72px, 150px) 60px repeat(5, minmax(54px, 1fr));
+    gap: 16px;
+  }
+
+  .book-title-card {
+    min-height: 0;
+  }
+}
+
+/* Tablet (e.g. iPad 1024 landscape): the 4-up level cards were taller than
+   wide. Make them square (aspect-ratio 1:1) — min-height:auto lets a card still
+   grow if its band text needs more than the square height, so nothing clips.
+   Lower bound is 900px (not 768): below that the 4 columns get too narrow and
+   the "Level N" wordmark would crowd, so narrow tablets keep the taller card. */
+@media (min-width: 900px) and (max-width: 1180px) {
+  /* Full width gives the 4 cards more room so a square is roomy (not cramped). */
+  .level-section .section-inner {
+    width: 100%;
+  }
+
+  /* Stop the cards stretching to the tallest one's height — otherwise the row
+     stretch overrides aspect-ratio. */
+  .level-grid {
+    align-items: start;
+  }
+
+  .level-button {
+    min-height: 0;
+    aspect-ratio: 1 / 1;
   }
 }
 
@@ -2507,27 +2689,42 @@ p {
     --hero-height: 380px;
   }
 
+  /* Compact mobile header: smaller logo, tighter logo->nav gap, less vertical
+     padding so the header doesn't dominate the (especially landscape) screen. */
   .topbar {
-    min-height: 122px;
+    min-height: 0;
     flex-wrap: wrap;
-    padding-right: 28px;
-    padding-left: 28px;
-    padding-top: 15px;
-    padding-bottom: 15px;
+    /* Tight row-gap: the base 16px gap created ~32px of dead space between the
+       brand row, the (empty, on public pages) actions row, and the nav row. */
+    gap: 2px;
+    padding-right: 24px;
+    padding-left: 24px;
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 
+  /* Logo aligned left (both orientations); the actions cluster (login icon, or
+     Admin/Log out when signed in) sits on the same row to its right. */
   .brand {
-    width: 100%;
-    justify-content: center;
+    width: auto;
+    justify-content: flex-start;
   }
 
   .brand-name {
-    width: 100%;
-    font-size: clamp(24px, 5.8vw, 29px);
-    justify-content: center;
-    justify-items: center;
-    line-height: 1.12;
-    text-align: center;
+    width: auto;
+    font-size: clamp(9px, 2.5vw, 12px);
+    justify-content: flex-start;
+    justify-items: start;
+    line-height: 1.1;
+    text-align: left;
+  }
+
+  /* The actual wordmark letters live in these two spans (fixed 33px by default);
+     shrink them on mobile so the header can be shorter. The brand row height
+     follows the letter size, so this also trims the header. */
+  .brand-accent,
+  .brand-adventures {
+    font-size: clamp(17px, 5vw, 20px);
   }
 
   .top-nav {
@@ -2537,37 +2734,105 @@ p {
     transform: none;
     width: 100vw;
     flex-basis: 100vw;
-    margin-right: -28px;
-    margin-left: -28px;
+    margin-top: 0;
+    margin-right: -24px;
+    margin-left: -24px;
     gap: 12px;
     justify-content: center;
   }
 
   .top-nav-link {
-    width: 50px;
-    min-width: 50px;
-    min-height: 56px;
+    width: 46px;
+    min-width: 46px;
+    min-height: 48px;
   }
 
   .nav-book {
-    width: 50px;
-    height: 36px;
-    border-radius: 17px;
+    width: 46px;
+    height: 33px;
+    border-radius: 16px;
   }
 
   .nav-book-number {
-    font-size: 20px;
+    font-size: 18px;
+  }
+
+  /* Header actions on mobile: a compact cluster on the right of the logo row.
+     The login icon (signed out) and the Admin / Log out buttons (signed in) are
+     all small CIRCULAR icon buttons sized to roughly the logo height. */
+  .topbar-actions {
+    gap: 8px;
   }
 
   .login-button {
+    display: inline-grid;
+    width: 34px;
+    height: 34px;
+    color: var(--ink);
+  }
+
+  .login-icon {
+    width: 21px;
+    height: 21px;
+  }
+
+  /* Plain line icons (no circular background) — simple and uncropped. The
+     .topbar-actions prefix raises specificity above the base pill styles (which
+     are declared later in the file). */
+  .topbar-actions .admin-nav-button,
+  .topbar-actions .admin-logout-button {
+    width: auto;
+    height: auto;
+    padding: 5px;
+    border-radius: 0;
+    background: none;
+    color: var(--ink);
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .topbar-actions .admin-nav-button:hover,
+  .topbar-actions .admin-logout-button:hover {
+    background: none;
+  }
+
+  .admin-nav-button .action-icon,
+  .admin-logout-button .action-icon {
+    display: block;
+    width: 24px;
+    height: 24px;
+  }
+
+  .action-label {
     display: none;
   }
 
+  /* Mobile hero: stack the copy, the two app buttons (side by side), then the
+     character image below — all visible. The section grows to fit its content
+     instead of being clamped to --hero-height (which clipped the hero). */
+  .hero-section.section-blue,
+  .hero-section .section-inner {
+    height: auto;
+    min-height: 0;
+  }
+
+  .hero-section .section-inner {
+    width: 100%;
+    padding: 26px 24px 40px;
+  }
+
+  .hero-grid {
+    height: auto;
+    gap: 22px;
+  }
+
   .hero-copy {
-    width: calc(100vw - 48px);
+    width: 100%;
     max-width: 100%;
     position: relative;
-    z-index: 1;
+    z-index: 3;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
   .hero-copy h1,
@@ -2580,9 +2845,51 @@ p {
     width: 100%;
   }
 
+  /* Shorter wave on mobile so the in-flow image below the copy only tucks its
+     base behind the white curve instead of being half-covered. */
+  .hero-wave {
+    height: 96px;
+  }
+
+  /* Keep the two store buttons on one row, sharing the width evenly. Shrink the
+     icon + label so "Google Play" stays inside the button at 320px wide. */
+  .app-downloads {
+    flex-wrap: nowrap;
+    gap: 10px;
+    margin-top: 22px;
+  }
+
+  .app-download-button {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 0;
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .app-download-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .app-download-button small {
+    font-size: 9px;
+  }
+
+  .app-download-button strong {
+    font-size: 12px;
+  }
+
+  /* Full viewport width (default was 80%, which left big margins and made the
+     2-up level cards narrow + tall). Full width + a tighter gap widens them. */
   .level-section .section-inner {
-    padding-right: 24px;
-    padding-left: 24px;
+    width: 100%;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .level-grid {
+    gap: 14px;
   }
 
   .intro-section .section-inner,
@@ -2599,79 +2906,178 @@ p {
     overflow-wrap: break-word;
   }
 
+  /* Two-up level cards: wider (full-width section) + a shorter height so they
+     read as cards, not tall pills. */
   .level-button {
-    min-height: 210px;
-    padding: 26px;
+    min-height: 146px;
+    grid-template-rows: 24px 1fr 36px;
+    padding: 14px 12px;
+    border-radius: 28px;
   }
 
   .level-button strong {
-    font-size: 34px;
+    font-size: 26px;
+  }
+
+  .level-button small {
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .level-kicker {
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+
+  /* Month screen: use the full viewport width (the default 80% content width
+     left big side margins, squeezing the buttons tall and wrapping the title).
+     Full width gives the 2-up buttons a wider, less stretched aspect. */
+  #monthScreen .section-inner {
+    width: 100%;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  #monthScreen #monthTitle {
+    font-size: clamp(24px, 7vw, 32px);
+    white-space: nowrap;
+  }
+
+  /* Two-up month buttons: full cell width + a shorter, wider aspect. */
+  .month-button {
+    width: 100%;
+    min-height: 84px;
+    padding: 14px 16px;
+  }
+
+  .month-button strong {
+    font-size: 40px;
   }
 
   .hero-stage {
-    position: absolute;
-    right: -178px;
-    bottom: -104px;
-    z-index: 0;
-    width: 230px;
-    height: 250px;
+    position: static;
+    right: auto;
+    bottom: auto;
+    z-index: 1;
+    width: 100%;
+    height: auto;
     min-height: 0;
     place-items: center;
-    pointer-events: none;
+    pointer-events: auto;
   }
 
   .hero-image {
-    width: 210px;
-    opacity: 0.76;
+    width: min(264px, 72%);
+    max-height: none;
+    margin: 0;
+    opacity: 1;
   }
 
   #contentScreen .section-inner {
-    padding-right: 24px;
-    padding-left: 24px;
+    padding-right: 16px;
+    padding-left: 16px;
   }
 
+  /* Opening / Ending Song buttons. Base mobile = horizontal; portrait stacks
+     them vertically (see the orientation:portrait block). NOTE: a leftover
+     duplicate rule used to re-shrink these to 10px/18px here — removed, so the
+     label + icon read at a proper size. */
   #contentScreen .content-toolbar {
     min-width: 0;
-    grid-template-columns: minmax(62px, 0.9fr) 56px repeat(5, minmax(42px, 1fr));
-    gap: 6px;
-    padding-right: 12px;
-    padding-left: 12px;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 4px 6px 8px;
+    overflow-x: visible;
   }
 
   #contentScreen .content-type {
-    min-height: 44px;
-    padding-right: 4px;
-    padding-left: 4px;
-    font-size: 10px;
+    flex: 1 1 0;
+    max-width: 240px;
+    min-height: 56px;
+    gap: 8px;
+    padding: 0 14px;
+    font-size: 15px;
   }
 
   #contentScreen .content-type-icon {
-    width: 18px;
-    height: 18px;
-    font-size: 11px;
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
   }
 
-  .lesson-grid {
+  /* Mobile weekday board: a 6-column grid (week label + Mon–Fri) with each
+     book cover promoted to its own full-width row above its two weeks. This
+     drops the wide book-card column that forced a horizontal scrollbar, so all
+     five weekdays fit on screen with no horizontal scroll and the day text
+     scales to the button. */
+  #contentScreen .lesson-board {
+    padding: 10px;
+    overflow-x: visible;
+  }
+
+  #contentScreen .lesson-grid {
     min-width: 0;
-    grid-template-columns: minmax(62px, 0.9fr) 56px repeat(5, minmax(42px, 1fr));
-    gap: 6px;
+    /* Cap + center the board so the weekday buttons stay phone-sized on wide
+       (landscape) screens instead of ballooning to fill 5 stretched columns.
+       Below ~430px the board just shrinks to fit, so portrait is unchanged.
+       The week column widens a touch (clamp) for the "N week" label. */
+    max-width: 430px;
+    margin-inline: auto;
+    /* Week column is just the number on mobile (the "week" word is hidden
+       below), so it can be narrow — that frees width for bigger day buttons. */
+    grid-template-columns: clamp(24px, 6.5vw, 34px) repeat(5, minmax(0, 1fr));
+    /* Keep columns tight (5 days must fit) but space the week rows apart so
+       week 1 and week 2 don't butt together. */
+    column-gap: 6px;
+    row-gap: 14px;
   }
 
-  .lesson-board {
-    padding: 12px;
+  /* Book cover sits on its own full-width row, but the CARD itself is sized to
+     the cover (centered, PC card aspect) — not stretched full width — so the
+     rounded cover and its white outline match the PC look instead of floating
+     in an oversized white box. margin-top adds breathing room so book 2 doesn't
+     butt up against the week-2 button row above it. */
+  #contentScreen .book-title-card {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    justify-self: center;
+    width: min(150px, 46%);
+    min-height: 0;
+    aspect-ratio: 150 / 202;
+    /* Extra space above each cover (on top of the grid row-gap) so book 2 has
+       clear breathing room from the week-2 row above it. */
+    margin-top: 16px;
+    margin-bottom: 6px;
+    border-radius: 22px;
   }
 
-  .book-title-card {
-    min-height: 148px;
+  /* has-cover keeps the base rule (background-size:cover + rounded + 3px white
+     outline), so no override needed here — it now renders like the PC card. */
+
+  #contentScreen .week-label {
+    min-height: 0;
+    padding: 2px;
+    border-radius: 14px;
+    font-size: clamp(14px, 3.6vw, 18px);
+    line-height: 1.1;
+    text-align: center;
   }
 
-  .week-label {
-    min-height: 68px;
-    font-size: 11px;
+  /* Show only the week number on mobile (e.g. "1" instead of "1 week"). */
+  #contentScreen .week-label .wk-word {
+    display: none;
   }
 
-  .lesson-button strong {
-    font-size: 13px;
+  /* Square (1:1) weekday buttons instead of tall pills. */
+  #contentScreen .lesson-button {
+    min-height: 0;
+    aspect-ratio: 1 / 1;
+    border-radius: 16px;
+    padding: 4px 2px;
+  }
+
+  #contentScreen .lesson-button strong {
+    font-size: clamp(13px, 3.8vw, 19px);
   }
 
   .content-v2-inner {
@@ -2889,7 +3295,8 @@ p {
 
   .brand-name {
     width: 100%;
-    font-size: clamp(23px, 6vw, 29px);
+    /* ~50% of the previous size per request. */
+    font-size: clamp(10px, 3vw, 13px);
     line-height: 1.12;
   }
 
@@ -2924,6 +3331,188 @@ p {
 
   .lesson-button {
     min-height: 68px;
+  }
+}
+
+/* Landscape phones (short + wide): put the logo and the level nav on ONE row
+   (logo left, nav right) instead of stacking them, to reclaim vertical space.
+   Large-phone landscapes (>=768px) already get the horizontal tablet header. */
+@media (max-width: 767px) and (orientation: portrait) {
+  /* Header row 1 = logo (left) + actions (right); the level nav drops to its
+     own centered row below (from the base rules). This keeps the header short. */
+  .topbar-actions {
+    order: 1;
+    margin-left: auto;
+  }
+
+  /* Slightly larger logo. The header row 1 height is set by the 34px action
+     icons (login / admin / log out), and the logo stays well under that, so the
+     header height and the right-side icons are unaffected. */
+  .brand-accent,
+  .brand-adventures {
+    font-size: clamp(22px, 6.5vw, 26px);
+  }
+
+  /* Month buttons square (1:1): keep the current width, drop the 137px height
+     floor and let aspect-ratio set the height from the column width. (Matches
+     the level-theme rule's specificity so it actually wins.) */
+  #monthScreen[class*="level-theme-"] .month-button {
+    min-height: 0;
+    aspect-ratio: 1 / 1;
+  }
+
+  /* Stack Opening Song (top) / Ending Song (bottom) vertically; with the row no
+     longer shared, the buttons can be larger. */
+  #contentScreen .content-toolbar {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #contentScreen .content-type {
+    flex: 0 0 auto;
+    width: 100%;
+    /* ~60% of the previous width (was 272). Label + icon trimmed a touch so the
+       text stays inside the narrower button. */
+    max-width: 164px;
+    min-height: 64px;
+    gap: 6px;
+    padding: 0 10px;
+    font-size: 15px;
+  }
+
+  #contentScreen .content-type-icon {
+    width: 22px;
+    height: 22px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 767px) and (orientation: landscape) {
+  .topbar {
+    flex-wrap: nowrap;
+    gap: 12px;
+    min-height: 0;
+    align-items: center;
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .brand {
+    width: auto;
+  }
+
+  .brand-name {
+    width: auto;
+    font-size: clamp(11px, 1.9vw, 14px);
+    text-align: left;
+  }
+
+  /* Single-row header: logo (left) · level nav (center) · actions (right). */
+  .top-nav {
+    position: static;
+    left: auto;
+    order: 1;
+    flex: 1 1 auto;
+    transform: none;
+    width: auto;
+    flex-basis: auto;
+    margin: 0;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .topbar-actions {
+    order: 2;
+  }
+
+  .top-nav-link {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .nav-book {
+    width: 44px;
+    height: 31px;
+  }
+
+  .nav-book-number {
+    font-size: 18px;
+  }
+
+  /* Bigger song/day-button text + icon so they read in proportion to the
+     buttons at landscape size. */
+  #contentScreen .content-type {
+    min-height: 52px;
+    font-size: 16px;
+  }
+
+  #contentScreen .content-type-icon {
+    width: 26px;
+    height: 26px;
+    font-size: 15px;
+  }
+
+  #contentScreen .lesson-button strong {
+    font-size: 21px;
+  }
+
+  #contentScreen .week-label {
+    font-size: 19px;
+  }
+
+  /* Landscape has horizontal room: lay the board out exactly like PC — book
+     cover (left) · week label · Mon–Fri — the cover spanning its two week rows.
+     Uncaps the board (portrait keeps the capped, cover-stacked layout). */
+  #contentScreen .lesson-grid {
+    max-width: none;
+    margin-inline: 0;
+    grid-template-columns:
+      clamp(96px, 16vw, 132px) clamp(28px, 5vw, 40px)
+      repeat(5, minmax(0, 1fr));
+    column-gap: 8px;
+  }
+
+  /* Book cover back in column 1, spanning its two week rows (auto-placed like
+     PC — override the portrait full-width-row placement). */
+  #contentScreen .book-title-card {
+    grid-column: auto;
+    grid-row: span 2;
+    justify-self: stretch;
+    align-self: stretch;
+    width: 100%;
+    min-height: 0;
+    aspect-ratio: auto;
+    margin: 0;
+  }
+
+  /* Month buttons: ~60% of their portrait size. Use fixed-width columns centered
+     as a group (instead of width:60% inside full 1fr cells) so the two buttons
+     sit close together rather than spread far apart. The height floor comes from
+     the higher-specificity level-theme rule (min-height:137px), so the override
+     must match that specificity to take effect. */
+  #monthScreen .month-grid {
+    grid-template-columns: repeat(2, 180px);
+    justify-content: center;
+    column-gap: 18px;
+  }
+
+  .month-button {
+    width: 100%;
+    padding: 8px 12px;
+  }
+
+  #monthScreen[class*="level-theme-"] .month-button {
+    min-height: 80px;
+  }
+
+  .month-button strong {
+    font-size: 24px;
+  }
+
+  .month-button span {
+    font-size: 11px;
   }
 }
 
@@ -3625,6 +4214,19 @@ body.noaccess-open {
   flex: 0 0 auto;
   align-items: center;
   gap: 12px;
+}
+
+/* Admin/Log out icons: present in markup for the mobile circular-icon variant,
+   but hidden on desktop/tablet where the buttons show their text label. */
+.action-icon {
+  display: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* Header buttons (shown only for a signed-in admin). */

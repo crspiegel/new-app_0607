@@ -348,7 +348,10 @@ function renderLessons() {
       weekNumber += 1;
       const weekLabel = document.createElement("div");
       weekLabel.className = "week-label";
-      weekLabel.textContent = `${weekNumber} week`;
+      // Number + word, wrapped in a single inline span so the grid-centered
+      // label stays on one line ("N week") on desktop; mobile hides .wk-word to
+      // show just the number (frees width for bigger day buttons).
+      weekLabel.innerHTML = `<span class="wk-text"><span class="wk-num">${weekNumber}</span> <span class="wk-word">week</span></span>`;
       lessonGrid.append(weekLabel);
 
       weekdays.forEach((day, dayIndex) => {
