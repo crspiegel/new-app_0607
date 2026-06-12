@@ -693,6 +693,48 @@
                 By signing in, you agree to our <strong>Terms</strong> and
                 <strong>Privacy Policy</strong>.
               </p>
+
+              <!-- Sign-up entry point: hidden by default; shown only when an
+                   admin turns on site_settings.signup_visible. Accounts are
+                   created by admins, so this form is a placeholder that guides
+                   the student to ask their teacher. -->
+              <div class="login-signup" id="loginSignup" hidden>
+                <p class="login-signup-sep">New student?</p>
+                <form class="login-form" id="signupForm" novalidate>
+                  <div class="login-field">
+                    <input
+                      class="login-input"
+                      type="text"
+                      id="signupId"
+                      autocomplete="off"
+                      placeholder="Choose an ID"
+                      aria-label="Choose an ID"
+                    />
+                  </div>
+                  <div class="login-field">
+                    <input
+                      class="login-input"
+                      type="password"
+                      id="signupPw"
+                      autocomplete="new-password"
+                      placeholder="Choose a password"
+                      aria-label="Choose a password"
+                    />
+                  </div>
+                  <p
+                    class="login-note"
+                    id="signupNote"
+                    role="status"
+                    hidden
+                  ></p>
+                  <button
+                    class="login-submit login-signup-submit"
+                    type="submit"
+                  >
+                    Sign up
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
         </section>
@@ -726,6 +768,65 @@
                 shown in place.
               </p>
               <div class="admin-board admin-gray" id="adminBoard"></div>
+
+              <!-- Member management: create / list / activate accounts (grades
+                   1-3). Backed by the admin-only create_member / set_member_active
+                   RPCs; the password hash never leaves the database. -->
+              <div class="admin-members">
+                <h2 class="admin-subtitle">Members</h2>
+                <form class="admin-member-form" id="memberForm" novalidate>
+                  <input
+                    class="admin-member-input"
+                    type="text"
+                    id="memberId"
+                    autocomplete="off"
+                    placeholder="ID (4+ chars)"
+                    aria-label="Member ID"
+                  />
+                  <input
+                    class="admin-member-input"
+                    type="text"
+                    id="memberPw"
+                    autocomplete="off"
+                    placeholder="Password (4+ chars)"
+                    aria-label="Member password"
+                  />
+                  <select
+                    class="admin-member-select"
+                    id="memberGrade"
+                    aria-label="Grade"
+                  >
+                    <option value="1">Grade 1</option>
+                    <option value="2">Grade 2</option>
+                    <option value="3">Grade 3</option>
+                  </select>
+                  <input
+                    class="admin-member-input"
+                    type="text"
+                    id="memberName"
+                    autocomplete="off"
+                    placeholder="Name (optional)"
+                    aria-label="Display name"
+                  />
+                  <button class="admin-member-add" type="submit">
+                    Add / Update
+                  </button>
+                </form>
+                <p
+                  class="admin-status"
+                  id="memberStatus"
+                  aria-live="polite"
+                ></p>
+                <div class="admin-member-list" id="memberList"></div>
+
+                <!-- Signup visibility (placeholder feature): when ON, a Sign-up
+                     entry point shows on the login page. Accounts are still
+                     created by admins here. -->
+                <label class="admin-signup-toggle">
+                  <input type="checkbox" id="signupToggle" />
+                  <span>Show the public Sign-up form on the login page</span>
+                </label>
+              </div>
             </div>
           </div>
         </section>

@@ -529,30 +529,47 @@ Delivery is **phased**; content access gate is **UI-level** (grade 3 → cute po
     `#admin`→login bounce, bad login reaches Supabase Auth and shows error; `npm.cmd run qa` green.
     ⚠ Real admin login + URL edit + cover upload + cross-device reflection need the admin's
     credentials → **manual test** (can't run headless).
-- **Phase 3 — TODO:** login wiring (admin = real Auth, members = `verify_member_login` RPC),
-  activate grade-3 gate, admin member management, hidden signup (`site_settings.signup_visible`),
-  ID/pw rule `/^[\x21-\x7E]{4,}$/` (≥4, ASCII only, no Korean), logout.
+- **Phase 3 — FRONTEND DONE (`2026-06-12`, uncommitted; backend RPCs already existed):** login + 3
+  grades wired. **No SQL changes** — `migration.sql` already had every Phase-3 RPC (`verify_member_login`,
+  `create_member`, `set_member_active`, `site_settings`). All work was `app.js`/`index.html`/`styles.css`.
+  - **Login branch** (`#loginForm`): `id.includes("@")` → admin Supabase Auth (existing); else →
+    `sb.rpc("verify_member_login",{p_id,p_password})` → grade or null. ⚠ A member id containing `@`
+    would misroute to admin Auth — issue members `@`-free ids.
+  - **Member session** = client-side: `state.grade` + `localStorage.cra_member` (helpers
+    `saveMemberSession`/`clearMemberSession`/`restoreMemberSession`). UI-level gate only (spoofable;
+    write-protection is the real security via RLS). Restored on load (admin session supersedes).
+  - **Grade gate**: `openSlot`→`isBlockedByGrade()` (`state.grade===3`) already existed; now fed real
+    grade → grade-3 click shows `#noAccessModal`; grade1/2/admin/anon play.
+  - **Signed-in UI**: `updateAdminUI` toggles `body.is-admin` (admin) + **`body.signed-in`** (admin OR
+    member); Log out shows when signed-in, Admin only for admin, Login hidden when signed-in
+    (CSS `body.signed-in .login-button{display:none}`). Logout clears both admin + member session.
+  - **Admin member panel** (`#adminScreen` → `.admin-members`): create form (id/pw/grade/name →
+    `create_member`), list (`from("members").select(...)`), Activate/Deactivate (`set_member_active`).
+    `renderMembers()` called from `openAdmin()`.
+  - **Signup = hidden placeholder** (user-chosen): `#loginSignup` form hidden unless
+    `site_settings.signup_visible` true (public read, `refreshSignupUI()` on load); admin checkbox
+    `#signupToggle` upserts the flag. **Submit creates NO account** → shows "Please ask your teacher
+    to create your account." (accounts stay admin-created).
+  - Verified headless: gate (grade3 popup / grade1 play / anon full), login routing (member-rpc vs
+    admin-auth), signed-in UI, logout clears session, signup hidden by default + placeholder note,
+    member-create admin guard. `npm.cmd run qa` green. ⚠ **Manual test needs real admin creds**: create
+    grade1/2/3 members → log in as each (grade3=popup, grade1/2=play); flip the signup toggle.
 
-### ▶ RESUME HERE (next session — `2026-06-11`)
+### ▶ RESUME HERE (`2026-06-12`)
 
-- **Uncommitted local change (`2026-06-11`):** responsive optimization — **2 rounds** (`styles.css`
-  only): round 1 (tablet-landscape + mobile-portrait base fixes) + round 2 (after the user's 320px
-  Galaxy S9+ re-test: image-behind-wave z-index, 320px store-button overflow, level 2×2, month
-  width/aspect/title, mobile content covers + square day buttons). See the two "Responsive …" bullets
-  above. `npm.cmd run qa` green; verified by Playwright clips at 320/390/1024/1280.
-  **Awaiting user device re-test, then commit/deploy on request.**
-- **Done & committed:** Phase 1 (player on all 40 pages) + Phase 2 (Supabase admin manager).
-  Header layout fix applied (`.topbar-actions` wrapper groups Admin/Log out/Login at the right).
-- **User-tested OK so far:** admin login, admin page, **cover image upload + drag-drop reflects
-  on the user page**. ✅
-- **NOT yet user-tested (do first tomorrow):** (1) video **URL registration** via the slot
-  modal → plays on the user content page; (2) **cross-device** reflection (phone/other browser).
-  If these work, Phase 2 is fully signed off.
-- **Then start Phase 3** (login + 3 grades). Note for Phase 3: the login form currently sends the
-  `user ID` field as an **email** to Supabase Auth (admin path). Phase 3 must add the member
-  branch: if Auth fails, try `sb.rpc('verify_member_login', {p_id, p_password})` → set
-  `state.grade` → grade-3 click shows `#noAccessModal` (already built, dormant). Member admin UI +
-  signup toggle still to build.
+- **All responsive/design work COMMITTED + DEPLOYED** (`a762cc7`, pushed to `master`, Vercel live).
+  Rounds 1–17: mobile-portrait (header icons, Back/Next, video vertical-volume popover) + tablet
+  portrait (600–767 month 5-col) + tablet landscape (month button parity/overlap/white-gap, content
+  white-gap + 2-row banner). Live verified.
+- **Phase 1 + Phase 2 — DONE & SIGNED OFF (`2026-06-12`).** User-tested OK: admin login, admin page,
+  cover upload+drag-drop reflection, **video URL registration → plays on user page**, **cross-device
+  reflection**. ✅ Phase 2 fully closed.
+- **Phase 3 (login + 3 grades) — FRONTEND DONE (`2026-06-12`, UNCOMMITTED).** See the Phase 3 bullet
+  above for detail. Headless-verified + `npm.cmd run qa` green. **Awaiting:** (1) user manual test with
+  real admin creds (create grade1/2/3 members → log in as each; signup toggle), (2) commit/deploy on
+  request. No SQL re-run needed (RPCs already provisioned).
+- **Then: items 3–4** (backlog/optional polish), **then LAST: font-loading FOUT** improvement
+  (memory `deferred-font-fout.md`).
 - **Infra reminders:** Supabase project `jguuexcgyvyljbcqfpib`; keys in `supabase-config.js`
   (ships; anon key is public-safe). `SUPABASE_SETUP.md` + `supabase/migration.sql` are the
   provisioning record (`.vercelignore`'d). Live site auto-deploys on push to `master`.

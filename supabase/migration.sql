@@ -123,7 +123,9 @@ returns smallint
 language plpgsql
 stable
 security definer
-set search_path = public
+-- pgcrypto (crypt) lives in the `extensions` schema on Supabase, so include it
+-- in the search_path or crypt()/gen_salt() resolve to "does not exist".
+set search_path = public, extensions
 as $$
 declare
   v_grade smallint;
@@ -145,7 +147,8 @@ create or replace function public.create_member(
 returns void
 language plpgsql
 security definer
-set search_path = public
+-- crypt()/gen_salt() are in the `extensions` schema on Supabase (see above).
+set search_path = public, extensions
 as $$
 begin
   if not public.is_admin() then

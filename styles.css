@@ -279,9 +279,9 @@ body.subpage-active .brand-name {
     transform 160ms ease;
 }
 
-/* Once signed in, the header shows Log out (and Admin) — hide the login icon so
-   both aren't shown at once (applies on desktop, tablet, and mobile). */
-body.is-admin .login-button {
+/* Once signed in (admin OR member), the header shows Log out (and Admin for
+   admins) — hide the login icon so both aren't shown at once (desktop/tablet/mobile). */
+body.signed-in .login-button {
   display: none;
 }
 
@@ -4557,6 +4557,150 @@ body.noaccess-open {
   font-weight: 600;
   font-size: 14px;
   color: #777;
+}
+
+/* Member management panel (admin screen). */
+.admin-members {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 2px solid #eee;
+}
+.admin-subtitle {
+  margin: 0 0 14px;
+  font-family: "Nunito", sans-serif;
+  font-weight: 900;
+  font-size: 20px;
+  color: #444;
+}
+.admin-member-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.admin-member-input,
+.admin-member-select {
+  height: 42px;
+  padding: 0 14px;
+  border: 2px solid #e2e2e2;
+  border-radius: 12px;
+  background: #fafafa;
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #333;
+}
+.admin-member-input {
+  flex: 1 1 150px;
+  min-width: 120px;
+}
+.admin-member-input:focus,
+.admin-member-select:focus {
+  outline: none;
+  border-color: var(--macaw-blue);
+}
+.admin-member-add {
+  height: 42px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--macaw-blue);
+  box-shadow: 0 4px 0 var(--macaw-blue-shadow);
+  color: var(--canvas);
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+}
+.admin-member-add:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+.admin-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.admin-member-empty {
+  margin: 4px 0;
+  font-family: "Nunito", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #999;
+}
+.admin-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #f4f4f4;
+  border-radius: 12px;
+}
+.admin-member-row.is-inactive {
+  opacity: 0.55;
+}
+.admin-member-info {
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #333;
+}
+.admin-member-toggle {
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 14px;
+  border: 2px solid #d8d8d8;
+  border-radius: 10px;
+  background: #fff;
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+}
+.admin-member-toggle:hover {
+  border-color: var(--macaw-blue);
+  color: var(--macaw-blue);
+}
+.admin-signup-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #555;
+  cursor: pointer;
+}
+.admin-signup-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--macaw-blue);
+}
+
+/* Sign-up entry point on the login page (placeholder, hidden by default). */
+.login-signup {
+  margin-top: 18px;
+  width: 100%;
+}
+.login-signup-sep {
+  margin: 0 0 12px;
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--muted-ink);
+  text-align: center;
+}
+.login-note {
+  margin: 4px 0 0;
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--macaw-blue);
+  text-align: center;
 }
 
 /* The gray board. */

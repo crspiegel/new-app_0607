@@ -1057,6 +1057,42 @@ let isAdmin = false;
 const adminState = { level: "Level 1", month: "March" };
 const levels = ["Level 1", "Level 2", "Level 3", "Level 4"];
 
+// Account-format rule (mirrors the server's `^[!-~]{4,}$`): >= 4 printable-ASCII
+// chars, no spaces, no Korean. Used for member login + admin member creation.
+const ACCOUNT_RE = /^[\x21-\x7E]{4,}$/;
+
+// Member (grade 1-3) session. Members are NOT Supabase Auth users, so the grade
+// is held client-side (localStorage) — a UI-level gate, intentionally simple
+// (write-protection is enforced by RLS; see NOTES). `state.grade` drives the
+// no-access popup in openSlot().
+const MEMBER_KEY = "cra_member";
+function saveMemberSession(id, grade) {
+  state.grade = grade;
+  try {
+    window.localStorage.setItem(MEMBER_KEY, JSON.stringify({ id, grade }));
+  } catch {
+    /* localStorage may be unavailable (private mode) — gate still works in-session */
+  }
+}
+function clearMemberSession() {
+  state.grade = undefined;
+  try {
+    window.localStorage.removeItem(MEMBER_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+function restoreMemberSession() {
+  try {
+    const raw = window.localStorage.getItem(MEMBER_KEY);
+    if (!raw) return;
+    const m = JSON.parse(raw);
+    if (m && [1, 2, 3].includes(m.grade)) state.grade = m.grade;
+  } catch {
+    /* ignore malformed/blocked storage */
+  }
+}
+
 const adminBoard = document.querySelector("#adminBoard");
 const adminLevelSelect = document.querySelector("#adminLevel");
 const adminMonthSelect = document.querySelector("#adminMonth");
@@ -1073,6 +1109,17 @@ const loginForm = document.querySelector("#loginForm");
 const loginId = document.querySelector("#loginId");
 const loginPassword = document.querySelector("#loginPassword");
 const loginError = document.querySelector("#loginError");
+const memberForm = document.querySelector("#memberForm");
+const memberId = document.querySelector("#memberId");
+const memberPw = document.querySelector("#memberPw");
+const memberGrade = document.querySelector("#memberGrade");
+const memberName = document.querySelector("#memberName");
+const memberStatus = document.querySelector("#memberStatus");
+const memberList = document.querySelector("#memberList");
+const signupToggle = document.querySelector("#signupToggle");
+const loginSignup = document.querySelector("#loginSignup");
+const signupForm = document.querySelector("#signupForm");
+const signupNote = document.querySelector("#signupNote");
 
 function setAdminStatus(text) {
   if (adminStatus) adminStatus.textContent = text || "";
@@ -1123,9 +1170,14 @@ async function savePage(level, month) {
 }
 
 function updateAdminUI() {
+  // signed-in = admin OR a logged-in member (grade set). Admin button is
+  // admin-only; Log out shows for anyone signed in; Login hides when signed in
+  // (CSS keys off body.signed-in).
+  const signedIn = isAdmin || state.grade != null;
   document.body.classList.toggle("is-admin", isAdmin);
+  document.body.classList.toggle("signed-in", signedIn);
   if (adminNavBtn) adminNavBtn.hidden = !isAdmin;
-  if (logoutBtn) logoutBtn.hidden = !isAdmin;
+  if (logoutBtn) logoutBtn.hidden = !signedIn;
 }
 
 async function refreshAdminStatus() {
@@ -1166,24 +1218,50 @@ if (loginForm) {
       setLoginError("Login is not available right now.");
       return;
     }
-    // Phase 2: admin login via Supabase Auth (email = the admin's email).
-    // Phase 3 adds the member (grade 1-3) branch here.
-    const { error } = await sb.auth.signInWithPassword({
-      email: id,
-      password: pw,
+
+    // Admins log in with an email; members with a plain ID. Branch on "@".
+    if (id.includes("@")) {
+      const { error } = await sb.auth.signInWithPassword({
+        email: id,
+        password: pw,
+      });
+      if (error) {
+        setLoginError("Login failed. Check your ID and password.");
+        return;
+      }
+      clearMemberSession(); // an admin session supersedes any member grade
+      await refreshAdminStatus();
+      if (loginPassword) loginPassword.value = "";
+      if (isAdmin) {
+        openAdmin();
+      } else {
+        setHash("home");
+        showScreen("home");
+      }
+      return;
+    }
+
+    // Member (grade 1-3): validate format, then verify server-side via the RPC
+    // (the hash never leaves the DB). Returns the grade or null.
+    if (!ACCOUNT_RE.test(id) || !ACCOUNT_RE.test(pw)) {
+      setLoginError(
+        "ID and password must be at least 4 characters — letters, numbers or symbols, no spaces.",
+      );
+      return;
+    }
+    const { data: grade, error } = await sb.rpc("verify_member_login", {
+      p_id: id,
+      p_password: pw,
     });
-    if (error) {
+    if (error || grade == null) {
       setLoginError("Login failed. Check your ID and password.");
       return;
     }
-    await refreshAdminStatus();
+    saveMemberSession(id, grade);
+    updateAdminUI();
     if (loginPassword) loginPassword.value = "";
-    if (isAdmin) {
-      openAdmin();
-    } else {
-      setHash("home");
-      showScreen("home");
-    }
+    setHash("home");
+    showScreen("home");
   });
 }
 
@@ -1191,6 +1269,7 @@ if (logoutBtn) {
   logoutBtn.addEventListener("click", async () => {
     if (sb) await sb.auth.signOut();
     isAdmin = false;
+    clearMemberSession();
     updateAdminUI();
     setHash("home");
     showScreen("home");
@@ -1226,11 +1305,155 @@ function openAdmin() {
   }
   populateAdminSelectors();
   renderAdminBoard();
+  renderMembers();
+  refreshSignupUI();
   setHash("admin");
   showScreen("admin");
 }
 
 if (adminNavBtn) adminNavBtn.addEventListener("click", openAdmin);
+
+/* ---- Member management (admin only) ----------------------------------- */
+
+function setMemberStatus(text) {
+  if (memberStatus) memberStatus.textContent = text || "";
+}
+
+// List all members (admin RLS allows the select). Each row: id · grade · name ·
+// an Activate/Deactivate toggle (set_member_active RPC).
+async function renderMembers() {
+  if (!memberList) return;
+  memberList.innerHTML = "";
+  if (!sb || !isAdmin) return;
+  const { data, error } = await sb
+    .from("members")
+    .select("id,grade,display_name,active")
+    .order("created_at");
+  if (error) {
+    setMemberStatus("Could not load members.");
+    return;
+  }
+  if (!data.length) {
+    memberList.innerHTML = '<p class="admin-member-empty">No members yet.</p>';
+    return;
+  }
+  data.forEach((m) => {
+    const row = document.createElement("div");
+    row.className = "admin-member-row";
+    if (!m.active) row.classList.add("is-inactive");
+    const info = document.createElement("span");
+    info.className = "admin-member-info";
+    info.textContent = `${m.id} · Grade ${m.grade}${
+      m.display_name ? ` · ${m.display_name}` : ""
+    }${m.active ? "" : " · (inactive)"}`;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "admin-member-toggle";
+    toggle.textContent = m.active ? "Deactivate" : "Activate";
+    toggle.addEventListener("click", async () => {
+      toggle.disabled = true;
+      const { error: tErr } = await sb.rpc("set_member_active", {
+        p_id: m.id,
+        p_active: !m.active,
+      });
+      if (tErr) setMemberStatus("Could not update that member.");
+      else await renderMembers();
+    });
+    row.append(info, toggle);
+    memberList.append(row);
+  });
+}
+
+if (memberForm) {
+  memberForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setMemberStatus("");
+    if (!sb || !isAdmin) {
+      setMemberStatus("Admins only.");
+      return;
+    }
+    const id = memberId ? memberId.value.trim() : "";
+    const pw = memberPw ? memberPw.value : "";
+    const grade = memberGrade ? Number(memberGrade.value) : 0;
+    const name = memberName ? memberName.value.trim() : "";
+    if (!ACCOUNT_RE.test(id) || !ACCOUNT_RE.test(pw)) {
+      setMemberStatus(
+        "ID and password must be 4+ characters — letters, numbers or symbols, no spaces.",
+      );
+      return;
+    }
+    if (![1, 2, 3].includes(grade)) {
+      setMemberStatus("Pick a grade (1-3).");
+      return;
+    }
+    const { error } = await sb.rpc("create_member", {
+      p_id: id,
+      p_password: pw,
+      p_grade: grade,
+      p_display_name: name || null,
+    });
+    if (error) {
+      setMemberStatus("Could not save: " + (error.message || "error"));
+      return;
+    }
+    setMemberStatus(`Saved "${id}" (Grade ${grade}).`);
+    if (memberPw) memberPw.value = "";
+    if (memberId) memberId.value = "";
+    if (memberName) memberName.value = "";
+    await renderMembers();
+  });
+}
+
+/* ---- Signup visibility (placeholder) ---------------------------------- */
+
+// Read the public site_settings flag.
+async function getSignupVisible() {
+  if (!sb) return false;
+  const { data, error } = await sb
+    .from("site_settings")
+    .select("value")
+    .eq("key", "signup_visible")
+    .maybeSingle();
+  if (error || !data) return false;
+  return data.value === true;
+}
+
+// Sync both the login-page entry point and the admin toggle to the flag.
+async function refreshSignupUI() {
+  const visible = await getSignupVisible();
+  if (loginSignup) loginSignup.hidden = !visible;
+  if (signupToggle) signupToggle.checked = visible;
+}
+
+if (signupToggle) {
+  signupToggle.addEventListener("change", async () => {
+    if (!sb || !isAdmin) return;
+    const next = signupToggle.checked;
+    const { error } = await sb
+      .from("site_settings")
+      .upsert({ key: "signup_visible", value: next });
+    if (error) {
+      signupToggle.checked = !next;
+      setMemberStatus("Could not update signup visibility.");
+      return;
+    }
+    if (loginSignup) loginSignup.hidden = !next;
+    setMemberStatus(`Sign-up form is now ${next ? "visible" : "hidden"}.`);
+  });
+}
+
+// Placeholder: accounts are created by admins, so signup just guides the
+// student to ask their teacher (no account is created here).
+if (signupForm) {
+  signupForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (signupNote) {
+      signupNote.textContent =
+        "Please ask your teacher to create your account.";
+      signupNote.hidden = false;
+    }
+  });
+}
 
 if (adminLevelSelect) {
   adminLevelSelect.addEventListener("change", () => {
@@ -1495,6 +1718,9 @@ if (view === "content-v3" && hashLevel && hashMonth) {
 // #admin deep link (admins only — others are bounced to login).
 (async () => {
   await refreshAdminStatus();
+  if (!isAdmin) restoreMemberSession(); // admin session supersedes member grade
+  updateAdminUI();
+  refreshSignupUI();
   await hydrateContent();
   if (view === "admin") {
     if (isAdmin) {

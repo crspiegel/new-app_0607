@@ -76,6 +76,39 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   `app.js` always sets `data-month` on `#contentScreen` when the content page shows. Use
   `[data-month="April"]` for one month, `[data-month]` for any.
 
+## Auth, grades & Supabase (Phase 2/3)
+
+- **Two login kinds share one form** (`#loginForm`). Branch on `@`: an id containing `@` → **admin**
+  Supabase Auth (`auth.signInWithPassword({email:id})`); otherwise → **member** `sb.rpc("verify_member_login",
+{p_id,p_password})` returning the grade (1-3) or null. ⚠ Don't issue member ids containing `@` — they'd
+  misroute to the admin Auth path and fail.
+- **Member grade is a CLIENT-SIDE gate**, not real auth. It lives in `state.grade` + `localStorage.cra_member`
+  (`saveMemberSession`/`clearMemberSession`/`restoreMemberSession`), restored on load (an admin Supabase
+  session supersedes it). It's spoofable on purpose — the real protection is RLS (only admins can WRITE
+  content/members/settings; video URLs are public to read). The grade only drives the `#noAccessModal` popup
+  in `openSlot` (grade 3 blocked; 1/2/admin/anon play).
+- **`body.signed-in`** (admin OR member) hides the header Login button and shows Log out; **`body.is-admin`**
+  additionally shows the Admin button. `updateAdminUI()` sets both; logout clears admin (`signOut`) AND the
+  member session.
+- **Backend is fully provisioned** — `supabase/migration.sql` is "Phase 2+3" and was already run, so the
+  member RPCs (`verify_member_login`, `create_member` [admin-only, `^[!-~]{4,}$`], `set_member_active`) and
+  `site_settings` exist. **Phase 3 needed NO SQL change.** Admin-only RPCs are guarded by `is_admin()` server-
+  side; the anon key can still CALL them but they raise "not authorized" unless the caller is an admin.
+- **Account format** rule is `/^[\x21-\x7E]{4,}$/` on the client (mirrors the server `^[!-~]{4,}$`): ≥4
+  printable-ASCII chars, no spaces, no Korean. Apply on member login + admin member-create.
+- **Signup is a hidden placeholder**: `#loginSignup` shows only when `site_settings.signup_visible` is true
+  (public read via `refreshSignupUI()`; admin flips it with the `#signupToggle` upsert). Its submit creates
+  **no account** — it just tells the student to ask their teacher. Real accounts are admin-created via
+  `create_member`. (A functional self-signup would need a new public `signup_member` RPC — deliberately not
+  built.)
+- **ESLint**: reference `window.supabase`/`window.localStorage`; use optional catch binding (`catch {`) for
+  ignored errors (an unused `catch (e)` trips `no-unused-vars`).
+- ⚠ **pgcrypto lives in the `extensions` schema on Supabase, not `public`.** A `SECURITY DEFINER` function
+  with `set search_path = public` then fails with **`function gen_salt(unknown) does not exist`** (and the
+  same for `crypt`). Fix: `set search_path = public, extensions` on every crypto-using RPC
+  (`verify_member_login`, `create_member`). This bit member-create/login in Phase 3 — the migration was
+  updated and must be **re-run** in the Supabase SQL Editor (it's idempotent `create or replace`).
+
 ## Video player modal (Vimeo)
 
 - The custom video modal (Level 1 / March) drives a Vimeo iframe via the **Vimeo Player SDK**
