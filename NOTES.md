@@ -100,6 +100,29 @@ window.Vimeo.Player` since the SDK loads async and may be absent (offline / head
   video. ⚠ Do NOT round the iframe itself — that's what _caused_ the dark seam (the iframe's own
   rounded corner exposed the dark stage background underneath). Headless can't reproduce the seam
   (no real playback), so verify the geometry (square + overscan), not pixels.
+- **Mobile-portrait volume = vertical tap popover (not hover).** Touch has no hover, so the desktop
+  hover/`:focus-within` reveal never opens by tap. On `@media (max-width:767px) and
+(orientation:portrait)` the `#vpVolume` slider becomes a VERTICAL popover above the speaker, opened
+  by `.vp-volume-open` (toggled in `app.js` when `#vpMute` is tapped). Gotchas:
+  - **Single `--vol` custom property** drives fill/thumb for BOTH orientations: horizontal desktop CSS
+    maps `--vol`→`fill width`/`thumb left`; the mobile block remaps it→`height`/`bottom`. `reflectVolumeUI`
+    only sets `--vol` (don't re-add inline `style.width`/`left` — and the `#vpVolumeFill`/`#vpVolumeThumb`
+    JS refs were removed as now-unused; eslint `no-unused-vars` will fail if you re-add them unused).
+  - **Drag ratio is orientation-aware:** vertical uses `(rect.bottom - clientY)/rect.height` (up = max),
+    horizontal uses `(clientX - rect.left)/rect.width`. The vertical test is `vpVolVertical()` =
+    `matchMedia("(max-width: 767px) and (orientation: portrait)")` — **keep this string byte-identical
+    to the CSS media query** or JS and CSS disagree about orientation.
+  - **Neutralise the desktop reveal on mobile:** tapping the speaker focuses it (`:focus-within`), which
+    would re-show the slider in the wrong (horizontal) spot. The mobile block redeclares
+    `.vp-volume:hover/:focus-within .vp-volume-slider{opacity:0…}` (same 0,3,0 specificity, later in the
+    file so it wins) BEFORE the `.vp-volume-open` open rule (which must come after to win when both match).
+  - **Fullscreen coexistence:** the FS chrome auto-hides after 2.5s (`revealFsControls`). While the volume
+    popover is open, `openVolume()` cancels `vpHideTimer` + pins `vp-controls-visible`; `closeVolume()`
+    re-arms it. Popover `z-index:7` sits above the FS scrim (5/6). Always `closeVolume()` on modal close
+    and on leaving fullscreen.
+  - ⚠ iOS Safari often ignores programmatic `setVolume` (media volume is hardware-only) — the popover UI
+    works but audio level may not change on some real devices. That's why YouTube/Vimeo mobile show no
+    on-screen volume. Verify on a real device before assuming it's broken.
 - **Headless can't actually play Vimeo:** Playwright synthetic clicks aren't a user-activation
   gesture for media, and even with `--autoplay-policy=no-user-gesture-required` the video stays
   buffering (spinner), so `play` never fires and the toggle won't flip in headless. Verify the
@@ -142,6 +165,51 @@ window.Vimeo.Player` since the SDK loads async and may be absent (offline / head
 - **`.section-inner` is `min(80%, …)` wide by default** — on a phone that's only 80% of the viewport
   with big side margins. `#contentScreen .section-inner` is forced to `width:100%` (≥768 block); the
   mobile hero now does the same so the copy isn't needlessly narrow.
+
+## Full-height fill & the `100vh − 185px` magic number
+
+- **The tinted screen sections fill height via `min-height: calc(100vh − 185px)`** (`#monthScreen` /
+  `#contentScreen` `.screen-active`), where **185 ≈ header + footer** at the DEFAULT (desktop/portrait)
+  heights. The `<body>` is a flex column with `main{flex:1 0 auto}`, but the section itself is `display:block`
+  — so this calc, not flex-grow, is what makes the level-tint background reach the footer.
+- ⚠ **If a media query changes the header or footer height, this constant is wrong** and a white band
+  appears between the section and the footer (the `<main>`/`<body>` `--canvas` bg showing through). This bit
+  the **landscape tablet** month page: the round-12 block trims the footer to 16px padding (~50px) and the
+  header is ~86px → real total **136**, so the base 185 over-subtracted ~49px → white gap. Fix = override the
+  constant for that context (`calc(100vh − 136px)`) AND flex the inner `.section-box.section-white{flex:1;
+display:flex; flex-direction:column; justify-content:center}` so content fills + vertically centers.
+  The **content page** (`#contentScreen`) hit the SAME gap in landscape tablets and took the SAME
+  `calc(100vh − 136px)` fix — but it only needs the min-height corrected (its `.section-blue` already carries
+  the tint, so no inner flex; the board stays top-aligned and the tint fills below it to the footer).
+- **Landscape-tablet content banner is 2-row.** Round-12 made the level banner one line
+  (`content-level-banner{grid-auto-flow:column}`), cramming `Level 1 · band · ③`. Now a 2-col×2-row grid:
+  name (r1c1) + month circle (r1c2), band spans r2. The circle is shrunk 60→46px there so the extra row
+  doesn't push the 4-week board past the fold on the 712-tall Galaxy Tab. Scoped to `768–1180 landscape`;
+  PC(>1180)/mobile keep the stacked banner.
+- **Landscape-tablet month buttons are width-capped for device parity.** Buttons are `1fr` of
+  `--content-width` (`min(80%,…)`), so a wider tablet gets bigger buttons (Tab 1138 vs iPad 1024). Cap with
+  `#monthScreen .month-grid{max-width:800px; margin-inline:auto}` → identical ~135px squares on both.
+- ⚠ **Capping a button decouples it from the viewport — so any `vw`-based font inside it breaks.** The month
+  number is `clamp(40px,7vw,92px)` and the label `1.6vw`; once the button is capped at ~135px, `7vw` at
+  1138px still yields an ~80px number that overflows and **overlaps the absolutely-positioned top-left label**.
+  Fix: in the capped (landscape-tablet) block, size the inner fonts with CONSTANTS that fit the fixed button
+  (`strong{font-size:52px}`, label `span{top:16px;left:16px;font-size:14px}`) — not `vw`. The number is
+  `align-self:center` (dead-center) while the label is `position:absolute;top:…`, so they collide whenever the
+  centered number's box-top rises above the label's bottom. The cleaner long-term fix is container units
+  (`.month-button{container-type:inline-size}` + `cqi` number) so the font always tracks the button regardless
+  of caps — deferred (would also change the portrait/desktop sizing).
+
+## Breakpoint gap: small portrait tablets (600–767px)
+
+- **768px is the phone↔tablet divide, but tablets exist BELOW it.** Galaxy Tab S4 portrait is **712px**,
+  Tab S7 **753px** — both `< 768`, so they miss every `@media (min-width:768px)` tablet rule and fall into
+  the **phone path** (e.g. `.month-grid repeat(2)` + `(max-width:767px) portrait` `aspect-ratio:1/1`),
+  which blows month buttons up to ~330px 2-col squares. iPad portrait (768) is fine because it just clears
+  the bar. Fix pattern: a dedicated **`@media (min-width:600px) and (max-width:767px) and
+(orientation:portrait)`** block that pulls the tablet layout (5-col compact) down into the gap. `min-width:600`
+  keeps real phones (≤ ~430 portrait) out. Reuse the tablet block's vw-clamp font sizes so it matches iPad.
+- ⚠ This gap can bite ANY screen that switches layout at 768, not just the month grid — when a portrait
+  tablet "looks like a giant phone", suspect the 600–767 gap first. (So far only the month screen is patched.)
 
 ## Logo & week-label markup gotchas
 

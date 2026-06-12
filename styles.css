@@ -2559,18 +2559,47 @@ p {
     padding-bottom: 18px;
   }
 
-  /* Banner laid out in a single row (level name · band · month badge) instead of
-     stacked — drops its height ~137→~60px so all four week rows fit. */
+  /* Fill the tinted section down to the footer (no white band). Same fix as the
+     month page: the base min-height uses calc(100vh - 185px), but THIS block trims
+     the footer to ~50px and the header is ~86px → 185 over-subtracts ~49px. */
+  #contentScreen.screen-active {
+    min-height: calc(100vh - 136px);
+  }
+
+  /* Banner on TWO rows (was a single row to save height): row 1 = level name (left)
+     + month circle (right), row 2 = the book band centered below. Keeps "Level 1"
+     on its own top line with the month badge beside it. The circle is shrunk so the
+     extra row doesn't push the 4-week board past the fold on the short Galaxy Tab. */
   #contentScreen .content-level-banner {
-    grid-auto-flow: column;
+    grid-auto-flow: row;
+    grid-template-columns: auto auto;
     align-items: center;
     justify-content: center;
-    gap: 14px;
+    column-gap: 12px;
+    row-gap: 2px;
     margin-bottom: 8px;
   }
 
+  #contentLevelName {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
   #contentScreen .content-banner-month {
+    grid-column: 2;
+    grid-row: 1;
     margin-top: 0;
+  }
+
+  #contentLevelBand {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  #contentScreen .content-banner-month strong {
+    width: 46px;
+    height: 46px;
+    font-size: 28px;
   }
 
   #contentScreen .content-main-header {
@@ -2596,6 +2625,48 @@ p {
 
   #contentScreen .week-label {
     min-height: 64px;
+  }
+
+  /* Month page — (A) fill the tinted section down to the footer (no white gap).
+     The base min-height uses calc(100vh - 185px), but THIS block trims the footer
+     to 16px padding (~50px tall) and the header is ~86px, so 185 over-subtracts by
+     ~49px → a white band shows between the section and the footer. Correct it to
+     the real header(86)+footer(50)=136, and flex the inner box so the month grid
+     sits vertically centered in the filled section. */
+  #monthScreen[class*="level-theme-"].screen-active {
+    min-height: calc(100vh - 136px);
+    display: flex;
+  }
+
+  #monthScreen[class*="level-theme-"] .section-box.section-white {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* (B) Uniform button size across devices. Buttons are 1fr of --content-width
+     (min(80%,…)), so a wider tablet (Galaxy Tab 1138) gets bigger buttons than a
+     narrower one (iPad 1024). Cap + center the grid so 5 columns yield ~150px
+     squares on both. */
+  #monthScreen .month-grid {
+    max-width: 800px;
+    margin-inline: auto;
+  }
+
+  /* The grid cap above fixes the button at ~135px, but the number/label fonts
+     still use vw (7vw / 1.6vw = viewport-relative). At 1138px the number swells
+     to ~80px and overlaps the absolutely-positioned top-left month label. The
+     button no longer scales with the viewport, so size the fonts to the capped
+     button with constants instead. */
+  #monthScreen[class*="level-theme-"] .month-button strong {
+    font-size: 52px;
+  }
+
+  #monthScreen[class*="level-theme-"] .month-button span {
+    top: 16px;
+    left: 16px;
+    font-size: 14px;
   }
 }
 
@@ -2796,11 +2867,21 @@ p {
     background: none;
   }
 
+  /* Match the login icon's footprint (21px) and shrink from the old 24px. */
   .admin-nav-button .action-icon,
   .admin-logout-button .action-icon {
     display: block;
-    width: 24px;
-    height: 24px;
+    width: 21px;
+    height: 21px;
+  }
+
+  /* The log-out glyph (door + arrow) fills its 24x24 viewBox almost edge to
+     edge, while the key glyph is tall and narrow — so at an equal box the
+     log-out reads noticeably bigger. Trim its box a touch so the two icons
+     look the same size, keyed to the Admin (key) icon. */
+  .admin-logout-button .action-icon {
+    width: 18px;
+    height: 18px;
   }
 
   .action-label {
@@ -3386,6 +3467,42 @@ p {
     height: 22px;
     font-size: 13px;
   }
+
+  /* Month nav (Back / Next) ~80% of the base size — the default 50px/15px
+     buttons felt too big at the top of the portrait content page. */
+  #contentScreen .content-nav-prev,
+  #contentScreen .content-nav-next {
+    min-height: 40px;
+    padding: 0 14px;
+    box-shadow: 0 3px 0 #d8d8d8;
+    font-size: 12px;
+  }
+}
+
+/* Small portrait tablets (Galaxy Tab S4 712, Tab S7 753, … widths 600–767px).
+   Below 768px they miss the tablet block and fall into the phone 2-column path,
+   so the month buttons balloon to ~330px squares. Pull the iPad (>=768) tablet
+   month layout (5-column compact squares) down to this range. Phones (<600px
+   portrait) keep 2 columns; landscape is unaffected. Placed after the
+   max-width:767px portrait block so it wins by source order at equal specificity. */
+@media (min-width: 600px) and (max-width: 767px) and (orientation: portrait) {
+  #monthScreen .month-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: start; /* else the default row stretch overrides aspect-ratio */
+  }
+
+  /* aspect-ratio:1/1 already applied by the portrait block above (keeps squares).
+     Scale the number + label to the smaller cells — same vw clamps as the tablet
+     block so it visually matches the iPad. */
+  .month-button strong {
+    font-size: clamp(40px, 7vw, 92px);
+  }
+
+  #monthScreen[class*="level-theme-"] .month-button span {
+    top: clamp(12px, 1.8vw, 26px);
+    left: clamp(12px, 1.6vw, 20px);
+    font-size: clamp(13px, 1.6vw, 21px);
+  }
 }
 
 @media (max-width: 767px) and (orientation: landscape) {
@@ -3907,11 +4024,14 @@ body.video-open {
   pointer-events: auto;
 }
 
+/* Driven by the --vol custom property set in JS (reflectVolumeUI). Horizontal
+   desktop slider: --vol -> fill width / thumb left. The vertical mobile popover
+   remaps --vol to height / bottom (see the mobile-portrait block). */
 .vp-volume-fill {
   position: absolute;
   left: 0;
   top: 0;
-  width: 100%;
+  width: var(--vol, 100%);
   height: 100%;
   background: var(--macaw-blue);
   border-radius: 999px;
@@ -3920,7 +4040,7 @@ body.video-open {
 .vp-volume-thumb {
   position: absolute;
   top: 50%;
-  left: 100%;
+  left: var(--vol, 100%);
   width: 21px;
   height: 21px;
   transform: translate(-50%, -50%);
@@ -4101,6 +4221,113 @@ body.video-open {
 @media (max-width: 760px) {
   .video-player-card {
     width: 92vw;
+  }
+}
+
+/* Mobile portrait (windowed AND fullscreen). Touch has no hover, so the desktop
+   hover-reveal volume popover never opens by tap. Two changes:
+   (1) shrink the oversized control buttons to ~80% so they fit the small card;
+   (2) turn the volume slider into a tap-to-reveal VERTICAL popover above the
+   speaker — tapping #vpMute toggles `.vp-volume-open` (app.js). Same breakpoint
+   string as the JS matchMedia in `vpVolVertical()` — keep them in sync. */
+@media (max-width: 767px) and (orientation: portrait) {
+  .video-player-card:not(.vp-fullscreen) .vp-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .video-player-card:not(.vp-fullscreen) .vp-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .video-player-card:not(.vp-fullscreen) .vp-toggle {
+    width: 46px;
+    height: 46px;
+  }
+
+  .video-player-card:not(.vp-fullscreen) .vp-toggle svg {
+    width: 23px;
+    height: 23px;
+  }
+
+  .video-player-card:not(.vp-fullscreen) .vp-transport-left,
+  .video-player-card:not(.vp-fullscreen) .vp-transport-center {
+    gap: 8px;
+  }
+
+  /* Vertical volume popover floating above the speaker icon. Hidden by default;
+     revealed only when app.js adds `.vp-volume-open` (tap). z-index sits above
+     the fullscreen scrim (5/6). Higher specificity than the (max-width:560px)
+     display:none rule, so it wins. */
+  .vp-volume {
+    position: relative;
+  }
+
+  .vp-volume .vp-volume-slider {
+    display: block;
+    position: absolute;
+    left: 50%;
+    right: auto;
+    top: auto;
+    bottom: calc(100% + 12px);
+    width: 14px;
+    height: 120px;
+    padding: 8px 0;
+    background: var(--hairline);
+    border-radius: 999px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(8px);
+    transform-origin: bottom center;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+    z-index: 7;
+    transition:
+      opacity 0.14s ease,
+      transform 0.14s ease;
+  }
+
+  /* Neutralise the desktop hover/focus-within reveal on touch: tapping the
+     speaker focuses it (:focus-within), which would otherwise show the slider in
+     the wrong (horizontal) position. Only `.vp-volume-open` opens it. Declared
+     before the open rule so the open rule wins by source order when both match. */
+  .vp-volume:hover .vp-volume-slider,
+  .vp-volume:focus-within .vp-volume-slider {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(8px);
+  }
+
+  .vp-volume.vp-volume-open .vp-volume-slider {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Remap the shared --vol fill/thumb from horizontal to vertical (fills from
+     the bottom up). */
+  .vp-volume .vp-volume-fill {
+    left: 0;
+    bottom: 0;
+    top: auto;
+    width: 100%;
+    height: var(--vol, 100%);
+  }
+
+  .vp-volume .vp-volume-thumb {
+    left: 50%;
+    bottom: var(--vol, 100%);
+    top: auto;
+    transform: translate(-50%, 50%);
+  }
+
+  .vp-volume-slider:hover .vp-volume-thumb,
+  .vp-volume-slider.is-dragging .vp-volume-thumb {
+    transform: translate(-50%, 50%) scale(1.15);
+  }
+
+  .vp-volume .vp-volume-slider::after {
+    display: none;
   }
 }
 

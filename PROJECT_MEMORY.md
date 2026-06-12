@@ -415,6 +415,68 @@ justify-content:center}`) · actions (right, `order:2`). The login icon now SHOW
     Tab S4 712/712, content board lastDay@614 — all fit with no scroll. (Portrait tablets keep the
     taller layout — they have the vertical room.)
 
+- **Mobile-portrait session — round 13 (`2026-06-12`, header icons + Back/Next + video volume; uncommitted):**
+  - **Header Admin/Log out icons smaller + matched.** Mobile `.action-icon` 24→**21px** (= login icon);
+    the log-out glyph (door+arrow) fills its viewBox more than the narrow key, so it's trimmed to
+    **18px** to read the same size as the Admin **key** icon. (`@media ≤767px` block.)
+  - **Month-detail Back/Next ~80%.** Portrait `#contentScreen .content-nav-prev/.content-nav-next`:
+    50px/15px → **40px/12px** (padding 0 14, bevel 3px). Scoped to portrait only.
+  - **Video player volume = tap-to-reveal VERTICAL popover (mobile portrait, windowed + fullscreen).**
+    Replaced the earlier always-visible bottom bar (it bloated the toolbar) and fixed "no volume in
+    fullscreen". Tapping the speaker (`#vpMute`) toggles `.vp-volume-open` on `.vp-volume` → a 14×120
+    vertical slider floats above the speaker (`bottom:calc(100% + 12px)`, `z-index:7` above the FS
+    scrim). Drag/keyboard adjust; **mute by dragging to 0**; **3s inactivity auto-close** + **outside-tap
+    close** (capture-phase `document` pointerdown). In FS, opening pins `vp-controls-visible` and
+    cancels the 2.5s hide timer so the popover isn't hidden with the chrome; closing resumes auto-hide.
+    Control buttons shrunk to ~80% (`.vp-btn` 40px, `.vp-toggle` 46px). Desktop/tablet keep the
+    horizontal hover popover unchanged. ⚠ See `NOTES.md` for the `--vol` var + matchMedia-sync +
+    focus-within-neutralise gotchas. ⚠ iOS may ignore programmatic `setVolume` (hardware-only) — UI
+    shows but audio may not change on some real devices; verify on device.
+
+- **Tablet-portrait fix — round 14 (`2026-06-12`, Galaxy Tab month buttons; uncommitted):**
+  Galaxy Tab S4 **portrait (712px)** month buttons ballooned to ~330px 2-col squares. Root cause:
+  712 < 768 so it misses the tablet block (`min-width:768`) and falls into the **phone 2-col path**
+  (`.month-grid repeat(2)` + the `(max-width:767px) portrait` `aspect-ratio:1/1`). Fixed with a new
+  **`@media (min-width:600px) and (max-width:767px) and (orientation:portrait)`** block that pulls the
+  iPad tablet layout down: `#monthScreen .month-grid{grid-template-columns:repeat(5,1fr); align-items:start}`
+  - the same number/label vw-clamps as the tablet block (2528·2532). Now 5×2 compact squares (~123px @712),
+    matching iPad. Phones (<600 portrait) keep 2-col; iPad(768)/landscape unchanged. Verified Playwright:
+    712→5col square, 768→5col (regress), 390→2col (regress), 1138-landscape→unchanged. ⚠ The 600–767 portrait
+    gap may also affect level/content screens — only the **month screen** was fixed (user-scoped).
+
+- **Tablet-landscape month — round 15 (`2026-06-12`, button-size parity + footer white gap; uncommitted):**
+  iPad/Galaxy Tab **landscape** month page had (1) device-varying button sizes (1fr of `--content-width`
+  min(80%) → iPad 1024=151px vs Tab 1138=172px) and (2) a **white band between the tinted section and the
+  footer** on iPad (~49px). Root cause of the gap: `#monthScreen.screen-active{min-height:calc(100vh - 185px)}`
+  uses the old header+footer magic number, but the round-12 landscape block trims the footer (→~50px); real
+  header(86)+footer(50)=**136**, so 185 over-subtracts ~49px → white `<main>` bg shows. Fixed **in the
+  landscape tablet block** (`(min-width:768px) and (max-width:1180px) and (orientation:landscape)`):
+  `screen-active{min-height:calc(100vh - 136px); display:flex}` + `.section-box.section-white{flex:1;
+display:flex; flex-direction:column; justify-content:center}` (tint fills to footer, buttons vertically
+  centered) and `#monthScreen .month-grid{max-width:800px; margin-inline:auto}` (5 cols → ~135px squares,
+  **identical on both devices**). Verified: iPad-LS & Tab-LS both 135×135 + gap 0; iPad-portrait/desktop
+  unchanged. ⚠ 136 depends on this block's footer/header heights — recompute if they change (see NOTES).
+
+- **Tablet-landscape month — round 16 (`2026-06-12`, label/number overlap; uncommitted):** round-15's grid
+  cap fixed the button at ~135px but left the number font at `clamp(40px,7vw,92px)` and the label at
+  `1.6vw` (viewport-relative) → at 1138px the number swelled to ~80px and overlapped the top-left month
+  label (Galaxy Tab landscape). Since the capped button no longer tracks the viewport, switched the fonts to
+  constants **in the same landscape block**: `.month-button strong{font-size:52px}` + the label `span`
+  `{top:16px; left:16px; font-size:14px}`. Verified worst overlap −6px (clear) on iPad-LS & Tab-LS, identical;
+  portrait/desktop untouched. ⚠ The cap↔vw-font decoupling is the lesson (see NOTES).
+
+- **Tablet-landscape CONTENT page — round 17 (`2026-06-12`, footer white gap + banner one-line; uncommitted):**
+  Landscape tablet `#content/...` had (1) a white band between the tint and footer (Tab 1138=20px, iPad
+  1024=49px) and (2) the level banner crammed onto one line (`Level 1 · band · ③`) by round-12's
+  `grid-auto-flow:column`. Both fixed **in the landscape tablet block** (`768–1180 landscape`):
+  (1) `#contentScreen.screen-active{min-height:calc(100vh - 136px)}` (same 185→136 magic-number fix as the
+  month page — header86+trimmed-footer50; the `.section-blue` tint then fills to the footer). (2) Banner →
+  **2 rows**: `content-level-banner{grid-auto-flow:row; grid-template-columns:auto auto}` with `#contentLevelName`
+  at (r1,c1), `.content-banner-month` at (r1,c2), `#contentLevelBand` spanning (r2, 1/-1) → "Level 1" + ③
+  circle on top, band below. Circle shrunk 60→**46px** (number 36→28) to keep the 4-week board inside the fold
+  on the short Galaxy Tab (712). Verified: gap 0 + 2-row banner + no vertical scroll on Tab-LS & iPad-LS;
+  **iPad Pro 1366 (PC, >1180), phone, desktop ALL unchanged** (circle 60, stacked banner).
+
 ## Platform build — approved 3-phase plan (`2026-06-10`)
 
 Plan file: `C:\Users\dupy2\.claude\plans\steady-roaming-yao.md`. Adds the video

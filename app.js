@@ -467,8 +467,7 @@ const vpDurationLabel = document.querySelector("#vpDurationLabel");
 const vpTitle = document.querySelector("#vpTitle");
 const vpMute = document.querySelector("#vpMute");
 const vpVolume = document.querySelector("#vpVolume");
-const vpVolumeFill = document.querySelector("#vpVolumeFill");
-const vpVolumeThumb = document.querySelector("#vpVolumeThumb");
+const vpVolumeWrap = document.querySelector(".vp-volume");
 const vpEndOverlay = document.querySelector("#vpEndOverlay");
 const vpReplay = document.querySelector("#vpReplay");
 const videoPlayerCard = videoModal
@@ -480,6 +479,7 @@ let vpLoopOn = false;
 let vpPlaying = false;
 let vpVolumeLevel = 1;
 let vpLastVolume = 1;
+let vpVolHideTimer = null;
 let vpDuration = 0;
 let vpCurrentSeconds = 0;
 let vpDragging = false;
@@ -575,9 +575,13 @@ function revealFsControls() {
 // Reflect the current volume on the slider + the mute button (muted = volume 0).
 function reflectVolumeUI() {
   const pct = Math.round(vpVolumeLevel * 100);
-  if (vpVolumeFill) vpVolumeFill.style.width = `${pct}%`;
-  if (vpVolumeThumb) vpVolumeThumb.style.left = `${pct}%`;
-  if (vpVolume) vpVolume.setAttribute("aria-valuenow", String(pct));
+  // A single custom property drives both the horizontal desktop slider (CSS maps
+  // --vol -> fill width / thumb left) and the vertical mobile popover (--vol ->
+  // fill height / thumb bottom), so the JS is orientation-agnostic.
+  if (vpVolume) {
+    vpVolume.style.setProperty("--vol", `${pct}%`);
+    vpVolume.setAttribute("aria-valuenow", String(pct));
+  }
   const muted = vpVolumeLevel === 0;
   if (vpMute) {
     vpMute.dataset.muted = String(muted);
@@ -593,6 +597,41 @@ function applyVolume(volume, { commit = true } = {}) {
   reflectVolumeUI();
   if (commit && vimeoPlayer)
     vimeoPlayer.setVolume(vpVolumeLevel).catch(() => {});
+}
+
+// On mobile portrait the volume slider is a tap-to-reveal VERTICAL popover above
+// the speaker (touch has no hover). Keep this query string identical to the CSS
+// media query that styles the vertical slider. Desktop/tablet keep hover.
+const vpVolVertical = () =>
+  window.matchMedia("(max-width: 767px) and (orientation: portrait)").matches;
+
+// Open the vertical volume popover and arm a 3s inactivity auto-close. In
+// fullscreen, hold the auto-hiding chrome open so the popover isn't hidden with
+// the controls.
+function openVolume() {
+  if (!vpVolumeWrap) return;
+  vpVolumeWrap.classList.add("vp-volume-open");
+  resetVolumeAutoClose();
+  if (videoPlayerCard && videoPlayerCard.classList.contains("vp-fullscreen")) {
+    if (vpHideTimer) window.clearTimeout(vpHideTimer);
+    videoPlayerCard.classList.add("vp-controls-visible");
+  }
+}
+
+function closeVolume() {
+  if (!vpVolumeWrap) return;
+  vpVolumeWrap.classList.remove("vp-volume-open");
+  if (vpVolHideTimer) window.clearTimeout(vpVolHideTimer);
+  vpVolHideTimer = null;
+  // Resume the normal fullscreen auto-hide countdown once the popover is gone.
+  if (videoPlayerCard && videoPlayerCard.classList.contains("vp-fullscreen")) {
+    revealFsControls();
+  }
+}
+
+function resetVolumeAutoClose() {
+  if (vpVolHideTimer) window.clearTimeout(vpVolHideTimer);
+  vpVolHideTimer = window.setTimeout(closeVolume, 3000);
 }
 
 // Reflect play/paused state on the single Play/Pause toggle button. Driven by
@@ -695,6 +734,7 @@ function closeVideoPlayer() {
   }
   videoModal.hidden = true;
   document.body.classList.remove("video-open");
+  closeVolume();
   if (vpHideTimer) window.clearTimeout(vpHideTimer);
   videoPlayerCard.classList.remove("vp-fullscreen", "vp-controls-visible");
   setVpProgress(0);
@@ -745,15 +785,28 @@ if (videoModal) {
     if (vimeoPlayer) vimeoPlayer.setLoop(vpLoopOn).catch(() => {});
   });
 
-  // Mute / unmute: Vimeo has no separate mute, so toggle volume between 0 and
-  // the last non-zero level. (Both persist across opens.)
+  // Speaker button. Mobile portrait: tap toggles the vertical volume popover
+  // (mute is done by dragging the slider to 0). Desktop/tablet: mute toggle
+  // between 0 and the last non-zero level (the slider reveals on hover).
   vpMute.addEventListener("click", () => {
+    if (vpVolVertical()) {
+      if (vpVolumeWrap && vpVolumeWrap.classList.contains("vp-volume-open"))
+        closeVolume();
+      else openVolume();
+      return;
+    }
     applyVolume(vpVolumeLevel > 0 ? 0 : vpLastVolume || 1);
   });
 
-  // Volume slider: drag / click / keyboard (±10%).
+  // Volume slider: drag / click / keyboard (±10%). Vertical (mobile popover)
+  // reads clientY from the bottom up; horizontal (desktop) reads clientX.
   const volRatioFromEvent = (event) => {
     const rect = vpVolume.getBoundingClientRect();
+    if (vpVolVertical())
+      return Math.max(
+        0,
+        Math.min(1, (rect.bottom - event.clientY) / rect.height),
+      );
     return Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
   };
   let vpVolDragging = false;
@@ -762,14 +815,19 @@ if (videoModal) {
     vpVolume.classList.add("is-dragging");
     vpVolume.setPointerCapture(event.pointerId);
     applyVolume(volRatioFromEvent(event));
+    resetVolumeAutoClose();
   });
   vpVolume.addEventListener("pointermove", (event) => {
-    if (vpVolDragging) applyVolume(volRatioFromEvent(event));
+    if (vpVolDragging) {
+      applyVolume(volRatioFromEvent(event));
+      resetVolumeAutoClose();
+    }
   });
   const endVolDrag = () => {
     if (!vpVolDragging) return;
     vpVolDragging = false;
     vpVolume.classList.remove("is-dragging");
+    resetVolumeAutoClose();
   };
   vpVolume.addEventListener("pointerup", endVolDrag);
   vpVolume.addEventListener("pointercancel", endVolDrag);
@@ -781,8 +839,25 @@ if (videoModal) {
     else if (event.key === "Home") applyVolume(0);
     else if (event.key === "End") applyVolume(1);
     else return;
+    resetVolumeAutoClose();
     event.preventDefault();
   });
+
+  // Tap outside the volume control closes the popover (capture phase so it runs
+  // before the speaker's own toggle, which is excluded by the contains check).
+  document.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (
+        vpVolumeWrap &&
+        vpVolumeWrap.classList.contains("vp-volume-open") &&
+        !vpVolumeWrap.contains(event.target)
+      ) {
+        closeVolume();
+      }
+    },
+    true,
+  );
 
   // Initialise the volume UI (slider fill + mute icon) to the default level.
   reflectVolumeUI();
@@ -804,6 +879,7 @@ if (videoModal) {
     if (isFs) {
       revealFsControls();
     } else {
+      closeVolume();
       if (vpHideTimer) window.clearTimeout(vpHideTimer);
       videoPlayerCard.classList.remove("vp-controls-visible");
     }
