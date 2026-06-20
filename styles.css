@@ -19,7 +19,7 @@
   --radius-card: 18px;
   --site-max-width: 1600px;
   --content-width: min(80%, var(--site-max-width));
-  --hero-height: 620px;
+  --hero-height: 434px;
   --font-display: "Fredoka", "Nunito", "Segoe UI", sans-serif;
   --font-ui: "Nunito", "Segoe UI", "Noto Sans", Arial, sans-serif;
   --font-nav: "Inter", "Segoe UI", "Noto Sans", Arial, sans-serif;
@@ -92,6 +92,10 @@ button {
   align-items: center;
   justify-content: center;
   gap: 18px;
+}
+
+body:not(.subpage-active) .top-nav {
+  display: none;
 }
 
 .top-nav-link {
@@ -423,11 +427,14 @@ main {
   text-align: center;
 }
 
-/* On a level page, the footer takes that level's theme color (L1 yellow,
-   L2 red, L3 blue, L4 purple). Home/overview keep the default green above.
-   --level-accent is set on the body's .level-theme-N class (see app.js). */
+/* On a level page (페이지1/페이지2), blend the footer into the body: use the
+   level's soft body tint as the background and the deeper theme shade for the
+   copyright text (instead of the saturated accent fill + white text, which
+   walled off the body and made it feel cramped). --level-accent-soft /
+   --level-accent-shadow are set on the body's .level-theme-N class. */
 body[class*="level-theme-"] .site-footer {
-  background: var(--level-accent);
+  background: var(--level-accent-soft);
+  color: var(--level-accent-shadow);
 }
 
 .site-footer p {
@@ -438,12 +445,25 @@ body[class*="level-theme-"] .site-footer {
   line-height: 1.35;
 }
 
+/* Main (home) page only: white footer band with dark-gray text (overrides the
+   default green/white). Home is the only screen without `subpage-active`. */
+body:not(.subpage-active) .site-footer {
+  background: var(--canvas);
+  color: var(--ink);
+}
+
 /* Main (home) page only: drop the footer copyright to a plain regular weight.
    Home is the only screen without `subpage-active` on <body> (app.js adds it to
    every other screen), so this scopes to the main page; all other pages keep
    the fully bold line (HOLD). */
 body:not(.subpage-active) .site-footer p {
+  font-size: 12px;
   font-weight: 400;
+}
+
+/* Keep the "TPS EDUCATION" name bold even where the line is regular weight. */
+.site-footer p strong {
+  font-weight: 700;
 }
 
 /* Login page recolors the shared footer to a clean white band with a hairline
@@ -853,10 +873,14 @@ p {
 .hero-image {
   position: relative;
   z-index: 1;
+  /* Anchor to the top of the hero with a fixed 30px gap, and let the image grow
+     down toward the hero bottom (max-height = full height minus that 30px gap)
+     so it scales up to nearly the top boundary. */
+  align-self: start;
   width: min(390px, 82%);
-  max-height: calc(100% - 220px);
-  margin-top: 0;
-  margin-bottom: -35px;
+  max-height: calc(100% - 30px);
+  margin-top: 30px;
+  margin-bottom: 0;
   object-fit: contain;
   filter: drop-shadow(0 22px 18px rgba(3, 29, 64, 0.2));
   transform: rotate(-2deg);
@@ -909,7 +933,7 @@ p {
 
 .level-section .section-inner {
   width: var(--content-width);
-  padding: 9px clamp(42px, 5vw, 72px) 76px;
+  padding: 9px clamp(42px, 5vw, 72px) 24px;
 }
 
 .intro-section .section-inner,
@@ -1013,14 +1037,19 @@ p {
 
 .level-button {
   display: grid;
-  min-height: 220px;
-  grid-template-rows: 36px 1fr 48px;
-  align-items: center;
+  /* Single overlapping cell: the kicker pins to the top-left while the "Level N"
+     label sits dead-center (both axes). Height reduced 10% (220 -> 198). */
+  grid-template: 1fr / 1fr;
+  min-height: 198px;
   padding: 28px;
   border-radius: 39px;
   color: var(--canvas);
   font-family: var(--font-nav);
   text-align: left;
+}
+
+.level-button > * {
+  grid-area: 1 / 1;
 }
 
 .level-button strong {
@@ -1050,6 +1079,7 @@ p {
 .level-kicker {
   display: inline-flex;
   width: fit-content;
+  align-self: start;
   justify-self: start;
   padding: 7px 12px;
   background: rgba(255, 255, 255, 0.2);
@@ -1077,6 +1107,120 @@ p {
 .level-four {
   background: var(--purple-accent);
   box-shadow: 0 6px 0 var(--purple-shadow);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Home page layout. The level ("body") section flexes to fill the space between
+   the header/hero (top) and footer (bottom); the level-button group is centered
+   both axes. Same proven pattern as the login page (body.login-active main):
+   make the home <main> a flex column, let the home screen fill it, and let the
+   level section center its content. This vertically centers the buttons on EVERY
+   device — including mobile (fixes the "buttons stuck near the top" issue).
+   --home-fixed = button height cap so >=768px never scrolls; --home-lvl-gap is
+   the gap between buttons. Bump --home-fixed up if a device shows a sliver.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  --home-fixed: 590px;
+  --home-lvl-gap: 22px;
+}
+
+body:not(.subpage-active) main {
+  display: flex;
+  flex-direction: column;
+}
+
+#homeScreen.screen-active {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#homeScreen .hero-section.section-blue {
+  flex: 0 0 auto;
+}
+
+#homeScreen .level-section {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Tablet (landscape) + desktop: lay the four buttons in one centered row, sized
+   to fill the available space at a 6:4 (w:h) ratio. Mobile keeps the base 2x2
+   grid (just centered by the flex level-section above). */
+@media (min-width: 768px) {
+  #homeScreen .level-section .section-inner {
+    display: flex;
+    width: 100%;
+    max-width: var(--site-max-width);
+    height: auto;
+    align-items: center;
+    justify-content: center;
+    padding-top: 0;
+    padding-bottom: 0;
+    padding-right: clamp(20px, 3vw, 64px);
+    padding-left: clamp(20px, 3vw, 64px);
+  }
+
+  #homeScreen .level-grid {
+    display: flex;
+    width: 100%;
+    gap: var(--home-lvl-gap);
+    align-items: center;
+    justify-content: center;
+  }
+
+  #homeScreen .level-button {
+    flex: 0 0 auto;
+    /* size = min(width-fit, height-fit, hard cap). 6:4 means width = height*1.5,
+       so the height cap (100vh - --home-fixed) is multiplied by 1.5 here; the
+       360px cap keeps buttons near PC size on very large monitors. */
+    width: min(
+      calc((100% - 3 * var(--home-lvl-gap)) / 4),
+      calc((100vh - var(--home-fixed)) * 1.5),
+      360px
+    );
+    height: auto;
+    min-height: 0;
+    padding: 12px;
+    aspect-ratio: 6 / 4;
+  }
+
+  /* Keep "Level N" on a single line, scaled to the button width. */
+  #homeScreen .level-button strong {
+    white-space: nowrap;
+    font-size: clamp(24px, 3.2vw, 40px);
+  }
+}
+
+/* PC only (>1180px): restore the original left/right margin around the level
+   button group. Tablets (768-1180px) keep the full-width layout above so their
+   buttons stay large; PCs narrow the grid back to --content-width (80%) so the
+   group sits centered with breathing room on both sides. */
+@media (min-width: 1181px) {
+  #homeScreen .level-section .section-inner {
+    width: var(--content-width);
+    max-width: var(--site-max-width);
+    padding-right: clamp(42px, 5vw, 72px);
+    padding-left: clamp(42px, 5vw, 72px);
+  }
+}
+
+/* Mobile: drop the hero-wave overlap (-58px) so the level section starts at the
+   hero bottom; with symmetric padding the 2x2 button group then centers cleanly
+   between the hero and the footer instead of tucking up under the hero. */
+@media (max-width: 767px) {
+  #homeScreen .level-section {
+    margin-top: 0;
+  }
+
+  #homeScreen .level-section .section-inner {
+    padding-top: 0;
+    padding-bottom: 0;
+  }
 }
 
 .feature-grid {
@@ -1158,7 +1302,7 @@ p {
 }
 
 .month-header {
-  margin-bottom: 30px;
+  margin-bottom: 80px;
 }
 
 .month-heading {
@@ -1196,14 +1340,10 @@ p {
   row-gap: 20px;
 }
 
-#monthScreen .eyebrow.blue {
-  min-height: 38px;
-  padding-right: 22px;
-  padding-left: 22px;
-  background: var(--canvas);
-  color: var(--level-accent, var(--macaw-blue));
-  font-family: var(--font-nav);
-  font-size: 15px;
+#monthScreen .month-heading {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
 }
 
 #monthScreen .screen-heading h2 {
@@ -1247,12 +1387,37 @@ p {
 
 .month-button strong {
   align-self: center;
+  /* inline-flex + flex-end bottom-aligns the number and the "월" suffix despite
+     their different typefaces/sizes; nowrap keeps them on one line (e.g. "12월"). */
+  display: inline-flex;
+  align-items: flex-end;
   margin-top: 8px;
   color: var(--level-accent-shadow, var(--ink));
   font-family: "Concert One", var(--font-display);
   font-size: 52px;
   font-style: normal !important;
   font-weight: 400;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* The "월" suffix uses its own typeface, sized relative to the number (em) so it
+   tracks the digit size across breakpoints and stays visually similar. It sits
+   inline right after the number, bottom-aligned via the flex parent. */
+.month-button strong .month-num {
+  /* <i> wrapper so the number keeps the strong's typeface/weight (font-style
+     reset from the italic default). Nudged down so its baseline meets the "월"
+     glyph's bottom, compensating for the two fonts' differing descenders. */
+  font-style: normal;
+  transform: translateY(0.12em);
+}
+
+.month-button strong .month-suffix {
+  margin-left: 0.06em;
+  font-family: "Nanum Gothic Coding", monospace;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 0.62em;
   line-height: 1;
 }
 
@@ -1356,7 +1521,8 @@ p {
   text-align: center;
 }
 
-#contentLevelName {
+#contentLevelName,
+#monthLevelTag {
   font-family: var(--font-sniglet);
   font-size: 40px;
   font-weight: 700;
@@ -2514,15 +2680,20 @@ p {
 @media (min-width: 768px) and (max-width: 1180px) {
   #monthScreen .section-inner {
     width: 100%;
+    padding-right: 16px;
+    padding-left: 16px;
   }
 
   .month-grid {
     align-items: start;
   }
 
+  /* Match the PC month-button proportion: same fixed height (137px) with a
+     full-width row, so the width (and thus the ratio) tracks PC instead of the
+     square (1:1) that looked too tall on tablets. */
   #monthScreen[class*="level-theme-"] .month-button {
-    min-height: 0;
-    aspect-ratio: 1 / 1;
+    min-height: 137px;
+    aspect-ratio: auto;
   }
 
   .month-button strong {
@@ -2650,7 +2821,7 @@ p {
      narrower one (iPad 1024). Cap + center the grid so 5 columns yield ~150px
      squares on both. */
   #monthScreen .month-grid {
-    max-width: 800px;
+    max-width: none;
     margin-inline: auto;
   }
 
@@ -2667,6 +2838,60 @@ p {
     top: 16px;
     left: 16px;
     font-size: 14px;
+  }
+
+  /* Toolbar pills (Opening/Ending Song, Word/Sentence Game): on PC they sit at
+     ~55% of the content width, but on the narrower tablet the fixed PC size made
+     them fill ~78% and look oversized next to the (scaled-down) weekday board.
+     Scale font/icon/height down roughly in proportion to the viewport (~ width
+     /1440) so their size relative to the page matches PC. */
+  #contentScreen .content-type {
+    min-height: 42px;
+    padding: 0 10px;
+    gap: 6px;
+    font-size: clamp(12px, 1.2vw, 14px);
+    /* Scale the radius + 3D bevel down with the shorter button so it stays a
+       clean rounded rectangle (the full-pill radius made the bevel shadow wrap
+       the curved bottom and look distorted). */
+    border-radius: 16px;
+    box-shadow: 0 4px 0 #d8d8d8;
+  }
+
+  #contentScreen .content-type.active {
+    box-shadow: 0 4px 0 #d8d8d8;
+  }
+
+  #contentScreen .content-type-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+  }
+
+  #contentScreen .content-toolbar {
+    /* (2) Align the 4 pills to the weekday grid: Opening Song's left edge = the
+       Monday column's left, Sentence Game's right edge = the Friday column's
+       right, with equal gaps between (space-between). The left offset matches the
+       board's left pad + cover col + week-label col + their gaps (30+150+16+60+16
+       = 272); the right inset matches the board's right pad (30). */
+    justify-content: space-between;
+    padding-left: 272px;
+    padding-right: 30px;
+    margin-top: 36px;
+    /* (1) breathing room above the weekday board, within the spare space (kept
+       small enough that the shortest tablet — Galaxy Tab — still doesn't scroll). */
+    margin-bottom: 16px;
+  }
+}
+
+/* PC (>=1250px, where the base weekday grid applies): align the 4 toolbar pills
+   to the weekday grid like the tablet rule above. Left offset = board pad(50) +
+   cover + week-label + gaps (= 342); right inset = board pad(50). No vertical
+   gap is added here because PC page2 is already at/near full height. */
+@media (min-width: 1250px) {
+  #contentScreen .content-toolbar {
+    justify-content: space-between;
+    padding-left: 342px;
+    padding-right: 50px;
   }
 }
 
@@ -2899,12 +3124,12 @@ p {
 
   .hero-section .section-inner {
     width: 100%;
-    padding: 26px 24px 40px;
+    padding: 12px 24px 12px;
   }
 
   .hero-grid {
     height: auto;
-    gap: 22px;
+    gap: 14px;
   }
 
   .hero-copy {
@@ -2920,6 +3145,12 @@ p {
   .hero-copy p {
     max-width: 100%;
     overflow-wrap: break-word;
+  }
+
+  /* Mobile portrait title 30% smaller (frees vertical space for a larger hero
+     image). <=420px gets an even smaller size in its own block below. */
+  .hero-copy h1 {
+    font-size: 34px;
   }
 
   .hero-copy p {
@@ -2990,14 +3221,17 @@ p {
   /* Two-up level cards: wider (full-width section) + a shorter height so they
      read as cards, not tall pills. */
   .level-button {
-    min-height: 146px;
-    grid-template-rows: 24px 1fr 36px;
-    padding: 14px 12px;
+    min-height: 0;
+    padding: 12px;
     border-radius: 28px;
+    /* Match the tablet/PC 6:4 ratio: 2-up width drives the height, which keeps
+       the 2x2 group shorter so it can center between hero and footer. */
+    aspect-ratio: 6 / 4;
   }
 
   .level-button strong {
-    font-size: 26px;
+    white-space: nowrap;
+    font-size: clamp(20px, 5.5vw, 30px);
   }
 
   .level-button small {
@@ -3048,7 +3282,7 @@ p {
   }
 
   .hero-image {
-    width: min(264px, 72%);
+    width: min(185px, 50%);
     max-height: none;
     margin: 0;
     opacity: 1;
@@ -3386,7 +3620,7 @@ p {
   }
 
   .hero-copy h1 {
-    font-size: 42px;
+    font-size: 29px;
     line-height: 1.04;
   }
 

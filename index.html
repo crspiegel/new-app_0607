@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&family=Cal+Sans&family=Cherry+Bomb+One&family=Concert+One&family=Fredoka:wght@600;700&family=Inter:wght@400;600;700;800&family=Manrope:wght@800&family=Nunito:wght@500;700;800;900&family=Readex+Pro:wght@600&family=Sniglet:wght@400;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&family=Cal+Sans&family=Cherry+Bomb+One&family=Concert+One&family=Fredoka:wght@600;700&family=Inter:wght@400;600;700;800&family=Manrope:wght@800&family=Nanum+Gothic+Coding:wght@400;700&family=Nunito:wght@500;700;800;900&family=Readex+Pro:wght@600&family=Sniglet:wght@400;800&display=swap"
       rel="stylesheet"
     />
     <link
@@ -26,8 +26,8 @@
           aria-label="Go to main page"
         >
           <span class="brand-name">
-            <span class="brand-accent">Reading</span>
-            <span class="brand-adventures">Adventure</span>
+            <span class="brand-accent">Cambridge</span>
+            <span class="brand-adventures">Reading</span>
           </span>
         </button>
         <nav class="top-nav" aria-label="Level navigation">
@@ -146,13 +146,8 @@
             <div class="section-inner hero-grid">
               <div class="hero-copy">
                 <h1 id="homeTitle">Brighter Thinking Better Learning</h1>
-                <p>
-                  A colorful reading journey for young English learners,
-                  organized by story bands, nonfiction topics, and
-                  classroom-friendly activities.
-                </p>
                 <div class="app-downloads" aria-label="App downloads">
-                  <a class="app-download-button" href="#levelTitle">
+                  <a class="app-download-button" href="#levelSection">
                     <svg
                       class="app-download-icon"
                       aria-hidden="true"
@@ -171,7 +166,7 @@
                       <strong>App Store</strong>
                     </span>
                   </a>
-                  <a class="app-download-button" href="#levelTitle">
+                  <a class="app-download-button" href="#levelSection">
                     <svg
                       class="app-download-icon"
                       aria-hidden="true"
@@ -216,138 +211,52 @@
           </div>
 
           <section
+            id="levelSection"
             class="section-box section-white level-section"
-            aria-labelledby="levelTitle"
+            aria-label="Choose your level"
           >
             <div class="section-inner">
-              <div class="section-heading">
-                <span class="eyebrow blue">Start Reading</span>
-                <h2 id="levelTitle">Choose Your LEVEL</h2>
-                <p>
-                  Select a level to begin monthly lessons with songs, stories,
-                  chants, and reading activities.
-                </p>
-              </div>
-
               <div class="level-grid" aria-label="Choose level">
                 <button
                   class="level-button level-one"
                   type="button"
                   data-level="Level 1"
                 >
-                  <span class="level-kicker">Starter</span>
                   <strong>Level 1</strong>
-                  <small>Pink A/B, Red, Yellow</small>
                 </button>
                 <button
                   class="level-button level-two"
                   type="button"
                   data-level="Level 2"
                 >
-                  <span class="level-kicker">Growing</span>
                   <strong>Level 2</strong>
-                  <small>Blue, Green, Orange</small>
                 </button>
                 <button
                   class="level-button level-three"
                   type="button"
                   data-level="Level 3"
                 >
-                  <span class="level-kicker">Confident</span>
                   <strong>Level 3</strong>
-                  <small>Turquoise, Purple, Gold</small>
                 </button>
                 <button
                   class="level-button level-four"
                   type="button"
                   data-level="Level 4"
                 >
-                  <span class="level-kicker">Fluent</span>
                   <strong>Level 4</strong>
-                  <small>White and Adventure Strands</small>
                 </button>
-              </div>
-            </div>
-          </section>
-
-          <section
-            class="section-box section-white intro-section"
-            aria-labelledby="introTitle"
-          >
-            <div class="section-inner library-grid">
-              <div class="library-copy">
-                <span class="eyebrow green">Program Introduction</span>
-                <h2 id="introTitle">
-                  A Reading Journey for Every Young Learner
-                </h2>
-                <p>
-                  Cambridge Reading Adventures is a leveled reading program
-                  designed to guide children from first words and simple
-                  sentence patterns to richer stories, nonfiction topics, and
-                  independent reading.
-                </p>
-              </div>
-              <figure class="library-art">
-                <img
-                  class="program-logo"
-                  src="assets/logo_001.PNG"
-                  alt="Cambridge Reading Adventures logo"
-                />
-              </figure>
-            </div>
-          </section>
-
-          <section
-            class="section-box section-blue"
-            aria-labelledby="featureTitle"
-          >
-            <div class="section-inner feature-section-inner">
-              <div class="section-heading">
-                <span class="eyebrow">Key Features</span>
-                <h2 id="featureTitle">
-                  Why Cambridge Reading Adventures Works
-                </h2>
-              </div>
-
-              <div class="feature-grid">
-                <article class="feature-card">
-                  <span class="feature-icon">A</span>
-                  <h3>Leveled Reading Path</h3>
-                  <p>
-                    Color bands make reading progression visible and easy to
-                    guide.
-                  </p>
-                </article>
-                <article class="feature-card">
-                  <span class="feature-icon">B</span>
-                  <h3>Stories and Nonfiction</h3>
-                  <p>
-                    Learners meet illustrated stories, real-world topics,
-                    animals, places, and people.
-                  </p>
-                </article>
-                <article class="feature-card">
-                  <span class="feature-icon">C</span>
-                  <h3>Classroom Ready</h3>
-                  <p>
-                    Structured reading experiences support vocabulary,
-                    listening, speaking, and guided reading.
-                  </p>
-                </article>
               </div>
             </div>
           </section>
         </section>
 
-        <section class="screen" id="monthScreen" aria-labelledby="monthTitle">
+        <section class="screen" id="monthScreen" aria-labelledby="monthLevelTag">
           <div class="section-box section-white">
             <div class="section-inner">
               <div class="month-header">
                 <div class="screen-heading month-heading">
                   <div>
-                    <span class="eyebrow blue" id="monthLevelTag">Level</span>
-                    <span class="month-strand" id="monthStrandTag"></span>
-                    <h2 id="monthTitle">Choose a Month</h2>
+                    <strong id="monthLevelTag">Level</strong>
                   </div>
                 </div>
               </div>
@@ -416,7 +325,6 @@
             <div class="section-inner">
               <div class="content-level-banner">
                 <strong id="contentLevelName"></strong>
-                <span id="contentLevelBand"></span>
                 <span class="content-v2-month-pill content-banner-month"
                   >Month <strong id="contentBannerMonthNumber"></strong
                 ></span>
@@ -477,6 +385,18 @@
                     >&#9733;</span
                   >
                   <span>Ending Song</span>
+                </button>
+                <button type="button" class="content-type content-game">
+                  <span class="content-type-icon" aria-hidden="true"
+                    >&#129513;</span
+                  >
+                  <span>Word Game</span>
+                </button>
+                <button type="button" class="content-type content-game">
+                  <span class="content-type-icon" aria-hidden="true"
+                    >&#127919;</span
+                  >
+                  <span>Sentence Game</span>
                 </button>
               </div>
 
@@ -833,7 +753,7 @@
       </main>
 
       <footer class="site-footer" aria-label="Copyright">
-        <p>Copyright 2026 TPS EDUCATION. All Rights Reserved.</p>
+        <p>Copyright 2026 <strong>TPS EDUCATION</strong>. All Rights Reserved.</p>
       </footer>
     </div>
 

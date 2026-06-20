@@ -16,12 +16,6 @@ const months = [
   "December",
 ];
 
-const levelStrands = {
-  "Level 1": "Pink A/B, Red, Yellow",
-  "Level 2": "Blue, Green, Orange",
-  "Level 3": "Turquoise, Purple, Gold",
-  "Level 4": "White and Adventure Strands",
-};
 
 const lessonTypes = [
   "Opening Song",
@@ -136,11 +130,9 @@ const monthGrid = document.querySelector("#monthGrid");
 const lessonGrid = document.querySelector("#lessonGrid");
 const lessonGridV2 = document.querySelector("#lessonGridV2");
 const monthLevelTag = document.querySelector("#monthLevelTag");
-const monthStrandTag = document.querySelector("#monthStrandTag");
 const contentPathTag = document.querySelector("#contentPathTag");
 const contentTitle = document.querySelector("#contentTitle");
 const contentLevelName = document.querySelector("#contentLevelName");
-const contentLevelBand = document.querySelector("#contentLevelBand");
 const contentBannerMonthNumber = document.querySelector(
   "#contentBannerMonthNumber",
 );
@@ -196,7 +188,6 @@ function levelToThemeClass(level) {
 }
 
 function applyLevelTheme() {
-  monthStrandTag.textContent = levelStrands[state.level] || "";
   [
     screens.months,
     screens.content,
@@ -274,7 +265,6 @@ function updateContentMonthNumber() {
   contentPathTag.textContent = state.level || "Level";
   screens.content.dataset.month = state.month;
   contentLevelName.textContent = state.level;
-  contentLevelBand.textContent = levelStrands[state.level] || "";
   contentBannerMonthNumber.textContent =
     monthIndex >= 0 ? String(monthIndex + 3) : "";
   refreshCovers();
@@ -317,7 +307,7 @@ function renderMonths() {
     const button = document.createElement("button");
     button.className = "month-button";
     button.type = "button";
-    button.innerHTML = `<span>${month}</span><strong>${index + 3}</strong>`;
+    button.innerHTML = `<span>${month}</span><strong><i class="month-num">${index + 3}</i><i class="month-suffix">월</i></strong>`;
     button.addEventListener("click", () => {
       state.month = month;
       updateContentMonthNumber();
