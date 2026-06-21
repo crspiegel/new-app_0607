@@ -645,8 +645,7 @@ body.login-active main {
   fill: var(--canvas);
 }
 
-.hero-grid,
-.library-grid {
+.hero-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 44px;
@@ -664,13 +663,7 @@ body.login-active main {
   align-items: stretch;
 }
 
-.library-grid {
-  align-items: center;
-}
-
-.hero-copy,
-.library-copy,
-.section-heading {
+.hero-copy {
   min-width: 0;
   max-width: 650px;
 }
@@ -797,10 +790,6 @@ body.login-active main {
   fill: currentColor;
 }
 
-.section-heading {
-  margin-bottom: 28px;
-}
-
 .eyebrow {
   display: inline-flex;
   width: fit-content;
@@ -893,11 +882,6 @@ p {
 
 .section-white p {
   color: var(--muted-ink);
-}
-
-.library-art {
-  display: grid;
-  place-items: center;
 }
 
 .hero-stage {
@@ -1036,20 +1020,6 @@ p {
   }
 }
 
-.library-art img {
-  width: 100%;
-  max-width: 520px;
-  border: 4px solid var(--hairline);
-  border-radius: var(--radius-card);
-  box-shadow: 0 8px 0 var(--hairline-strong);
-}
-
-.library-art .program-logo {
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
 .level-section {
   position: relative;
   z-index: 3;
@@ -1061,28 +1031,7 @@ p {
   padding: 9px clamp(42px, 5vw, 72px) 24px;
 }
 
-.intro-section .section-inner,
-.section-inner.feature-section-inner {
-  width: var(--content-width);
-  padding-right: clamp(42px, 5vw, 72px);
-  padding-left: clamp(42px, 5vw, 72px);
-}
-
-.level-section .section-heading {
-  max-width: 760px;
-  margin-right: auto;
-  margin-left: 0;
-}
-
 .level-section .eyebrow.blue {
-  font-family: var(--font-nav);
-}
-
-.intro-section .eyebrow.green {
-  font-family: var(--font-nav);
-}
-
-.feature-section-inner .eyebrow {
   font-family: var(--font-nav);
 }
 
@@ -1090,39 +1039,6 @@ p {
   font-family: "Nunito", var(--font-ui);
   font-weight: 900;
   font-size: 33px;
-}
-
-.intro-section h2 {
-  font-family: "Nunito", var(--font-ui);
-  font-weight: 900;
-  font-size: 33px;
-}
-
-.feature-section-inner h2,
-.feature-card h3 {
-  font-family: var(--font-google-sans-flex);
-  font-weight: 900;
-}
-
-.feature-section-inner h2 {
-  font-family: "Nunito", var(--font-ui);
-  font-weight: 900;
-  font-size: 33px;
-}
-
-.level-section .section-heading p {
-  font-family: var(--font-google-sans-flex);
-  font-weight: 300;
-}
-
-.intro-section p {
-  font-family: var(--font-google-sans-flex);
-  font-weight: 300;
-}
-
-.feature-card p {
-  font-family: var(--font-google-sans-flex);
-  font-weight: 300;
 }
 
 .level-grid {
@@ -1199,19 +1115,6 @@ p {
   font-weight: 800;
   line-height: 1.25;
   text-align: center;
-}
-
-.level-kicker {
-  display: inline-flex;
-  width: fit-content;
-  align-self: start;
-  justify-self: start;
-  padding: 7px 12px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 999px;
-  font-family: var(--font-nav);
-  font-size: 14px;
-  font-weight: 900;
 }
 
 .level-one {
@@ -1348,42 +1251,6 @@ body:not(.subpage-active) main {
   }
 }
 
-.feature-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 18px;
-}
-
-.feature-card {
-  min-height: 210px;
-  padding: 26px;
-  background: var(--canvas);
-  border: 0;
-  border-radius: 39px;
-  box-shadow: 0 8px 0 var(--owl-green-shadow);
-  color: var(--ink);
-}
-
-.feature-card p {
-  color: var(--muted-ink);
-  font-size: 17px;
-}
-
-.feature-icon {
-  display: grid;
-  width: 54px;
-  height: 54px;
-  place-items: center;
-  margin-bottom: 20px;
-  background: var(--sunny-yellow);
-  border-radius: 50%;
-  box-shadow: 0 4px 0 var(--sunny-yellow-shadow);
-  color: var(--ink);
-  font-family: var(--font-sniglet);
-  font-size: 29px;
-  font-weight: 900;
-}
-
 .overview-section .section-inner {
   padding-top: 54px;
   padding-bottom: 78px;
@@ -1473,16 +1340,6 @@ body:not(.subpage-active) main {
 
 #monthScreen .screen-heading h2 {
   color: var(--level-accent-shadow, var(--ink));
-}
-
-#monthScreen .month-strand {
-  display: block;
-  margin-top: 8px;
-  color: var(--level-accent-shadow, var(--muted-ink));
-  font-family: var(--font-nav);
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1.3;
 }
 
 .month-button {
@@ -2628,8 +2485,7 @@ body:not(.subpage-active) main {
     padding-bottom: 0;
   }
 
-  .hero-grid,
-  .library-grid {
+  .hero-grid {
     grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.8fr);
     gap: clamp(72px, 9vw, 150px);
   }
@@ -2644,17 +2500,9 @@ body:not(.subpage-active) main {
     grid-row: 1;
   }
 
-  .library-grid {
-    grid-template-columns: minmax(0, 0.85fr) minmax(360px, 1fr);
-  }
-
   .level-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 28px;
-  }
-
-  .feature-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .overview-grid {
@@ -3330,20 +3178,6 @@ body:not(.subpage-active) main {
     gap: 14px;
   }
 
-  .intro-section .section-inner,
-  .section-inner.feature-section-inner {
-    padding-right: 24px;
-    padding-left: 24px;
-  }
-
-  .level-section .section-heading {
-    max-width: 100%;
-  }
-
-  .level-section .section-heading p {
-    overflow-wrap: break-word;
-  }
-
   /* Two-up level cards: wider (full-width section) + a shorter height so they
      read as cards, not tall pills. */
   .level-button {
@@ -3365,11 +3199,6 @@ body:not(.subpage-active) main {
     line-height: 1.2;
   }
 
-  .level-kicker {
-    padding: 5px 9px;
-    font-size: 11px;
-  }
-
   /* Month screen: use the full viewport width (the default 80% content width
      left big side margins, squeezing the buttons tall and wrapping the title).
      Full width gives the 2-up buttons a wider, less stretched aspect. */
@@ -3377,11 +3206,6 @@ body:not(.subpage-active) main {
     width: 100%;
     padding-right: 18px;
     padding-left: 18px;
-  }
-
-  #monthScreen #monthTitle {
-    font-size: clamp(24px, 7vw, 32px);
-    white-space: nowrap;
   }
 
   /* Two-up month buttons: full cell width + a shorter, wider aspect. */
@@ -3723,12 +3547,6 @@ body:not(.subpage-active) main {
   }
 
   .level-section .section-inner {
-    padding-right: 18px;
-    padding-left: 18px;
-  }
-
-  .intro-section .section-inner,
-  .section-inner.feature-section-inner {
     padding-right: 18px;
     padding-left: 18px;
   }

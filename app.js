@@ -16,7 +16,6 @@ const months = [
   "December",
 ];
 
-
 const lessonTypes = [
   "Opening Song",
   "Story",

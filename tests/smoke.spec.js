@@ -5,18 +5,14 @@ test("main level-to-month-to-content flow renders", async ({ page }) => {
   page.on("requestfailed", (request) => failedRequests.push(request.url()));
 
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", { name: "Cambridge Reading Adventures" }).first(),
-  ).toBeVisible();
+  await expect(page.locator("#homeTitle")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Level 1" }).first(),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Level 1" }).first().click();
   await expect(page).toHaveURL(/#months\/Level%201$/);
-  await expect(
-    page.getByRole("heading", { name: "Choose a Month" }),
-  ).toBeVisible();
+  await expect(page.locator("#monthLevelTag")).toHaveText("Level 1");
 
   await page.getByRole("button", { name: /March/i }).click();
   await expect(page).toHaveURL(/#content\/Level%201\/March$/);
