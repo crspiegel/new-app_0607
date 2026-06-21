@@ -870,7 +870,11 @@ p {
   overflow: visible;
 }
 
-.hero-image {
+/* Hero character rig: the base layer + cut-out parts (waving arm, two heads)
+   are stacked; .hero-rig is the sized/positioned element that carries the gentle
+   whole-character float, while each part oscillates around its joint on top
+   (e-book / InDesign style subtle motion). */
+.hero-rig {
   position: relative;
   z-index: 1;
   /* Anchor to the top of the hero with a fixed 30px gap, and let the image grow
@@ -881,11 +885,92 @@ p {
   max-height: calc(100% - 30px);
   margin-top: 30px;
   margin-bottom: 0;
-  object-fit: contain;
   filter: drop-shadow(0 22px 18px rgba(3, 29, 64, 0.2));
   transform: rotate(-2deg);
-  animation: heroImageFloat 6.5s ease-in-out infinite;
+  animation: heroImageFloat 4.33s ease-in-out infinite;
   will-change: transform;
+}
+
+.hero-rig .hero-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+/* Each cut-out part overlays the base exactly (same full-canvas PNG) and rotates
+   around its joint. transform-origin = joint position as % of the artwork. */
+.hero-rig-part {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+/* Dad's raised arm — wave, pivot at the shoulder. */
+.hero-rig-f-arm {
+  transform-origin: 25.4% 39.8%;
+  animation: heroWave 1.73s ease-in-out infinite;
+}
+
+/* Girl's extended arm — gentler wave, pivot at her shoulder. */
+.hero-rig-d-arm {
+  transform-origin: 79% 62.2%;
+  animation: heroWaveSmall 2.07s ease-in-out infinite;
+}
+
+/* Dad's head — sway, pivot at the neck. */
+.hero-rig-f-head {
+  transform-origin: 33.7% 28%;
+  animation: heroSway 2.27s ease-in-out infinite;
+}
+
+/* Girl's head — sway (opposite phase), pivot at the neck. */
+.hero-rig-d-head {
+  transform-origin: 74.1% 61.8%;
+  animation: heroSwayAlt 2s ease-in-out infinite;
+}
+
+@keyframes heroWave {
+  0%,
+  100% {
+    transform: rotate(-9deg);
+  }
+  50% {
+    transform: rotate(9deg);
+  }
+}
+
+@keyframes heroWaveSmall {
+  0%,
+  100% {
+    transform: rotate(6deg);
+  }
+  50% {
+    transform: rotate(-6deg);
+  }
+}
+
+@keyframes heroSway {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes heroSwayAlt {
+  0%,
+  100% {
+    transform: rotate(3deg);
+  }
+  50% {
+    transform: rotate(-3deg);
+  }
 }
 
 @keyframes heroImageFloat {
@@ -2643,7 +2728,7 @@ body:not(.subpage-active) main {
     place-items: center end;
   }
 
-  .hero-image {
+  .hero-rig {
     width: min(330px, 100%);
   }
 }
@@ -2947,16 +3032,14 @@ body:not(.subpage-active) main {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Text entrance animations still respect reduced-motion. The hero character
+     rig (float + arm/head sway) is intentionally exempt — per request it should
+     animate regardless of the OS "reduce motion" setting. */
   .hero-copy .eyebrow,
   .hero-copy h1,
   .hero-copy p,
-  .app-downloads,
-  .hero-image {
+  .app-downloads {
     animation: none;
-  }
-
-  .hero-image {
-    transform: rotate(-2deg);
   }
 }
 
@@ -3281,11 +3364,15 @@ body:not(.subpage-active) main {
     pointer-events: auto;
   }
 
-  .hero-image {
+  .hero-rig {
     width: min(185px, 50%);
     max-height: none;
     margin: 0;
     opacity: 1;
+  }
+
+  .hero-rig .hero-image {
+    max-height: none;
   }
 
   #contentScreen .section-inner {
