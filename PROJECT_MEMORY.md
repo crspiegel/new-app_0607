@@ -477,6 +477,54 @@ display:flex; flex-direction:column; justify-content:center}` (tint fills to foo
   on the short Galaxy Tab (712). Verified: gap 0 + 2-row banner + no vertical scroll on Tab-LS & iPad-LS;
   **iPad Pro 1366 (PC, >1180), phone, desktop ALL unchanged** (circle 60, stacked banner).
 
+- **Session `2026-06-21` — branding, layout polish, hero animation, cleanup (all committed/pushed):**
+  Naming convention used with client (빅웨이브/BigWave): **메인**=`#homeScreen`, **페이지1**=`#monthScreen`
+  (월 선택), **페이지2**=`#contentScreen` (월 상세); **월그리드**=`#monthGrid`, **요일그리드**=페이지2 Mon–Fri
+  board; 영역 = 헤더 / body / 풋터.
+  - **Header/branding:** logo wordmark → **"Cambridge Reading"**; level nav hidden on 메인 only
+    (`body:not(.subpage-active) .top-nav{display:none}`).
+  - **메인페이지:** removed _Program Introduction_ + _Key Features_ sections; _Start Reading_ removed its
+    title/eyebrow/desc (kept the 4 level buttons); level buttons stripped of pill-kicker + book-band text,
+    set to **6:4** ratio, label dead-centered; hero height −30% (`--hero-height` 620→434) and the white
+    wave follows; footer on 메인 → **white bg + dark-gray (`--ink`) text**.
+  - **No-scroll layouts:** 메인 uses `body:not(.subpage-active) main{display:flex;column}` + `#homeScreen`
+    flex:1 + level-section centers buttons (works mobile too — vertical-centering fix); tablet-landscape +
+    PC: level buttons scale to fit at 6:4, **PC (≥1181px) keeps side margins**, tablet uses full width.
+  - **페이지1:** level marking unified with 페이지2's `#contentLevelName` (Sniglet 40, theme-shadow) and
+    centered; removed "Choose a Month" + strand text; **월그리드 numbers gained a "월" suffix** (Nanum Gothic
+    Coding 700, baseline-aligned via inline-flex flex-end + per-digit `translateY`); tablet month buttons
+    match **PC proportion** (fixed 137px height + full width; removed the `max-width:800px` cap).
+  - **페이지2:** removed `#contentLevelBand` book-band text (all levels); added **Word Game** (🧩) +
+    **Sentence Game** (🎯, U+1F3AF) buttons after Ending Song; tablet toolbar buttons scaled to ~PC
+    proportion (`clamp(12px,1.2vw,14px)`, radius/bevel scaled to avoid distorted shadow); **toolbar aligned
+    to the Mon–Fri columns** (left pad 272 tablet / 342 PC, right inset 30/50, `space-between`) + ~16px gap
+    above the board (Galaxy-Tab-safe, no scroll). ⚠ PC content page already scrolls at ≤1080px height.
+  - **Level-page footer:** `body[class*="level-theme-"] .site-footer` → \*\*body tint bg (`--level-accent-soft`)
+    - theme-shadow text\*\* (was saturated accent + white), so body feels less cramped.
+  - **Hero character animation (cutout rig):** client supplied **layered transparent PNGs same-canvas**
+    (`assets/hero-rig-base/f-arm/d-arm/f-head/d-head.png`; base has connection areas **extended** so rotation
+    reveals real body, not a gap). `.hero-rig` carries float+sizing; each part rotates around its joint
+    (`transform-origin` %); arm wave ±9°/±6°, head sway ±3°; **speed ×1.5** (arm 1.73s, heads 2.0–2.27s,
+    float 4.33s). **Exempt from `prefers-reduced-motion`** (client wants it always on — their OS has reduce
+    motion ON). Old flat `hero-builder-characters_02.PNG` no longer referenced (kept on disk).
+  - **Hero title:** word-by-word reveal — words wrapped in `.hero-word`, staggered (~0.17s) pop-up; also
+    exempt from reduce-motion.
+  - **Reusable skills added** (`.claude/skills/`): `cutout-rig-animation` (+`scripts/rig-helper.py`) and
+    `word-reveal-animation` — for repeating these on other pages.
+  - **Code review + cleanup** (objective subagent + independent verify): removed ~188 lines of dead CSS
+    (intro/feature/library/`.level-kicker`/`#monthTitle`/`.month-strand` etc. — matched no element);
+    merged the 2 Google-Fonts `<link>`s into 1 (**FOUT mitigation** — the flash is normal `display=swap`
+    async swap, NOT leftover code; full removal needs font `preload`/self-host = deferred); `app.js`
+    prettier; **smoke tests updated to current UI → 9/9 pass**, `npm run check` green. **V2/V3 calendar
+    screens kept** (smoke tests assert they "remain available"). **18 orphaned asset images kept** per
+    client (design reference).
+  - **Infra note:** worked via gh account **`bigwavecto`**, added as a **collaborator** (write) on
+    `crspiegel/new-app_0607`; pushes work from this account now. (Repo/Vercel owner is still `crspiegel`.)
+  - Commits today: `e015e8b` (UI), `0816144` (hero rig), `4b8fdb6` (word reveal), `d78f5b0` (skills),
+    `0044b01` (cleanup).
+  - **Deferred / open:** full FOUT removal (font preload/self-host); whether to delete the 18 orphaned
+    assets later.
+
 ## Platform build — approved 3-phase plan (`2026-06-10`)
 
 Plan file: `C:\Users\dupy2\.claude\plans\steady-roaming-yao.md`. Adds the video
