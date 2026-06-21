@@ -693,6 +693,46 @@ body.login-active main {
   animation: heroTextRise 720ms ease both;
 }
 
+/* Hero title: animate word-by-word instead of as one block. */
+#homeTitle {
+  animation: none;
+}
+
+.hero-word {
+  display: inline-block;
+  opacity: 0;
+  animation: heroWordIn 600ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* Sequential reveal: each word starts ~0.17s after the previous. */
+.hero-word:nth-child(1) {
+  animation-delay: 0.05s;
+}
+.hero-word:nth-child(2) {
+  animation-delay: 0.22s;
+}
+.hero-word:nth-child(3) {
+  animation-delay: 0.39s;
+}
+.hero-word:nth-child(4) {
+  animation-delay: 0.56s;
+}
+
+@keyframes heroWordIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 26px, 0);
+  }
+  60% {
+    opacity: 1;
+    transform: translate3d(0, -6px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
 .hero-copy h1 {
   animation-delay: 100ms;
 }
@@ -3036,11 +3076,14 @@ body:not(.subpage-active) main {
      rig (float + arm/head sway) is intentionally exempt — per request it should
      animate regardless of the OS "reduce motion" setting. */
   .hero-copy .eyebrow,
-  .hero-copy h1,
   .hero-copy p,
   .app-downloads {
     animation: none;
   }
+
+  /* The hero title's word-by-word reveal is intentionally exempt (like the
+     character rig) — per request it should play regardless of "reduce motion".
+     Leaving its animation on also keeps the words visible (opacity 0 -> 1). */
 }
 
 @media (max-width: 1023px) {
