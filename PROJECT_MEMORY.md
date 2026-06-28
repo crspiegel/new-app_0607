@@ -581,6 +581,22 @@ padding-inline:max(50px,4vw)}` (≥50px gutters, 1600 cap).
   JS: `openMemberEditor`/`commitMemberEdit` call `update_member`; new `.admin-member-actions` wraps Edit +
   toggle. `npm.cmd run qa` green (9/9).
 
+- **Session `2026-06-28d` — admin Korean localization + refresh fix:**
+  - **Admin UI → Korean.** Translated the admin-only chrome (menu/title, hints, member form labels +
+    placeholders, buttons, status/toast messages, cover-card labels, both modals — slot editor + member editor)
+    to Korean. **Kept English on purpose:** content-slot names that mirror the kid-facing page (Opening Song /
+    `Week 1 · Mon · Story`), data values (Level 1 / March / Mon–Fri), the user-facing login page, and the header
+    Admin / Log out buttons (shared chrome next to the user-facing Login). Added **Noto Sans KR** to the font
+    import and a new `--font-admin` (Latin → Google Sans, Korean → Noto Sans KR) applied to `#adminScreen` +
+    both admin modals (which live outside `#adminScreen`).
+  - **Member list slow-to-appear on refresh — FIXED.** Root cause: the bootstrap IIFE's `#admin` deep-link path
+    rendered only `renderAdminBoard()` and **omitted `renderMembers()`** (unlike `openAdmin()`); with no
+    hashchange router, the list stayed blank until `openAdmin()` re-ran (e.g. re-clicking Admin). Fix: the
+    refresh `#admin` path now calls **`openAdmin()`** (full init incl. member list + default tab; bounces
+    non-admins to login). DB/RLS/auth were never the problem.
+  - `npm.cmd run qa` green (9/9). Client verified refresh now shows members immediately. Open: whether to also
+    localize the header Admin / Log out buttons (deferred).
+
 ## Platform build — approved 3-phase plan (`2026-06-10`)
 
 Plan file: `C:\Users\dupy2\.claude\plans\steady-roaming-yao.md`. Adds the video

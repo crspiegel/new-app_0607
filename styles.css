@@ -24,6 +24,11 @@
   --font-ui: "Nunito", "Segoe UI", "Noto Sans", Arial, sans-serif;
   --font-nav: "Inter", "Segoe UI", "Noto Sans", Arial, sans-serif;
   --font-google-sans: "Google Sans", "Google Sans Text", var(--font-nav);
+  /* Admin tool font: Latin/numbers in Google Sans, Korean in Noto Sans KR
+     (high readability) — the admin UI is Korean-labelled. */
+  --font-admin:
+    "Google Sans", "Google Sans Text", "Noto Sans KR", "Malgun Gothic",
+    var(--font-nav);
   --font-google-sans-flex:
     "Google Sans Flex", "Google Sans", "Google Sans Text", var(--font-nav);
   --font-sniglet: "Sniglet", var(--font-nav);
@@ -4703,13 +4708,19 @@ body.noaccess-open {
 /* Admin screen shell. */
 
 /* Admin body area: unify ALL text (title, hint, members, board, slot names,
-   etc.) to Google Sans so the admin tool reads distinctly from the kid-facing
-   site. The id + universal selector outranks the per-element class fonts below
-   (Sniglet / Nunito / Inter) without needing !important. Scoped to #adminScreen,
-   so the header admin buttons and the slot-editor modal are left as-is. */
+   etc.) to the admin font so the tool reads distinctly from the kid-facing site
+   AND its Korean labels render in a high-readability face (Noto Sans KR). The id
+   + universal selector outranks the per-element class fonts below (Sniglet /
+   Nunito / Inter) without needing !important. The two admin-only modals
+   (#adminSlotModal, #memberEditModal) live outside #adminScreen, so they are
+   included explicitly here for the same Korean-readable typography. */
 #adminScreen,
-#adminScreen * {
-  font-family: var(--font-google-sans);
+#adminScreen *,
+#adminSlotModal,
+#adminSlotModal *,
+#memberEditModal,
+#memberEditModal * {
+  font-family: var(--font-admin);
 }
 
 .admin-inner {

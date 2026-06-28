@@ -1504,7 +1504,7 @@ const adminViews = {
   content: document.querySelector("#adminViewContent"),
   members: document.querySelector("#adminViewMembers"),
 };
-const adminViewTitles = { content: "Content Manager", members: "Members" };
+const adminViewTitles = { content: "콘텐츠 관리", members: "회원 관리" };
 
 function setAdminView(view) {
   Object.entries(adminViews).forEach(([name, el]) => {
@@ -1539,11 +1539,12 @@ async function renderMembers() {
     .select("id,grade,display_name,active")
     .order("created_at");
   if (error) {
-    setMemberStatus("Could not load members.");
+    setMemberStatus("회원을 불러올 수 없습니다.");
     return;
   }
   if (!data.length) {
-    memberList.innerHTML = '<p class="admin-member-empty">No members yet.</p>';
+    memberList.innerHTML =
+      '<p class="admin-member-empty">등록된 회원이 없습니다.</p>';
     return;
   }
   data.forEach((m) => {
@@ -1552,29 +1553,29 @@ async function renderMembers() {
     if (!m.active) row.classList.add("is-inactive");
     const info = document.createElement("span");
     info.className = "admin-member-info";
-    info.textContent = `${m.id} · Grade ${m.grade}${
+    info.textContent = `${m.id} · 등급 ${m.grade}${
       m.display_name ? ` · ${m.display_name}` : ""
-    }${m.active ? "" : " · (inactive)"}`;
+    }${m.active ? "" : " · (비활성)"}`;
     const actions = document.createElement("div");
     actions.className = "admin-member-actions";
 
     const edit = document.createElement("button");
     edit.type = "button";
     edit.className = "admin-member-edit";
-    edit.textContent = "Edit";
+    edit.textContent = "수정";
     edit.addEventListener("click", () => openMemberEditor(m));
 
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "admin-member-toggle";
-    toggle.textContent = m.active ? "Deactivate" : "Activate";
+    toggle.textContent = m.active ? "비활성화" : "활성화";
     toggle.addEventListener("click", async () => {
       toggle.disabled = true;
       const { error: tErr } = await sb.rpc("set_member_active", {
         p_id: m.id,
         p_active: !m.active,
       });
-      if (tErr) setMemberStatus("Could not update that member.");
+      if (tErr) setMemberStatus("회원 정보를 수정할 수 없습니다.");
       else await renderMembers();
     });
     actions.append(edit, toggle);
@@ -1588,7 +1589,7 @@ if (memberForm) {
     event.preventDefault();
     setMemberStatus("");
     if (!sb || !isAdmin) {
-      setMemberStatus("Admins only.");
+      setMemberStatus("관리자 전용입니다.");
       return;
     }
     const id = memberId ? memberId.value.trim() : "";
@@ -1597,12 +1598,12 @@ if (memberForm) {
     const name = memberName ? memberName.value.trim() : "";
     if (!ACCOUNT_RE.test(id) || !ACCOUNT_RE.test(pw)) {
       setMemberStatus(
-        "ID and password must be 4+ characters — letters, numbers or symbols, no spaces.",
+        "아이디와 비밀번호는 공백 없이 4자 이상이어야 합니다(영문·숫자·기호).",
       );
       return;
     }
     if (![1, 2, 3].includes(grade)) {
-      setMemberStatus("Pick a grade (1-3).");
+      setMemberStatus("등급을 선택하세요 (1-3).");
       return;
     }
     const { error } = await sb.rpc("create_member", {
@@ -1612,10 +1613,10 @@ if (memberForm) {
       p_display_name: name || null,
     });
     if (error) {
-      setMemberStatus("Could not save: " + (error.message || "error"));
+      setMemberStatus("저장할 수 없습니다: " + (error.message || "error"));
       return;
     }
-    setMemberStatus(`Saved "${id}" (Grade ${grade}).`);
+    setMemberStatus(`"${id}" 저장 완료 (등급 ${grade}).`);
     if (memberPw) memberPw.value = "";
     if (memberId) memberId.value = "";
     if (memberName) memberName.value = "";
@@ -1654,35 +1655,35 @@ function closeMemberEditor() {
 async function commitMemberEdit() {
   if (!editingMemberId) return;
   if (!sb || !isAdmin) {
-    setMemberEditStatus("Admins only.");
+    setMemberEditStatus("관리자 전용입니다.");
     return;
   }
   const grade = memberEditGrade ? Number(memberEditGrade.value) : 0;
   const pw = memberEditPw ? memberEditPw.value : "";
   if (![1, 2, 3].includes(grade)) {
-    setMemberEditStatus("Pick a grade (1-3).");
+    setMemberEditStatus("등급을 선택하세요 (1-3).");
     return;
   }
   if (pw && !ACCOUNT_RE.test(pw)) {
     setMemberEditStatus(
-      "Password must be 4+ characters — letters, numbers or symbols, no spaces.",
+      "비밀번호는 공백 없이 4자 이상이어야 합니다(영문·숫자·기호).",
     );
     return;
   }
-  setMemberEditStatus("Saving…");
+  setMemberEditStatus("저장 중…");
   const { error } = await sb.rpc("update_member", {
     p_id: editingMemberId,
     p_grade: grade,
     p_password: pw ? pw : null,
   });
   if (error) {
-    setMemberEditStatus("Could not save: " + (error.message || "error"));
+    setMemberEditStatus("저장할 수 없습니다: " + (error.message || "error"));
     return;
   }
   const savedId = editingMemberId;
   closeMemberEditor();
   setMemberStatus(
-    `Updated "${savedId}" (Grade ${grade})${pw ? " · password changed" : ""}.`,
+    `"${savedId}" 수정 완료 (등급 ${grade})${pw ? " · 비밀번호 변경됨" : ""}.`,
   );
   await renderMembers();
 }
@@ -1729,11 +1730,11 @@ if (signupToggle) {
       .upsert({ key: "signup_visible", value: next });
     if (error) {
       signupToggle.checked = !next;
-      setMemberStatus("Could not update signup visibility.");
+      setMemberStatus("회원가입 표시 설정을 변경할 수 없습니다.");
       return;
     }
     if (loginSignup) loginSignup.hidden = !next;
-    setMemberStatus(`Sign-up form is now ${next ? "visible" : "hidden"}.`);
+    setMemberStatus(`회원가입 폼이 ${next ? "표시" : "숨김"} 상태입니다.`);
   });
 }
 
@@ -1776,7 +1777,7 @@ function adminSlotButton(slot) {
   name.textContent = slotLabel(slot);
   const value = document.createElement("span");
   value.className = "admin-slot-url";
-  value.textContent = url || "Not set";
+  value.textContent = url || "미설정";
   button.append(name, value);
   button.addEventListener("click", () => openSlotEditor(slot));
   return button;
@@ -1794,10 +1795,12 @@ function adminCoverCard(book) {
   }
   const label = document.createElement("span");
   label.className = "admin-cover-label";
-  label.textContent = `${book === "book-1" ? "Book 1" : "Book 2"} cover`;
+  label.textContent = book === "book-1" ? "표지 1" : "표지 2";
   const hint = document.createElement("span");
   hint.className = "admin-cover-hint";
-  hint.textContent = url ? "Drop / click to replace" : "Drop image or click";
+  hint.textContent = url
+    ? "끌어다 놓거나 클릭해 교체"
+    : "이미지를 끌어다 놓거나 클릭";
   card.append(label, hint);
   wireCoverCard(card, book);
   return card;
@@ -1880,13 +1883,13 @@ async function commitSlot(value) {
   const entry = pageEntry(adminState.level, adminState.month);
   if (value) entry.videos[slot] = value;
   else delete entry.videos[slot];
-  setAdminStatus("Saving…");
+  setAdminStatus("저장 중…");
   const { error } = await savePage(adminState.level, adminState.month);
   if (error) {
-    setAdminStatus("Save failed.");
+    setAdminStatus("저장 실패.");
     return;
   }
-  setAdminStatus("Saved.");
+  setAdminStatus("저장 완료.");
   closeSlotEditor();
   renderAdminBoard();
 }
@@ -1918,13 +1921,13 @@ function slugify(text) {
 
 async function uploadCover(book, file) {
   if (!sb || !file) return;
-  setAdminStatus("Uploading…");
+  setAdminStatus("업로드 중…");
   const path = `${slugify(adminState.level)}/${slugify(adminState.month)}/${book}`;
   const { error: upErr } = await sb.storage
     .from("covers")
     .upload(path, file, { upsert: true, contentType: file.type });
   if (upErr) {
-    setAdminStatus("Upload failed.");
+    setAdminStatus("업로드 실패.");
     return;
   }
   const { data } = sb.storage.from("covers").getPublicUrl(path);
@@ -1934,10 +1937,10 @@ async function uploadCover(book, file) {
   entry.covers[book] = url;
   const { error: saveErr } = await savePage(adminState.level, adminState.month);
   if (saveErr) {
-    setAdminStatus("Save failed.");
+    setAdminStatus("저장 실패.");
     return;
   }
-  setAdminStatus("Cover updated.");
+  setAdminStatus("표지 업데이트 완료.");
   renderAdminBoard();
 }
 
@@ -2027,12 +2030,11 @@ if (view === "content-v3" && hashLevel && hashMonth) {
   refreshSignupUI();
   await hydrateContent();
   if (view === "admin") {
-    if (isAdmin) {
-      populateAdminSelectors();
-      renderAdminBoard();
-      showScreen("admin");
-    } else {
-      showScreen("login");
-    }
+    // Mirror openAdmin() so a REFRESH on #admin restores the FULL admin view —
+    // board AND member list (+ default tab). Previously this path rendered only
+    // the board, so the member list stayed blank until openAdmin ran again
+    // (e.g. re-clicking the Admin button), which looked like a slow/late load.
+    // openAdmin() bounces non-admins to the login screen.
+    openAdmin();
   }
 })();
