@@ -597,6 +597,13 @@ padding-inline:max(50px,4vw)}` (≥50px gutters, 1600 cap).
   - `npm.cmd run qa` green (9/9). Client verified refresh now shows members immediately. Open: whether to also
     localize the header Admin / Log out buttons (deferred).
 
+- **Session `2026-06-28e` — favicon (logo letter "C"):** added a brand favicon = the logo's first letter **C**
+  (the "Cambridge" wordmark colour, teal `#16b8ad`) — a rounded-square teal tile with a chunky rounded white
+  **C** drawn as a stroked arc (font-independent so it renders anywhere). Files at repo root: **`favicon.svg`**
+  (primary, scalable), **`favicon-32.png`** (legacy), **`apple-touch-icon.png`** (180, full-square for iOS).
+  `scripts/make-favicon.mjs` rasterizes the PNGs from the SVG via headless Chromium (no image libs). Linked in
+  `index.html` <head> (icon svg + png + apple-touch-icon). `npm.cmd run qa` green (9/9).
+
 ## Platform build — approved 3-phase plan (`2026-06-10`)
 
 Plan file: `C:\Users\dupy2\.claude\plans\steady-roaming-yao.md`. Adds the video

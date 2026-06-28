@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Cambridge Reading">
+  <rect width="32" height="32" rx="7.5" fill="#16b8ad"/>
+  <path d="M21.6 9.4 A8.6 8.6 0 1 0 21.6 22.6"
+        fill="none" stroke="#ffffff" stroke-width="5.2" stroke-linecap="round"/>
+</svg>
