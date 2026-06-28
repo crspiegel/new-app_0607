@@ -185,9 +185,49 @@ begin
 end;
 $$;
 
+-- Edit an existing member's grade (permission) and/or password. Admin-only.
+-- p_password is OPTIONAL: pass NULL (or blank) to keep the current password and
+-- change only the grade; pass a new value to also reset the password (re-hashed
+-- the same bcrypt way as create_member). Does NOT change the id or active flag.
+create or replace function public.update_member(
+  p_id text, p_grade smallint, p_password text default null
+)
+returns void
+language plpgsql
+security definer
+-- crypt()/gen_salt() live in the `extensions` schema on Supabase.
+set search_path = public, extensions
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized';
+  end if;
+  if p_grade not in (1, 2, 3) then
+    raise exception 'grade must be 1, 2 or 3';
+  end if;
+  if p_password is not null and p_password <> '' then
+    if p_password !~ '^[!-~]{4,}$' then
+      raise exception 'password must be >= 4 printable-ASCII chars (no spaces, no Korean)';
+    end if;
+    update public.members
+      set grade = p_grade,
+          password_hash = crypt(p_password, gen_salt('bf'))
+      where id = p_id;
+  else
+    update public.members
+      set grade = p_grade
+      where id = p_id;
+  end if;
+  if not found then
+    raise exception 'member % not found', p_id;
+  end if;
+end;
+$$;
+
 -- anon needs ONLY the login verifier — revoke the admin RPCs from anon.
 revoke all on function public.create_member(text, text, smallint, text) from anon;
 revoke all on function public.set_member_active(text, boolean) from anon;
+revoke all on function public.update_member(text, smallint, text) from anon;
 
 -- ---------------------------------------------------------------------------
 -- Storage policies for the "covers" bucket

@@ -1127,6 +1127,57 @@
       </div>
     </div>
 
+    <!-- Admin: edit a member's grade (permission) and/or password. -->
+    <div class="admin-modal" id="memberEditModal" hidden>
+      <div class="admin-modal-overlay" data-member-edit-close></div>
+      <div
+        class="admin-modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="memberEditTitle"
+      >
+        <h2 class="admin-modal-title" id="memberEditTitle">Edit member</h2>
+        <p class="admin-modal-sub" id="memberEditSub"></p>
+
+        <label class="admin-modal-label" for="memberEditGrade"
+          >Grade (permission)</label
+        >
+        <select class="admin-modal-input" id="memberEditGrade">
+          <option value="1">Grade 1</option>
+          <option value="2">Grade 2</option>
+          <option value="3">Grade 3</option>
+        </select>
+
+        <label class="admin-modal-label" for="memberEditPw">New password</label>
+        <input
+          class="admin-modal-input"
+          id="memberEditPw"
+          type="text"
+          autocomplete="off"
+          placeholder="Leave blank to keep the current password"
+        />
+
+        <p class="admin-status" id="memberEditStatus" aria-live="polite"></p>
+
+        <div class="admin-modal-actions">
+          <button
+            type="button"
+            class="admin-btn admin-btn-ghost"
+            data-member-edit-close
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="admin-btn admin-btn-primary"
+            id="memberEditSave"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="https://player.vimeo.com/api/player.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>

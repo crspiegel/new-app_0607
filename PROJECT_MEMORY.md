@@ -571,6 +571,16 @@ padding-inline:max(50px,4vw)}` (≥50px gutters, 1600 cap).
     admin (RLS). Supabase config in `supabase-config.js`.
   - `npm.cmd run qa` green (9/9). Client verified Vimeo+YouTube playback + empty-slot popup before commit.
 
+- **Session `2026-06-28c` — admin member editor (grade + password):** added a per-member **Edit** button in the
+  Members tab → opens a modal (mirrors the slot-editor modal) to change a member's **grade (permission)** and
+  optionally **reset the password** (blank = keep current). Backed by a new Supabase RPC
+  **`update_member(p_id, p_grade, p_password default null)`** added to `supabase/migration.sql` (SECURITY
+  DEFINER, `is_admin()` gate, bcrypt `crypt(pw, gen_salt('bf'))` — same as `create_member`; revoked from anon).
+  **Client ran the SQL in Supabase** and verified grade-only + password-change edits before commit. The id and
+  active flag are not editable here (active = the existing Activate/Deactivate toggle via `set_member_active`).
+  JS: `openMemberEditor`/`commitMemberEdit` call `update_member`; new `.admin-member-actions` wraps Edit +
+  toggle. `npm.cmd run qa` green (9/9).
+
 ## Platform build — approved 3-phase plan (`2026-06-10`)
 
 Plan file: `C:\Users\dupy2\.claude\plans\steady-roaming-yao.md`. Adds the video

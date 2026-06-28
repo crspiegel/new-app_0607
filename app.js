@@ -1291,6 +1291,12 @@ const memberGrade = document.querySelector("#memberGrade");
 const memberName = document.querySelector("#memberName");
 const memberStatus = document.querySelector("#memberStatus");
 const memberList = document.querySelector("#memberList");
+const memberEditModal = document.querySelector("#memberEditModal");
+const memberEditSub = document.querySelector("#memberEditSub");
+const memberEditGrade = document.querySelector("#memberEditGrade");
+const memberEditPw = document.querySelector("#memberEditPw");
+const memberEditStatus = document.querySelector("#memberEditStatus");
+const memberEditSave = document.querySelector("#memberEditSave");
 const signupToggle = document.querySelector("#signupToggle");
 const loginSignup = document.querySelector("#loginSignup");
 const signupForm = document.querySelector("#signupForm");
@@ -1549,6 +1555,15 @@ async function renderMembers() {
     info.textContent = `${m.id} · Grade ${m.grade}${
       m.display_name ? ` · ${m.display_name}` : ""
     }${m.active ? "" : " · (inactive)"}`;
+    const actions = document.createElement("div");
+    actions.className = "admin-member-actions";
+
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "admin-member-edit";
+    edit.textContent = "Edit";
+    edit.addEventListener("click", () => openMemberEditor(m));
+
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "admin-member-toggle";
@@ -1562,7 +1577,8 @@ async function renderMembers() {
       if (tErr) setMemberStatus("Could not update that member.");
       else await renderMembers();
     });
-    row.append(info, toggle);
+    actions.append(edit, toggle);
+    row.append(info, actions);
     memberList.append(row);
   });
 }
@@ -1605,6 +1621,82 @@ if (memberForm) {
     if (memberName) memberName.value = "";
     await renderMembers();
   });
+}
+
+/* ---- Member edit modal (grade + password) ----------------------------- */
+// Per-member editor: change the grade (permission) and optionally reset the
+// password. Backed by the update_member RPC (password is re-hashed server-side;
+// a blank password keeps the current one). The id itself is not editable.
+let editingMemberId = null;
+
+function setMemberEditStatus(text) {
+  if (memberEditStatus) memberEditStatus.textContent = text || "";
+}
+
+function openMemberEditor(m) {
+  editingMemberId = m.id;
+  if (memberEditSub)
+    memberEditSub.textContent = `${m.id}${m.display_name ? ` · ${m.display_name}` : ""}`;
+  if (memberEditGrade) memberEditGrade.value = String(m.grade);
+  if (memberEditPw) memberEditPw.value = "";
+  setMemberEditStatus("");
+  if (memberEditModal) memberEditModal.hidden = false;
+  document.body.classList.add("admin-modal-open");
+  if (memberEditGrade) memberEditGrade.focus();
+}
+
+function closeMemberEditor() {
+  editingMemberId = null;
+  if (memberEditModal) memberEditModal.hidden = true;
+  document.body.classList.remove("admin-modal-open");
+}
+
+async function commitMemberEdit() {
+  if (!editingMemberId) return;
+  if (!sb || !isAdmin) {
+    setMemberEditStatus("Admins only.");
+    return;
+  }
+  const grade = memberEditGrade ? Number(memberEditGrade.value) : 0;
+  const pw = memberEditPw ? memberEditPw.value : "";
+  if (![1, 2, 3].includes(grade)) {
+    setMemberEditStatus("Pick a grade (1-3).");
+    return;
+  }
+  if (pw && !ACCOUNT_RE.test(pw)) {
+    setMemberEditStatus(
+      "Password must be 4+ characters — letters, numbers or symbols, no spaces.",
+    );
+    return;
+  }
+  setMemberEditStatus("Saving…");
+  const { error } = await sb.rpc("update_member", {
+    p_id: editingMemberId,
+    p_grade: grade,
+    p_password: pw ? pw : null,
+  });
+  if (error) {
+    setMemberEditStatus("Could not save: " + (error.message || "error"));
+    return;
+  }
+  const savedId = editingMemberId;
+  closeMemberEditor();
+  setMemberStatus(
+    `Updated "${savedId}" (Grade ${grade})${pw ? " · password changed" : ""}.`,
+  );
+  await renderMembers();
+}
+
+if (memberEditModal) {
+  memberEditModal.querySelectorAll("[data-member-edit-close]").forEach((el) => {
+    el.addEventListener("click", closeMemberEditor);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !memberEditModal.hidden) closeMemberEditor();
+  });
+}
+if (memberEditSave) {
+  memberEditSave.addEventListener("click", commitMemberEdit);
 }
 
 /* ---- Signup visibility (placeholder) ---------------------------------- */

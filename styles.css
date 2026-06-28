@@ -4914,7 +4914,13 @@ body.noaccess-open {
   font-size: 14px;
   color: #333;
 }
-.admin-member-toggle {
+.admin-member-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+.admin-member-toggle,
+.admin-member-edit {
   flex: 0 0 auto;
   height: 34px;
   padding: 0 14px;
@@ -4927,7 +4933,8 @@ body.noaccess-open {
   color: #555;
   cursor: pointer;
 }
-.admin-member-toggle:hover {
+.admin-member-toggle:hover,
+.admin-member-edit:hover {
   border-color: var(--macaw-blue);
   color: var(--macaw-blue);
 }
