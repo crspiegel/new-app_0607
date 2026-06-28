@@ -525,6 +525,24 @@ display:flex; flex-direction:column; justify-content:center}` (tint fills to foo
   - **Deferred / open:** full FOUT removal (font preload/self-host); whether to delete the 18 orphaned
     assets later.
 
+- **Session `2026-06-28` — Level 1 페이지2 요일그리드 단일 표지 (uncommitted):** client wants **Level 1
+  only** to show **one** cover in the 요일그리드 instead of two, keeping the cover's **current size/aspect**
+  and centering it vertically across the 1–4 week span; Levels 2–4 keep both covers. Plan file:
+  `C:\Users\USER\.claude\plans\zippy-discovering-allen.md`.
+  - **Public 페이지2 (CSS only, `styles.css`):** `#contentScreen.level-theme-1 .book-title-card.book-2
+{display:none}` (all breakpoints) + inside `@media (min-width:768px)`: `.book-1{grid-column:1;
+grid-row:1/span 4; align-self:center; aspect-ratio:150/202; min-height:0}` — book-1 reserves the whole
+    left column so the 24 weekday cells auto-flow unchanged, while the cover stays current-size and centered.
+    **No column-width change** → tablet/mobile no-scroll layouts untouched. Mobile (`max-width:767`) keeps the
+    existing full-width banner; the `min-width:768` rule and the `max-width:767` block meet with no gap.
+  - **ADMIN (`app.js` `renderAdminBoard` + `styles.css`):** Level 1 now renders a **single** `.admin-book
+.admin-book--single` block = one cover (`book-1`) + **weeks 1–4** (slot keys `w1..w4` are independent of
+    the cover, so all 4 weeks of video editors remain); other levels keep the 2-block loop. CSS
+    `.admin-book--single .admin-cover{align-self:center}`.
+  - Pre-existing **test cover images ignored** per client (will be re-uploaded; orphaned `book-2` data is fine).
+  - `npm.cmd run qa` green (lint + prettier + 9/9 Playwright). Visual spot-check across PC/tablet/mobile + admin
+    still recommended before commit.
+
 ## Platform build — approved 3-phase plan (`2026-06-10`)
 
 Plan file: `C:\Users\dupy2\.claude\plans\steady-roaming-yao.md`. Adds the video

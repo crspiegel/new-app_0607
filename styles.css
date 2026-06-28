@@ -1712,6 +1712,26 @@ body:not(.subpage-active) main {
   box-shadow: 0 0 0 3px #ffffff;
 }
 
+/* Level 1 only: a single cover instead of two. The second card is dropped at
+   every breakpoint; the first reserves the whole left column (4 rows) so the
+   weekday grid auto-flows unchanged, while the cover itself keeps its current
+   size/proportion (aspect-ratio, not stretched) and sits vertically centered
+   in that 1–4 week span. Column width is untouched, so the tablet/mobile
+   no-scroll layouts are unaffected. Levels 2–4 keep both covers. */
+#contentScreen.level-theme-1 .book-title-card.book-2 {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  #contentScreen.level-theme-1 .book-title-card.book-1 {
+    grid-column: 1;
+    grid-row: 1 / span 4;
+    align-self: center;
+    aspect-ratio: 150 / 202;
+    min-height: 0;
+  }
+}
+
 .week-label {
   display: grid;
   min-height: 86px;
@@ -4909,6 +4929,11 @@ body.noaccess-open {
   grid-template-columns: 150px 1fr;
   gap: 16px;
   align-items: stretch;
+}
+/* Level 1 single-cover block: keep the one cover at its current size and center
+   it vertically against the four week rows instead of stretching it full-height. */
+.admin-book--single .admin-cover {
+  align-self: center;
 }
 .admin-weeks {
   display: flex;

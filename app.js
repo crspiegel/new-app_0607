@@ -1511,15 +1511,24 @@ function renderAdminBoard() {
 
   const grid = document.createElement("div");
   grid.className = "admin-grid";
+
+  // Level 1 mirrors the public page: a single cover (book-1) centered next to
+  // all four weeks, instead of one cover per two-week book block. Slot keys are
+  // w1..w4 (independent of the cover), so the four weeks of editors are kept.
+  const singleCover = adminState.level === "Level 1";
+  const books = singleCover ? [1] : [1, 2];
   let weekNumber = 0;
-  for (let book = 1; book <= 2; book += 1) {
+  books.forEach((book) => {
     const bookBlock = document.createElement("div");
-    bookBlock.className = "admin-book";
+    bookBlock.className = singleCover
+      ? "admin-book admin-book--single"
+      : "admin-book";
     bookBlock.append(adminCoverCard(`book-${book}`));
 
     const weeks = document.createElement("div");
     weeks.className = "admin-weeks";
-    for (let w = 0; w < 2; w += 1) {
+    const weekCount = singleCover ? 4 : 2;
+    for (let w = 0; w < weekCount; w += 1) {
       weekNumber += 1;
       const row = document.createElement("div");
       row.className = "admin-week-row";
@@ -1534,7 +1543,7 @@ function renderAdminBoard() {
     }
     bookBlock.append(weeks);
     grid.append(bookBlock);
-  }
+  });
   adminBoard.append(grid);
 }
 
