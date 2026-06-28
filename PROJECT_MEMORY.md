@@ -540,8 +540,36 @@ grid-row:1/span 4; align-self:center; aspect-ratio:150/202; min-height:0}` — b
     the cover, so all 4 weeks of video editors remain); other levels keep the 2-block loop. CSS
     `.admin-book--single .admin-cover{align-self:center}`.
   - Pre-existing **test cover images ignored** per client (will be re-uploaded; orphaned `book-2` data is fine).
-  - `npm.cmd run qa` green (lint + prettier + 9/9 Playwright). Visual spot-check across PC/tablet/mobile + admin
-    still recommended before commit.
+  - `npm.cmd run qa` green (lint + prettier + 9/9 Playwright). **Committed** `ff4660e`.
+
+- **Session `2026-06-28b` — admin polish + player (Vimeo→Vimeo/YouTube), sample fallback removed:**
+  - **Admin typography:** unified the whole admin body to Google Sans via `#adminScreen, #adminScreen *
+{font-family:var(--font-google-sans)}` (id+universal outranks the per-element Sniglet/Nunito/Inter; no
+    `!important`). Header admin buttons + slot modal left as-is.
+  - **Admin board width / no h-scroll:** the weekday board overflowed because `.admin-week-row`'s `1fr`
+    (=`minmax(auto,1fr)`) couldn't shrink below the `.admin-slot-url` nowrap min-content. Fixed with
+    `minmax(0,1fr)` on `.admin-book` + `.admin-week-row` (base **and** the `max-width:760px` block) +
+    `min-width:0` on `.admin-slot`/`.admin-weeks`. Also widened admin body to use the viewport:
+    `#adminScreen .admin-inner{width:100%; max-width:var(--site-max-width); margin-inline:auto;
+padding-inline:max(50px,4vw)}` (≥50px gutters, 1600 cap).
+  - **Admin sections split into tabs:** top-center **plain-text menu** (`.admin-menu`/`.admin-menu-btn`,
+    underline-on-active — deliberately not pill buttons, to read differently from the kid-facing header nav)
+    toggles `#adminViewContent` (level/month + board) vs `#adminViewMembers` (member mgmt). JS
+    `setAdminView(view)` flips `[hidden]` + active class + `#adminTitle`; `openAdmin()` defaults to content.
+    `.admin-view[hidden]{display:none}` guard needed because `.admin-view` sets `display:flex`.
+  - **Video player now Vimeo OR YouTube.** Refactored the Vimeo-only player to a uniform `activePlayer`
+    interface (play/pause/setCurrentTime/setVolume/setLoop/destroy). `parseVideoSource()` detects
+    youtube.com/youtu.be/embed/shorts/live → `mountYouTube` (IFrame API, lazy-loaded; custom controls drive
+    it; **250ms poll** for progress since YT has no timeupdate; loop handled on ENDED); else `mountVimeo`
+    (unchanged behavior). `#vpClickLayer` over the iframe keeps native chrome inert. Admin URL field label →
+    "Vimeo or YouTube".
+  - **Sample-video fallback REMOVED.** `parseVideoSource` returns null for empty; `openSlot` shows a new
+    **"Coming soon!"** popup (`#comingSoonModal`, reuses no-access shell, English copy) instead of playing
+    `SAMPLE_VIMEO_ID` (constant deleted).
+  - **DB:** client cleared all stored video URLs via Supabase SQL `update content_pages set videos='{}'::jsonb`
+    (covers preserved). Content lives in `content_pages` (videos/covers jsonb), read by anon key, written by
+    admin (RLS). Supabase config in `supabase-config.js`.
+  - `npm.cmd run qa` green (9/9). Client verified Vimeo+YouTube playback + empty-slot popup before commit.
 
 ## Platform build — approved 3-phase plan (`2026-06-10`)
 

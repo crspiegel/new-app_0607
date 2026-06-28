@@ -695,8 +695,28 @@
         <section class="screen" id="adminScreen" aria-labelledby="adminTitle">
           <div class="section-box section-white admin-section">
             <div class="section-inner admin-inner">
+              <nav class="admin-menu" aria-label="Admin sections">
+                <button
+                  type="button"
+                  class="admin-menu-btn active"
+                  data-admin-view="content"
+                >
+                  Content
+                </button>
+                <button
+                  type="button"
+                  class="admin-menu-btn"
+                  data-admin-view="members"
+                >
+                  Members
+                </button>
+              </nav>
               <div class="admin-bar">
                 <h1 class="admin-title" id="adminTitle">Content Manager</h1>
+              </div>
+
+              <!-- Content view: weekday board + the level/month it edits. -->
+              <div class="admin-view" id="adminViewContent">
                 <div class="admin-controls">
                   <label class="admin-select">
                     <span>Level</span>
@@ -712,71 +732,73 @@
                     aria-live="polite"
                   ></span>
                 </div>
+                <p class="admin-hint">
+                  Click a button to set its video URL. Drag an image onto a
+                  cover card (or click it) to upload the book cover. Current
+                  values are shown in place.
+                </p>
+                <div class="admin-board admin-gray" id="adminBoard"></div>
               </div>
-              <p class="admin-hint">
-                Click a button to set its video URL. Drag an image onto a cover
-                card (or click it) to upload the book cover. Current values are
-                shown in place.
-              </p>
-              <div class="admin-board admin-gray" id="adminBoard"></div>
 
-              <!-- Member management: create / list / activate accounts (grades
+              <!-- Members view: create / list / activate accounts (grades
                    1-3). Backed by the admin-only create_member / set_member_active
                    RPCs; the password hash never leaves the database. -->
-              <div class="admin-members">
-                <h2 class="admin-subtitle">Members</h2>
-                <form class="admin-member-form" id="memberForm" novalidate>
-                  <input
-                    class="admin-member-input"
-                    type="text"
-                    id="memberId"
-                    autocomplete="off"
-                    placeholder="ID (4+ chars)"
-                    aria-label="Member ID"
-                  />
-                  <input
-                    class="admin-member-input"
-                    type="text"
-                    id="memberPw"
-                    autocomplete="off"
-                    placeholder="Password (4+ chars)"
-                    aria-label="Member password"
-                  />
-                  <select
-                    class="admin-member-select"
-                    id="memberGrade"
-                    aria-label="Grade"
-                  >
-                    <option value="1">Grade 1</option>
-                    <option value="2">Grade 2</option>
-                    <option value="3">Grade 3</option>
-                  </select>
-                  <input
-                    class="admin-member-input"
-                    type="text"
-                    id="memberName"
-                    autocomplete="off"
-                    placeholder="Name (optional)"
-                    aria-label="Display name"
-                  />
-                  <button class="admin-member-add" type="submit">
-                    Add / Update
-                  </button>
-                </form>
-                <p
-                  class="admin-status"
-                  id="memberStatus"
-                  aria-live="polite"
-                ></p>
-                <div class="admin-member-list" id="memberList"></div>
+              <div class="admin-view" id="adminViewMembers" hidden>
+                <div class="admin-members">
+                  <h2 class="admin-subtitle">Members</h2>
+                  <form class="admin-member-form" id="memberForm" novalidate>
+                    <input
+                      class="admin-member-input"
+                      type="text"
+                      id="memberId"
+                      autocomplete="off"
+                      placeholder="ID (4+ chars)"
+                      aria-label="Member ID"
+                    />
+                    <input
+                      class="admin-member-input"
+                      type="text"
+                      id="memberPw"
+                      autocomplete="off"
+                      placeholder="Password (4+ chars)"
+                      aria-label="Member password"
+                    />
+                    <select
+                      class="admin-member-select"
+                      id="memberGrade"
+                      aria-label="Grade"
+                    >
+                      <option value="1">Grade 1</option>
+                      <option value="2">Grade 2</option>
+                      <option value="3">Grade 3</option>
+                    </select>
+                    <input
+                      class="admin-member-input"
+                      type="text"
+                      id="memberName"
+                      autocomplete="off"
+                      placeholder="Name (optional)"
+                      aria-label="Display name"
+                    />
+                    <button class="admin-member-add" type="submit">
+                      Add / Update
+                    </button>
+                  </form>
+                  <p
+                    class="admin-status"
+                    id="memberStatus"
+                    aria-live="polite"
+                  ></p>
+                  <div class="admin-member-list" id="memberList"></div>
 
-                <!-- Signup visibility (placeholder feature): when ON, a Sign-up
+                  <!-- Signup visibility (placeholder feature): when ON, a Sign-up
                      entry point shows on the login page. Accounts are still
                      created by admins here. -->
-                <label class="admin-signup-toggle">
-                  <input type="checkbox" id="signupToggle" />
-                  <span>Show the public Sign-up form on the login page</span>
-                </label>
+                  <label class="admin-signup-toggle">
+                    <input type="checkbox" id="signupToggle" />
+                    <span>Show the public Sign-up form on the login page</span>
+                  </label>
+                </div>
               </div>
             </div>
           </div>
@@ -1037,6 +1059,28 @@
       </div>
     </div>
 
+    <!-- "Coming soon" popup — shown when a lesson/song button has no video URL
+         yet (replaces the old sample-video fallback). Reuses the no-access
+         shell. -->
+    <div class="noaccess-modal" id="comingSoonModal" hidden>
+      <div class="noaccess-overlay" data-comingsoon-close></div>
+      <div
+        class="noaccess-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="comingSoonTitle"
+      >
+        <div class="noaccess-emoji" aria-hidden="true">&#127916;</div>
+        <h2 class="noaccess-title" id="comingSoonTitle">Coming soon!</h2>
+        <p class="noaccess-text">
+          This video isn't ready yet. Check back soon!
+        </p>
+        <button type="button" class="noaccess-ok" data-comingsoon-close>
+          OK
+        </button>
+      </div>
+    </div>
+
     <!-- Admin: set a slot's video URL. Prefilled with the current value. -->
     <div class="admin-modal" id="adminSlotModal" hidden>
       <div class="admin-modal-overlay" data-admin-close></div>
@@ -1049,13 +1093,13 @@
         <h2 class="admin-modal-title" id="adminSlotTitle"></h2>
         <p class="admin-modal-sub" id="adminSlotSub"></p>
         <label class="admin-modal-label" for="adminSlotInput"
-          >Video URL (Vimeo)</label
+          >Video URL (Vimeo or YouTube)</label
         >
         <input
           class="admin-modal-input"
           id="adminSlotInput"
           type="text"
-          placeholder="https://vimeo.com/123456789  or  123456789"
+          placeholder="https://vimeo.com/123456789  or  https://youtu.be/abc123XYZ45"
         />
         <div class="admin-modal-actions">
           <button

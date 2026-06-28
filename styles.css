@@ -4701,11 +4701,36 @@ body.noaccess-open {
 }
 
 /* Admin screen shell. */
+
+/* Admin body area: unify ALL text (title, hint, members, board, slot names,
+   etc.) to Google Sans so the admin tool reads distinctly from the kid-facing
+   site. The id + universal selector outranks the per-element class fonts below
+   (Sniglet / Nunito / Inter) without needing !important. Scoped to #adminScreen,
+   so the header admin buttons and the slot-editor modal are left as-is. */
+#adminScreen,
+#adminScreen * {
+  font-family: var(--font-google-sans);
+}
+
 .admin-inner {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
+
+/* Admin body uses (nearly) the full viewport width instead of the site's 80%
+   content width, so the weekday board has room and never needs a horizontal
+   scrollbar. Capped at the site max and centered, with a >=50px side gutter.
+   Overrides only the inline padding of .section-inner (higher specificity);
+   the block padding from .section-inner is kept. Admin-only via #adminScreen. */
+#adminScreen .admin-inner {
+  width: 100%;
+  max-width: var(--site-max-width);
+  margin-inline: auto;
+  padding-right: max(50px, 4vw);
+  padding-left: max(50px, 4vw);
+}
+
 .admin-bar {
   display: flex;
   flex-wrap: wrap;
@@ -4713,6 +4738,46 @@ body.noaccess-open {
   justify-content: space-between;
   gap: 16px;
 }
+
+/* Admin section menu: centered, plain-text tabs at the very top of the admin
+   body that switch between the Content and Members panels (each a .admin-view).
+   Deliberately text-only (no pill/box) so it reads differently from the
+   kid-facing header nav buttons. The .admin-view[hidden] guard keeps a hidden
+   panel collapsed even though .admin-view sets display:flex. */
+.admin-menu {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+}
+.admin-menu-btn {
+  padding: 2px 2px 6px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #9a9a9a;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.admin-menu-btn:hover {
+  color: var(--macaw-blue);
+}
+.admin-menu-btn.active {
+  color: var(--ink);
+  border-bottom-color: var(--macaw-blue);
+}
+.admin-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.admin-view[hidden] {
+  display: none;
+}
+
 .admin-title {
   margin: 0;
   font-family: "Sniglet", sans-serif;
@@ -4926,7 +4991,7 @@ body.noaccess-open {
 }
 .admin-book {
   display: grid;
-  grid-template-columns: 150px 1fr;
+  grid-template-columns: 150px minmax(0, 1fr);
   gap: 16px;
   align-items: stretch;
 }
@@ -4937,13 +5002,14 @@ body.noaccess-open {
 }
 .admin-weeks {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 10px;
   justify-content: center;
 }
 .admin-week-row {
   display: grid;
-  grid-template-columns: 70px repeat(5, 1fr);
+  grid-template-columns: 70px repeat(5, minmax(0, 1fr));
   gap: 8px;
   align-items: stretch;
 }
@@ -4961,6 +5027,7 @@ body.noaccess-open {
 /* Editable slot button. */
 .admin-slot {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 3px;
   min-height: 58px;
@@ -5155,6 +5222,6 @@ body.admin-modal-open {
     min-height: 120px;
   }
   .admin-week-row {
-    grid-template-columns: 56px repeat(5, 1fr);
+    grid-template-columns: 56px repeat(5, minmax(0, 1fr));
   }
 }

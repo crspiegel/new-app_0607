@@ -438,8 +438,6 @@ function renderCalendarV3() {
    Level 1 / March content page — the check happens at click time so the
    shared #contentScreen markup stays inert on every other level/month. */
 
-const SAMPLE_VIMEO_ID = 210024645;
-
 const videoModal = document.querySelector("#videoModal");
 const vpFrame = document.querySelector("#vpFrame");
 const vpClickLayer = document.querySelector("#vpClickLayer");
@@ -463,7 +461,14 @@ const videoPlayerCard = videoModal
   ? videoModal.querySelector(".video-player-card")
   : null;
 
-let vimeoPlayer = null;
+// The active player exposes a small uniform interface — play(), pause(),
+// setCurrentTime(s), setVolume(0..1), setLoop(bool), destroy() — so the shared
+// transport controls below work whether the source is a Vimeo or a YouTube
+// video. For Vimeo it's the Vimeo.Player instance directly; for YouTube it's a
+// thin adapter over the IFrame API (see makeYouTubeAdapter).
+let activePlayer = null;
+let ytPoll = null; // YouTube has no timeupdate event → poll current time
+let ytApiPromise = null; // resolves once the YouTube IFrame API has loaded
 let vpLoopOn = false;
 let vpPlaying = false;
 let vpVolumeLevel = 1;
@@ -474,15 +479,23 @@ let vpCurrentSeconds = 0;
 let vpDragging = false;
 let vpHideTimer = null;
 
-// Resolve a stored video value into Vimeo Player options. Accepts a numeric id,
-// a numeric-string id, or a full Vimeo URL; falls back to the sample video when
-// a slot has no URL yet so every page stays playable during rollout.
-function resolveVimeoSource(source) {
-  if (!source) return { id: SAMPLE_VIMEO_ID };
-  if (typeof source === "number") return { id: source };
+// Matches the 11-char video id in any common YouTube URL shape
+// (watch?v=, youtu.be/, embed/, shorts/, live/).
+const YT_ID_RE =
+  /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/;
+
+// Classify a stored video value. Returns null for an empty slot (no sample
+// fallback — empty means "not ready yet", handled in openSlot). YouTube URLs
+// resolve to { kind: "youtube", id }; everything else stays Vimeo (a numeric id
+// or a full Vimeo URL).
+function parseVideoSource(source) {
+  if (!source) return null;
   const str = String(source).trim();
-  if (/^\d+$/.test(str)) return { id: Number(str) };
-  return { url: str };
+  if (!str) return null;
+  const yt = str.match(YT_ID_RE);
+  if (yt) return { kind: "youtube", id: yt[1] };
+  if (/^\d+$/.test(str)) return { kind: "vimeo", id: Number(str) };
+  return { kind: "vimeo", url: str };
 }
 
 // Current viewer grade. Phase 3 sets state.grade on login; until then everyone
@@ -492,14 +505,18 @@ function isBlockedByGrade() {
 }
 
 // Single entry point for opening a content slot's video. Grade 3 is screen-
-// gated with the cute popup; everyone else plays the slot's URL (or the sample
-// fallback). Works on every level/month.
+// gated with the cute popup; an empty slot shows the "coming soon" popup (no
+// sample fallback); otherwise the slot's URL plays. Works on every level/month.
 function openSlot(slot, label) {
   if (isBlockedByGrade()) {
     showNoAccessPopup();
     return;
   }
   const url = getVideoUrl(state.level, state.month, slot);
+  if (!url) {
+    showComingSoon();
+    return;
+  }
   openVideoPlayer(label, url);
 }
 
@@ -537,7 +554,7 @@ function seekTo(seconds) {
   vpCurrentSeconds = clamped;
   setVpProgress((clamped / vpDuration) * 100);
   setVpTimes(clamped, vpDuration);
-  if (vimeoPlayer) vimeoPlayer.setCurrentTime(clamped).catch(() => {});
+  if (activePlayer) activePlayer.setCurrentTime(clamped).catch(() => {});
 }
 
 function setVpEnded(ended) {
@@ -584,8 +601,8 @@ function applyVolume(volume, { commit = true } = {}) {
   vpVolumeLevel = Math.max(0, Math.min(1, volume));
   if (vpVolumeLevel > 0) vpLastVolume = vpVolumeLevel;
   reflectVolumeUI();
-  if (commit && vimeoPlayer)
-    vimeoPlayer.setVolume(vpVolumeLevel).catch(() => {});
+  if (commit && activePlayer)
+    activePlayer.setVolume(vpVolumeLevel).catch(() => {});
 }
 
 // On mobile portrait the volume slider is a tap-to-reveal VERTICAL popover above
@@ -635,12 +652,30 @@ function setVpPlaying(playing) {
 }
 
 function togglePlayback() {
-  if (!vimeoPlayer) return;
+  if (!activePlayer) return;
   if (vpPlaying) {
-    vimeoPlayer.pause().catch(() => {});
+    activePlayer.pause().catch(() => {});
   } else {
-    vimeoPlayer.play().catch(() => {});
+    activePlayer.play().catch(() => {});
   }
+}
+
+// Tear down whatever player is mounted (Vimeo instance or YouTube adapter) and
+// clear the frame, so the next mount starts clean.
+function teardownPlayer() {
+  if (ytPoll) {
+    window.clearInterval(ytPoll);
+    ytPoll = null;
+  }
+  if (activePlayer) {
+    try {
+      Promise.resolve(activePlayer.destroy()).catch(() => {});
+    } catch {
+      /* ignore */
+    }
+    activePlayer = null;
+  }
+  if (vpFrame) vpFrame.innerHTML = "";
 }
 
 function openVideoPlayer(label, source) {
@@ -656,57 +691,185 @@ function openVideoPlayer(label, source) {
   vpDuration = 0;
   vpCurrentSeconds = 0;
 
-  if (window.Vimeo && window.Vimeo.Player) {
-    if (vimeoPlayer) {
-      vimeoPlayer.destroy().catch(() => {});
-      vimeoPlayer = null;
-    }
-    vpFrame.innerHTML = "";
-    vimeoPlayer = new window.Vimeo.Player(vpFrame, {
-      ...resolveVimeoSource(source),
-      controls: false,
-      loop: vpLoopOn,
-      responsive: false,
-    });
-    vimeoPlayer
-      .getDuration()
-      .then((duration) => {
-        vpDuration = duration;
-        setVpTimes(0, duration);
-      })
-      .catch(() => {});
-    vimeoPlayer.on("timeupdate", (data) => {
-      vpDuration = data.duration || vpDuration;
-      if (!vpDragging) {
-        vpCurrentSeconds = data.seconds || 0;
-        setVpProgress((data.percent || 0) * 100);
-        setVpTimes(data.seconds, vpDuration);
-      }
-    });
-    // Buffered (loaded) amount, for the lighter track indicator.
-    vimeoPlayer.on("progress", (data) => {
-      setVpBuffer((data.percent || 0) * 100);
-    });
-    // Apply the persisted volume to the fresh player and keep the UI in sync.
-    vimeoPlayer.setVolume(vpVolumeLevel).catch(() => {});
-    vimeoPlayer.on("volumechange", (data) => {
-      vpVolumeLevel = data.volume;
-      if (vpVolumeLevel > 0) vpLastVolume = vpVolumeLevel;
-      reflectVolumeUI();
-    });
-    vimeoPlayer.on("play", () => {
-      setVpPlaying(true);
-      setVpEnded(false);
-    });
-    vimeoPlayer.on("pause", () => setVpPlaying(false));
-    // On end, cover Vimeo's related-videos screen with our own end overlay.
-    vimeoPlayer.on("ended", () => {
-      setVpPlaying(false);
-      setVpEnded(true);
-    });
-    vimeoPlayer.setLoop(vpLoopOn).catch(() => {});
-    vimeoPlayer.play().catch(() => {});
+  teardownPlayer();
+
+  const parsed = parseVideoSource(source);
+  if (!parsed) return; // empty is handled by openSlot, but stay safe
+  if (parsed.kind === "youtube") {
+    mountYouTube(parsed.id);
+  } else {
+    mountVimeo(parsed);
   }
+}
+
+// Mount a Vimeo video and wire its events to the shared transport UI.
+function mountVimeo(parsed) {
+  if (!(window.Vimeo && window.Vimeo.Player)) return;
+  vpFrame.innerHTML = "";
+  const player = new window.Vimeo.Player(vpFrame, {
+    ...(parsed.id != null ? { id: parsed.id } : { url: parsed.url }),
+    controls: false,
+    loop: vpLoopOn,
+    responsive: false,
+  });
+  activePlayer = player;
+  player
+    .getDuration()
+    .then((duration) => {
+      vpDuration = duration;
+      setVpTimes(0, duration);
+    })
+    .catch(() => {});
+  player.on("timeupdate", (data) => {
+    vpDuration = data.duration || vpDuration;
+    if (!vpDragging) {
+      vpCurrentSeconds = data.seconds || 0;
+      setVpProgress((data.percent || 0) * 100);
+      setVpTimes(data.seconds, vpDuration);
+    }
+  });
+  // Buffered (loaded) amount, for the lighter track indicator.
+  player.on("progress", (data) => {
+    setVpBuffer((data.percent || 0) * 100);
+  });
+  // Apply the persisted volume to the fresh player and keep the UI in sync.
+  player.setVolume(vpVolumeLevel).catch(() => {});
+  player.on("volumechange", (data) => {
+    vpVolumeLevel = data.volume;
+    if (vpVolumeLevel > 0) vpLastVolume = vpVolumeLevel;
+    reflectVolumeUI();
+  });
+  player.on("play", () => {
+    setVpPlaying(true);
+    setVpEnded(false);
+  });
+  player.on("pause", () => setVpPlaying(false));
+  // On end, cover Vimeo's related-videos screen with our own end overlay.
+  player.on("ended", () => {
+    setVpPlaying(false);
+    setVpEnded(true);
+  });
+  player.setLoop(vpLoopOn).catch(() => {});
+  player.play().catch(() => {});
+}
+
+// Lazy-load the YouTube IFrame API once; resolves when window.YT is ready.
+function loadYouTubeApi() {
+  if (window.YT && window.YT.Player) return Promise.resolve();
+  if (ytApiPromise) return ytApiPromise;
+  ytApiPromise = new Promise((resolve) => {
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof prev === "function") prev();
+      resolve();
+    };
+    if (!document.querySelector("script[data-yt-api]")) {
+      const s = document.createElement("script");
+      s.src = "https://www.youtube.com/iframe_api";
+      s.setAttribute("data-yt-api", "");
+      document.head.appendChild(s);
+    }
+  });
+  return ytApiPromise;
+}
+
+// Wrap a YT.Player in the same small interface the transport controls expect.
+// Each call is fire-and-forget but returns a thenable so the .then()/.catch()
+// chains in the handlers keep working. Loop is driven by vpLoopOn in the ENDED
+// state change (the IFrame API's native loop needs a playlist).
+function makeYouTubeAdapter(yt) {
+  const safe = (fn) => {
+    try {
+      fn();
+    } catch {
+      /* player may not be ready yet */
+    }
+    return Promise.resolve();
+  };
+  return {
+    play: () => safe(() => yt.playVideo()),
+    pause: () => safe(() => yt.pauseVideo()),
+    setCurrentTime: (s) => safe(() => yt.seekTo(s, true)),
+    setVolume: (v) => safe(() => yt.setVolume(Math.round(v * 100))),
+    setLoop: () => Promise.resolve(),
+    destroy: () => safe(() => yt.destroy()),
+  };
+}
+
+// Mount a YouTube video. The native chrome is hidden (controls:0) and the
+// #vpClickLayer sits over the iframe, so our own controls drive playback.
+function mountYouTube(videoId) {
+  loadYouTubeApi().then(() => {
+    if (!vpFrame || videoModal.hidden) return;
+    vpFrame.innerHTML = "";
+    const host = document.createElement("div");
+    vpFrame.appendChild(host);
+    const yt = new window.YT.Player(host, {
+      videoId,
+      width: "100%",
+      height: "100%",
+      playerVars: {
+        autoplay: 1,
+        controls: 0,
+        rel: 0,
+        modestbranding: 1,
+        playsinline: 1,
+        fs: 0,
+        disablekb: 1,
+        iv_load_policy: 3,
+      },
+      events: {
+        onReady: () => {
+          try {
+            yt.setVolume(Math.round(vpVolumeLevel * 100));
+            const d = yt.getDuration();
+            if (d) {
+              vpDuration = d;
+              setVpTimes(0, d);
+            }
+            yt.playVideo();
+          } catch {
+            /* ignore */
+          }
+        },
+        onStateChange: (event) => {
+          const S = window.YT.PlayerState;
+          if (event.data === S.PLAYING) {
+            setVpPlaying(true);
+            setVpEnded(false);
+          } else if (event.data === S.PAUSED) {
+            setVpPlaying(false);
+          } else if (event.data === S.ENDED) {
+            if (vpLoopOn) {
+              try {
+                yt.seekTo(0, true);
+                yt.playVideo();
+              } catch {
+                /* ignore */
+              }
+            } else {
+              setVpPlaying(false);
+              setVpEnded(true);
+            }
+          }
+        },
+      },
+    });
+    activePlayer = makeYouTubeAdapter(yt);
+    // YouTube has no timeupdate event — poll position/buffer for the progress UI.
+    ytPoll = window.setInterval(() => {
+      if (!yt || typeof yt.getCurrentTime !== "function" || vpDragging) return;
+      const dur = yt.getDuration() || vpDuration;
+      vpDuration = dur;
+      const cur = yt.getCurrentTime() || 0;
+      vpCurrentSeconds = cur;
+      if (dur > 0) setVpProgress((cur / dur) * 100);
+      setVpTimes(cur, dur);
+      if (typeof yt.getVideoLoadedFraction === "function") {
+        setVpBuffer(yt.getVideoLoadedFraction() * 100);
+      }
+    }, 250);
+  });
 }
 
 function closeVideoPlayer() {
@@ -714,13 +877,7 @@ function closeVideoPlayer() {
   if (document.fullscreenElement) {
     document.exitFullscreen().catch(() => {});
   }
-  if (vimeoPlayer) {
-    vimeoPlayer.destroy().catch(() => {});
-    vimeoPlayer = null;
-  }
-  if (vpFrame) {
-    vpFrame.innerHTML = "";
-  }
+  teardownPlayer();
   videoModal.hidden = true;
   document.body.classList.remove("video-open");
   closeVolume();
@@ -751,18 +908,18 @@ if (videoModal) {
   // Replay from the end overlay: restart from 0 and hide the overlay.
   vpReplay.addEventListener("click", () => {
     setVpEnded(false);
-    if (!vimeoPlayer) return;
-    vimeoPlayer
+    if (!activePlayer) return;
+    activePlayer
       .setCurrentTime(0)
-      .then(() => vimeoPlayer.play())
+      .then(() => activePlayer.play())
       .catch(() => {});
   });
 
   vpStop.addEventListener("click", () => {
-    if (!vimeoPlayer) return;
-    vimeoPlayer
+    if (!activePlayer) return;
+    activePlayer
       .pause()
-      .then(() => vimeoPlayer.setCurrentTime(0))
+      .then(() => activePlayer.setCurrentTime(0))
       .catch(() => {});
     setVpProgress(0);
     setVpTimes(0, vpDuration);
@@ -771,7 +928,7 @@ if (videoModal) {
   vpLoop.addEventListener("click", () => {
     vpLoopOn = !vpLoopOn;
     vpLoop.setAttribute("aria-pressed", String(vpLoopOn));
-    if (vimeoPlayer) vimeoPlayer.setLoop(vpLoopOn).catch(() => {});
+    if (activePlayer) activePlayer.setLoop(vpLoopOn).catch(() => {});
   });
 
   // Speaker button. Mobile portrait: tap toggles the vertical volume popover
@@ -890,7 +1047,7 @@ if (videoModal) {
     setVpTimes(ratio * vpDuration, vpDuration);
   };
   vpProgress.addEventListener("pointerdown", (event) => {
-    if (!vimeoPlayer || !vpDuration) return;
+    if (!activePlayer || !vpDuration) return;
     vpDragging = true;
     vpProgress.classList.add("is-dragging");
     vpProgress.setPointerCapture(event.pointerId);
@@ -904,8 +1061,8 @@ if (videoModal) {
     vpDragging = false;
     vpProgress.classList.remove("is-dragging");
     const ratio = ratioFromEvent(event);
-    if (vimeoPlayer && vpDuration) {
-      vimeoPlayer.setCurrentTime(ratio * vpDuration).catch(() => {});
+    if (activePlayer && vpDuration) {
+      activePlayer.setCurrentTime(ratio * vpDuration).catch(() => {});
     }
   };
   vpProgress.addEventListener("pointerup", endDrag);
@@ -913,7 +1070,7 @@ if (videoModal) {
 
   // Keyboard seeking on the slider: ±5s with arrows, Home/End to jump.
   vpProgress.addEventListener("keydown", (event) => {
-    if (!vimeoPlayer || !vpDuration) return;
+    if (!activePlayer || !vpDuration) return;
     if (event.key === "ArrowRight") seekTo(vpCurrentSeconds + 5);
     else if (event.key === "ArrowLeft") seekTo(vpCurrentSeconds - 5);
     else if (event.key === "Home") seekTo(0);
@@ -957,6 +1114,35 @@ if (noAccessModal) {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !noAccessModal.hidden) {
       hideNoAccessPopup();
+    }
+  });
+}
+
+/* ---- "Coming soon" popup (empty slot) ----------------------------------
+   Shown when a lesson/song button has no video URL yet — replaces the old
+   sample-video fallback so an empty slot reads as "not ready" instead of
+   silently playing a placeholder. Reuses the no-access modal styling. */
+const comingSoonModal = document.querySelector("#comingSoonModal");
+
+function showComingSoon() {
+  if (!comingSoonModal) return;
+  comingSoonModal.hidden = false;
+  document.body.classList.add("noaccess-open");
+}
+
+function hideComingSoon() {
+  if (!comingSoonModal) return;
+  comingSoonModal.hidden = true;
+  document.body.classList.remove("noaccess-open");
+}
+
+if (comingSoonModal) {
+  comingSoonModal.querySelectorAll("[data-comingsoon-close]").forEach((el) => {
+    el.addEventListener("click", hideComingSoon);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !comingSoonModal.hidden) {
+      hideComingSoon();
     }
   });
 }
@@ -1293,6 +1479,7 @@ function openAdmin() {
     return;
   }
   populateAdminSelectors();
+  setAdminView("content");
   renderAdminBoard();
   renderMembers();
   refreshSignupUI();
@@ -1301,6 +1488,33 @@ function openAdmin() {
 }
 
 if (adminNavBtn) adminNavBtn.addEventListener("click", openAdmin);
+
+/* ---- Admin section tabs (Content / Members) --------------------------- */
+// In-page tabs (no separate hash route): the top menu toggles which admin
+// panel is visible. Both panels stay populated; only their visibility flips.
+const adminTitle = document.querySelector("#adminTitle");
+const adminMenuButtons = document.querySelectorAll(".admin-menu-btn");
+const adminViews = {
+  content: document.querySelector("#adminViewContent"),
+  members: document.querySelector("#adminViewMembers"),
+};
+const adminViewTitles = { content: "Content Manager", members: "Members" };
+
+function setAdminView(view) {
+  Object.entries(adminViews).forEach(([name, el]) => {
+    if (el) el.hidden = name !== view;
+  });
+  adminMenuButtons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.adminView === view);
+  });
+  if (adminTitle && adminViewTitles[view]) {
+    adminTitle.textContent = adminViewTitles[view];
+  }
+}
+
+adminMenuButtons.forEach((btn) => {
+  btn.addEventListener("click", () => setAdminView(btn.dataset.adminView));
+});
 
 /* ---- Member management (admin only) ----------------------------------- */
 
