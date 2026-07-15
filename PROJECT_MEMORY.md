@@ -38,6 +38,9 @@ deploying for client review. The app is **live**: https://new-app0607.vercel.app
   deploy. **Static, no build** (`vercel.json` + `.vercelignore`; see `NOTES.md` for why no Vite build).
 - **Accounts:** GitHub + Vercel are **`crspiegel` / crspiegel@gmail.com** (NOT any `wechange2023*`
   account). `git push` works (gh is the credential helper via `gh auth setup-git`).
+- **Custom domain:** `cambridgereading.com` (registered at **Gabia**), connected `2026-07-15` via
+  Gabia DNS records (nameservers unchanged). `www` = primary, apex → `www` (308). Live vercel.app URL
+  (`new-app0607.vercel.app`) still works. Details/values → `NOTES.md` "Custom domain (Gabia + Vercel)".
 
 ## Design changes done so far
 
@@ -682,7 +685,24 @@ Delivery is **phased**; content access gate is **UI-level** (grade 3 → cute po
     member-create admin guard. `npm.cmd run qa` green. ⚠ **Manual test needs real admin creds**: create
     grade1/2/3 members → log in as each (grade3=popup, grade1/2=play); flip the signup toggle.
 
-### ▶ RESUME HERE (`2026-06-12`)
+### ▶ RESUME HERE (`2026-07-15`)
+
+- **Custom domain `cambridgereading.com` CONNECTED (`2026-07-15`).** Registered at **Gabia**;
+  connected to Vercel project `new-app_0607` via the **DNS-record method** (Gabia nameservers kept,
+  no NS change). Vercel has both `cambridgereading.com` (apex) + `www.cambridgereading.com` added;
+  **`www` is the primary (Production), apex 308-redirects to `www`**. Gabia DNS records saved:
+  `A @ → 216.198.79.1` and `CNAME www → e17453d2652fa5ed.vercel-dns-017.com.` (TTL 1800). DNS already
+  resolves correctly on 8.8.8.8. **Awaiting:** Vercel to flip to "Valid Configuration" + auto-issue
+  SSL (user to click **Refresh** in Settings→Domains; then verify `https://cambridgereading.com` +
+  `https://www.cambridgereading.com` load with a lock). See `NOTES.md` → "Custom domain (Gabia + Vercel)".
+- **Local repo synced to GitHub (`2026-07-15`).** Local `master` was 11 commits behind + had
+  divergent **uncommitted** local work (6 files, +937 lines, NOT on GitHub). Fast-forwarded local to
+  `origin/master` (`6c456ea`). The divergent local work was **backed up** before overwrite:
+  `git stash@{0}` ("backup-local-uncommitted-before-github-sync") + a patch file in the session
+  scratchpad (`local-backup-20260715.patch`). **OPEN DECISION:** confirm with user whether that
+  stashed local work is obsolete (→ `git stash drop`) or must be recovered.
+
+### ▶ Session log (`2026-06-12`)
 
 - **All responsive/design work COMMITTED + DEPLOYED** (`a762cc7`, pushed to `master`, Vercel live).
   Rounds 1–17: mobile-portrait (header icons, Back/Next, video vertical-volume popover) + tablet

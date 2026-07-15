@@ -28,6 +28,30 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 - The device-auth login flow (`vercel login`, `gh auth login`) reuses the **browser session** —
   log the wrong account out of the site in the browser first, or it re-authorizes the wrong one.
 
+## Custom domain (Gabia + Vercel)
+
+- **Domain:** `cambridgereading.com`, registered at **Gabia** (gabia.com). Connected to Vercel
+  project `new-app_0607` on `2026-07-15` using the **DNS-record method** — Gabia nameservers kept,
+  only A/CNAME records added. (Nameserver method was NOT used; only needed for wildcard subdomains.)
+- **Exact records set in Gabia** (My가비아 → 도메인 관리 → DNS 정보 → DNS 관리):
+  - `A` · host `@` · value **`216.198.79.1`** · TTL 1800
+  - `CNAME` · host `www` · value **`e17453d2652fa5ed.vercel-dns-017.com.`** · TTL 1800
+- **Use Vercel's NEW values, not the old ones from memory.** Vercel migrated IP ranges: apex A is now
+  **`216.198.79.1`** (old `76.76.21.21` still works but is deprecated), and the CNAME is now a
+  **project-specific** host (`e17453d2652fa5ed.vercel-dns-017.com.`), NOT the old universal
+  `cname.vercel-dns.com`. **Always copy the exact value shown in Vercel → Settings → Domains** rather
+  than reusing a remembered value — the CNAME differs per project.
+- **Vercel domain config:** both `cambridgereading.com` + `www.cambridgereading.com` added. `www` is
+  **primary (Production)**; apex **308-redirects to `www`** (Vercel default). No extra Vercel setup
+  beyond adding the domains — SSL is auto-issued once DNS verifies.
+- **Verify propagation from the CLI** (Git Bash) before waiting on the dashboard:
+  `nslookup -type=A cambridgereading.com 8.8.8.8` and
+  `nslookup -type=CNAME www.cambridgereading.com 8.8.8.8`. TTL 1800 (30 min) vs 3600 (1 hr) only
+  affects DNS cache duration — either works; shorter TTL just makes later edits propagate faster.
+- **Gotchas:** apex (`@`) cannot take a CNAME (DNS rule) → must be an A record. Remove any pre-existing
+  Gabia parking `@`/`www` records first to avoid conflicts. Leave MX/TXT (email) records untouched —
+  adding A/CNAME doesn't affect mail.
+
 ## Fonts & typography
 
 - **Verify a font/weight actually exists and renders — never assume.**
