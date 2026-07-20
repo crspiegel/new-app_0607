@@ -389,65 +389,13 @@
                 </button>
               </div>
 
-              <div class="content-toolbar" aria-label="Lesson content types">
-                <button
-                  type="button"
-                  class="content-type active"
-                  data-slot="opening"
-                  data-label-key="opening"
-                >
-                  <span class="content-type-icon" aria-hidden="true"
-                    >&#9834;</span
-                  >
-                  <span>Opening Song</span>
-                </button>
-                <button type="button" class="content-type">
-                  <span class="content-type-icon" aria-hidden="true"
-                    >&#128214;</span
-                  >
-                  <span>Story</span>
-                </button>
-                <button type="button" class="content-type">
-                  <span class="content-type-icon" aria-hidden="true">W</span>
-                  <span>Word Chant</span>
-                </button>
-                <button type="button" class="content-type">
-                  <span class="content-type-icon" aria-hidden="true">S</span>
-                  <span>Sentence Chant</span>
-                </button>
-                <button
-                  type="button"
-                  class="content-type"
-                  data-slot="ending"
-                  data-label-key="ending"
-                >
-                  <span class="content-type-icon" aria-hidden="true"
-                    >&#9733;</span
-                  >
-                  <span>Ending Song</span>
-                </button>
-                <button
-                  type="button"
-                  class="content-type content-game"
-                  data-label-key="wordGame"
-                >
-                  <span class="content-type-icon" aria-hidden="true"
-                    >&#129513;</span
-                  >
-                  <span>Word Game</span>
-                </button>
-                <button
-                  type="button"
-                  class="content-type content-game"
-                  data-slot="unit"
-                  data-label-key="sentenceGame"
-                >
-                  <span class="content-type-icon" aria-hidden="true"
-                    >&#127919;</span
-                  >
-                  <span>Sentence Game</span>
-                </button>
-              </div>
+              <!-- Buttons are rendered per level by renderContentToolbar()
+                   in app.js (TOOLBAR_BUTTONS is the single source of truth
+                   for the user toolbar AND the admin editor's top row). -->
+              <div
+                class="content-toolbar"
+                aria-label="Lesson content types"
+              ></div>
 
               <div class="lesson-board" aria-label="Monthly lesson board">
                 <div class="lesson-grid" id="lessonGrid"></div>
@@ -1197,7 +1145,12 @@
       >
         <h2 class="admin-modal-title" id="adminSlotTitle"></h2>
         <p class="admin-modal-sub" id="adminSlotSub"></p>
-        <label class="admin-modal-label" for="adminSlotInput"
+        <!-- Label/placeholder are set per slot kind in openSlotEditor():
+             video slots = Vimeo/YouTube URL, game slots = game-modal URL. -->
+        <label
+          class="admin-modal-label"
+          id="adminSlotLabel"
+          for="adminSlotInput"
           >영상 URL (Vimeo 또는 YouTube)</label
         >
         <input

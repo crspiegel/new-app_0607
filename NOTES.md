@@ -232,7 +232,10 @@ window.Vimeo.Player` since the SDK loads async and may be absent (offline / head
 - ⚠ **If a media query changes the header or footer height, this constant is wrong** and a white band
   appears between the section and the footer (the `<main>`/`<body>` `--canvas` bg showing through). This bit
   the **landscape tablet** month page: the round-12 block trims the footer to 16px padding (~50px) and the
-  header is ~86px → real total **136**, so the base 185 over-subtracted ~49px → white gap. Fix = override the
+  header is ~86px → real total **136**, so the base 185 over-subtracted ~49px → white gap. It bit AGAIN on
+  desktop when the level-page copyright font shrank 13→11px (footer ~3px shorter → 3px white line on every
+  level page). **Safety net (2026-07-21): `body[class*="level-theme-"] main` now carries the level tint**,
+  so constant drift can no longer show white — but keep correcting the constant for real layout math. Fix = override the
   constant for that context (`calc(100vh − 136px)`) AND flex the inner `.section-box.section-white{flex:1;
 display:flex; flex-direction:column; justify-content:center}` so content fills + vertically centers.
   The **content page** (`#contentScreen`) hit the SAME gap in landscape tablets and took the SAME

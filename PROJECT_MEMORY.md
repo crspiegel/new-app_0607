@@ -788,6 +788,38 @@ Delivery is **phased**; content access gate is **UI-level** (grade 3 → cute po
   below (`max-width: 1180px`)**: always opens full-screen, only the Close button shows (the 70%
   default was too small there).
 
+- **Level 1-3 six-button toolbar (`2026-07-20`, local only — awaiting review before push):**
+  the 페이지2 toolbar is now **rendered per level from `TOOLBAR_BUTTONS` in `app.js`** (static
+  markup removed from `index.html`; single source of truth shared by the user toolbar AND the
+  admin top row — the mirror rule is now structural). Beginner keeps its 4 buttons; internal
+  "Level 2".."Level 4" (displayed Level 1-3) get 6: Good Morning Song / Good Bye Song /
+  **I Sit Game / I Like School Game** (game modal, slots `game`/`game2`) / **I Sit Song /
+  I Like School Song** (video player, slots `song1`/`song2`). 6-button layout =
+  `.content-toolbar--wide` 3×2 grid (2×3 on mobile portrait); on ≥768px it overrides the
+  board-aligned left padding (342px PC / 272px tablet) with normal 50px so labels stay
+  single-line. Toolbar clicks are now **delegated** on `.content-toolbar` (buttons re-render).
+  Dead CSS removed: nth-child hide rules + grid-column placements for the old static toolbar.
+  **Rev 2 (same day):** the 6 buttons now sit on **ONE row spanning the full board width**
+  (cover-image left edge → Friday right edge, `justify-content: space-between`, side padding =
+  board padding 50px PC / 30px tablet). Buttons are slimmer than Beginner's (side pad
+  `clamp(7px,0.8vw,12px)` PC) with a **viewport-scaled font** (`clamp(11.5px, 1.78vw − 9px,
+15.5px)` PC; steeper than plain vw because icons/padding don't shrink). Tablet (768-1180)
+  additionally hides the icon circles and uses `clamp(10.5px, 2.1vw − 6px, 14px)` so one row
+  holds even at 768px. <768px falls back: landscape 3×2, portrait 2×3 grid. **Rev 3:** icons
+  restored on tablet (20px, font `clamp(10.5px, 1.9vw − 7px, 14px)`) — hidden ONLY at
+  768-899px (portrait iPad, genuinely no room); button side padding bumped (PC
+  `clamp(8px,0.85vw,13px)`, tablet `clamp(8px,0.9vw,12px)`).
+- **Admin game-slot editor labels + footer size (`2026-07-21`, local only):** the slot-URL
+  editor's label/placeholder now switch by slot kind in `openSlotEditor()` (`#adminSlotLabel`):
+  game slots read "게임 URL (사용자 화면에서 모달창으로 열림)", video slots keep the
+  Vimeo/YouTube wording. (The game slots already opened the game modal on the user side —
+  verified with stubbed Supabase rows — only the editor's wording was misleading.) Level-page
+  footer copyright shrunk 13px → **11px** (`body[class*="level-theme-"] .site-footer p`);
+  home (12px) and login footers unchanged. The shrink exposed a ~3px **white band** above the
+  footer (the `100vh − 185px` min-height constant no longer matched the shorter footer) — fixed
+  structurally: `body[class*="level-theme-"] main` now carries the level tint, so constant
+  drift can never show white again (see `NOTES.md` "Full-height fill").
+
 ## Backlog (feature work, after design)
 
 1. Decide whether V3 (Mon-Fri calendar) should replace the default `#content/...` route.

@@ -309,6 +309,14 @@ main {
   min-height: 0;
 }
 
+/* Level pages: paint <main> with the level's soft tint so the screen's
+   min-height calc (100vh − fixed header+footer constant) can never expose a
+   white band between the section and the footer when the real footer/header
+   height drifts a few px (e.g. the copyright font-size change). */
+body[class*="level-theme-"] main {
+  background: var(--level-accent-soft, var(--canvas));
+}
+
 .screen {
   display: none;
 }
@@ -448,6 +456,12 @@ body[class*="level-theme-"] .site-footer {
   font-size: 13px;
   font-weight: 800;
   line-height: 1.35;
+}
+
+/* Level pages (페이지1/페이지2): the copyright line read too large — one
+   notch down from the 13px default. */
+body[class*="level-theme-"] .site-footer p {
+  font-size: 11px;
 }
 
 /* Main (home) page only: white footer band with dark-gray text (overrides the
@@ -1585,44 +1599,16 @@ body:not(.subpage-active) main {
   visibility: hidden;
 }
 
-.content-type:nth-child(1) {
-  grid-column: 3;
-}
-
-.content-type:nth-child(2) {
-  grid-column: 4;
-}
-
-.content-type:nth-child(3) {
-  grid-column: 5;
-}
-
-.content-type:nth-child(4) {
-  grid-column: 6;
-}
-
-.content-type:nth-child(5) {
-  grid-column: 7;
-}
-
 /* ----------------------------------------------------------------------
    V1 content-page design — applied to ALL levels (1-4) and ALL months.
    Rolled out from the client-approved Level 1 / April page. Per-level colors
-   come from the .level-theme-N --content-* variables. Toolbar is reduced to
-   Opening + Ending Song (centered); the weekday board uses theme-colored 3D
-   buttons with flat, tinted week-label cards.
+   come from the .level-theme-N --content-* variables. Toolbar buttons are
+   rendered per level by app.js (TOOLBAR_BUTTONS): Beginner = 4, Level 1-3
+   internal keys "Level 2".."Level 4" = 6. The weekday board uses
+   theme-colored 3D buttons with flat, tinted week-label cards.
    ---------------------------------------------------------------------- */
 
-/* Hide Story / Word Chant / Sentence Chant, leaving Opening + Ending Song. */
-#contentScreen .content-type:nth-child(2),
-#contentScreen .content-type:nth-child(3),
-#contentScreen .content-type:nth-child(4) {
-  display: none;
-}
-
-/* Center the remaining Opening / Ending Song buttons in the screen
-   instead of leaving them left-aligned in the toolbar grid. */
-/* All content pages: center Opening/Ending Song and tighten the gap to the
+/* Center the toolbar buttons in the screen and tighten the gap to the
    weekday board (~50% of the original). The board's top padding is halved in
    the >=768px block (desktop) so mobile keeps its smaller padding. */
 #contentScreen .content-toolbar {
@@ -1630,6 +1616,81 @@ body:not(.subpage-active) main {
   justify-content: center;
   margin-bottom: 12px;
   padding-bottom: 7px;
+}
+
+/* 6-button levels (Level 1-3): all six buttons on ONE row spanning the full
+   board width (cover image → Friday column edge). Slimmer side padding than
+   Beginner's 4 buttons, and a viewport-scaled font — the fixed costs (icons,
+   padding, gaps) don't shrink with the container, so the font calc is
+   steeper than plain vw. Below 768px one row can't fit: landscape falls
+   back to 3×2, portrait to 2×3. The double-class selector outranks the
+   per-breakpoint .content-toolbar rules below. */
+#contentScreen .content-toolbar.content-toolbar--wide {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-left: 50px;
+  padding-right: 50px;
+}
+
+#contentScreen .content-toolbar--wide .content-type {
+  flex: 0 1 auto;
+  padding: 0 clamp(8px, 0.85vw, 13px);
+  gap: 6px;
+  font-size: clamp(11.5px, calc(1.78vw - 9px), 15.5px);
+  white-space: nowrap;
+}
+
+#contentScreen .content-toolbar--wide .content-type-icon {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+}
+
+/* Tablet: the container is narrower — smaller icons and a harder-scaled
+   font so one row still fits. Side padding 30px matches the tablet board's
+   inner edges. */
+@media (min-width: 768px) and (max-width: 1180px) {
+  #contentScreen .content-toolbar.content-toolbar--wide {
+    padding-left: 30px;
+    padding-right: 30px;
+  }
+
+  #contentScreen .content-toolbar--wide .content-type {
+    padding: 0 clamp(8px, 0.9vw, 12px);
+    gap: 5px;
+    font-size: clamp(10.5px, calc(1.9vw - 7px), 14px);
+  }
+
+  #contentScreen .content-toolbar--wide .content-type-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+  }
+}
+
+/* Only the narrowest tablet band (portrait iPad) truly has no room for the
+   icon circles — hide them there alone. */
+@media (min-width: 768px) and (max-width: 899px) {
+  #contentScreen .content-toolbar--wide .content-type-icon {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  #contentScreen .content-toolbar.content-toolbar--wide {
+    display: grid;
+    grid-template-columns: repeat(3, auto);
+    justify-content: center;
+    row-gap: 10px;
+  }
+}
+
+@media (max-width: 767px) and (orientation: portrait) {
+  #contentScreen .content-toolbar.content-toolbar--wide {
+    grid-template-columns: repeat(2, auto);
+    justify-items: center;
+  }
 }
 
 /* Opening + Ending Song buttons: keep the 3D depth (the 0 6px bevel) but drop
@@ -5149,9 +5210,8 @@ body.game-open {
 }
 .admin-songs {
   display: grid;
-  /* Mirrors the user toolbar: Opening Song · Ending Song · Game (game-modal
-     URL) · Unit Song (video URL). */
-  grid-template-columns: repeat(4, 1fr);
+  /* Mirrors the user toolbar (TOOLBAR_BUTTONS) — the column count is set
+     inline by renderAdminBoard(), one column per toolbar button. */
   gap: 12px;
 }
 .admin-grid {

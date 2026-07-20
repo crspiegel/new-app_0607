@@ -77,43 +77,62 @@ function levelLabel(level) {
   return LEVEL_LABELS[level] || level;
 }
 
-/* Beginner (internal "Level 1") renames the four visible content-type buttons
-   on the content page — and the matching admin slot labels. All ten months of
-   that level share the toolbar markup, so one per-level map covers them. */
-const CONTENT_TYPE_LABELS = {
-  default: {
-    opening: "Opening Song",
-    ending: "Ending Song",
-    wordGame: "Word Game",
-    sentenceGame: "Sentence Game",
-  },
-  "Level 1": {
-    opening: "Good Morning Song",
-    ending: "Good Bye Song",
-    wordGame: "Game",
-    sentenceGame: "Unit Song",
-  },
+/* ---- Content-page toolbar (per level) ----------------------------------
+   Single source of truth for the buttons above the weekday board on the
+   content page. The USER toolbar and the ADMIN editor's top row both render
+   from this, so they always stay in sync (work rule: admin mirrors the user
+   screen). Each slot key is stored in content_pages.videos per level/month.
+   kind "video" plays the slot's YouTube/Vimeo URL in the video player;
+   kind "game" opens the slot's URL in the game modal. */
+const TOOLBAR_BUTTONS = {
+  // Beginner (internal key "Level 1")
+  "Level 1": [
+    { slot: "opening", kind: "video", label: "Good Morning Song", icon: "♪" },
+    { slot: "ending", kind: "video", label: "Good Bye Song", icon: "★" },
+    { slot: "game", kind: "game", label: "Game", icon: "🧩" },
+    { slot: "unit", kind: "video", label: "Unit Song", icon: "🎯" },
+  ],
+  // Level 1-3 (internal keys "Level 2".."Level 4")
+  default: [
+    { slot: "opening", kind: "video", label: "Good Morning Song", icon: "♪" },
+    { slot: "ending", kind: "video", label: "Good Bye Song", icon: "★" },
+    { slot: "game", kind: "game", label: "I Sit Game", icon: "🧩" },
+    { slot: "game2", kind: "game", label: "I Like School Game", icon: "🎯" },
+    { slot: "song1", kind: "video", label: "I Sit Song", icon: "♫" },
+    { slot: "song2", kind: "video", label: "I Like School Song", icon: "🎶" },
+  ],
 };
-function contentTypeLabel(level, key) {
-  const set = CONTENT_TYPE_LABELS[level] || CONTENT_TYPE_LABELS.default;
-  return set[key] || CONTENT_TYPE_LABELS.default[key] || "";
+function toolbarButtons(level) {
+  return TOOLBAR_BUTTONS[level] || TOOLBAR_BUTTONS.default;
 }
 
-// Repaint the content-page toolbar labels for the current level. The buttons
-// carry data-label-key (opening / ending / wordGame / sentenceGame); the same
-// span text feeds the video player title via the toolbar click handler.
-function refreshContentTypeLabels() {
-  document
-    .querySelectorAll("#contentScreen .content-type[data-label-key]")
-    .forEach((button) => {
-      const label = button.querySelector("span:last-child");
-      if (label) {
-        label.textContent = contentTypeLabel(
-          state.level,
-          button.dataset.labelKey,
-        );
-      }
-    });
+// (Re)build the content-page toolbar for the current level. Called from
+// updateContentMonthNumber so every entry path (click or hash) renders it.
+const contentToolbar = document.querySelector(
+  "#contentScreen .content-toolbar",
+);
+
+function renderContentToolbar() {
+  if (!contentToolbar) return;
+  const buttons = toolbarButtons(state.level);
+  contentToolbar.innerHTML = "";
+  // 6-button levels get a 2-row grid (see .content-toolbar--wide).
+  contentToolbar.classList.toggle("content-toolbar--wide", buttons.length > 4);
+  buttons.forEach((item, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = index === 0 ? "content-type active" : "content-type";
+    button.dataset.slot = item.slot;
+    button.dataset.kind = item.kind;
+    const icon = document.createElement("span");
+    icon.className = "content-type-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = item.icon;
+    const label = document.createElement("span");
+    label.textContent = item.label;
+    button.append(icon, label);
+    contentToolbar.append(button);
+  });
 }
 
 /* ---- Content data source (Phase 1: local map) --------------------------
@@ -318,7 +337,7 @@ function updateContentMonthNumber() {
   contentLevelName.textContent = levelLabel(state.level);
   contentBannerMonthNumber.textContent =
     monthIndex >= 0 ? String(monthIndex + 3) : "";
-  refreshContentTypeLabels();
+  renderContentToolbar();
   refreshCovers();
 }
 
@@ -1232,13 +1251,13 @@ function closeGameModal() {
 }
 
 // Same gating as videos: grade 3 sees the no-access popup, an empty slot the
-// coming-soon popup.
-function openGameSlot() {
+// coming-soon popup. `slot` is a game-kind toolbar slot ("game" / "game2").
+function openGameSlot(slot) {
   if (isBlockedByGrade()) {
     showNoAccessPopup();
     return;
   }
-  const url = getVideoUrl(state.level, state.month, "game");
+  const url = getVideoUrl(state.level, state.month, slot || "game");
   if (!url) {
     showComingSoon();
     return;
@@ -1293,24 +1312,26 @@ document.querySelectorAll(".content-nav-next").forEach((button) => {
   button.addEventListener("click", () => goToMonth(1));
 });
 
-document.querySelectorAll(".content-type").forEach((button) => {
-  button.addEventListener("click", () => {
-    document
+// Toolbar clicks (delegated — the buttons are re-rendered per level).
+// kind "video" plays the slot in the video player; kind "game" opens the
+// game modal from the slot's URL.
+if (contentToolbar) {
+  contentToolbar.addEventListener("click", (event) => {
+    const button = event.target.closest(".content-type");
+    if (!button) return;
+    contentToolbar
       .querySelectorAll(".content-type")
       .forEach((item) => item.classList.remove("active"));
     button.classList.add("active");
-    // Visible #contentScreen buttons: Opening/Ending Song and Unit Song play
-    // a video from their data-slot ("opening" / "ending" / "unit"); the
-    // (Word) Game button opens the game modal from its own "game" slot.
-    const slot = button.dataset.slot;
-    if (slot) {
+    const { slot, kind } = button.dataset;
+    if (kind === "game") {
+      openGameSlot(slot);
+    } else if (slot) {
       const label = button.querySelector("span:last-child");
       openSlot(slot, label ? label.textContent.trim() : "");
-    } else if (button.dataset.labelKey === "wordGame") {
-      openGameSlot();
     }
   });
-});
+}
 
 document.querySelectorAll(".content-v2-tab").forEach((button) => {
   button.addEventListener("click", () => {
@@ -1421,13 +1442,11 @@ function setAdminStatus(text) {
   if (adminStatus) adminStatus.textContent = text || "";
 }
 
-// Human label for a slot key, e.g. "Week 1 · Mon · Story". The song slots are
-// named per level (Beginner uses Good Morning/Good Bye Song).
+// Human label for a slot key, e.g. "Week 1 · Mon · Story". Toolbar slots
+// (songs/games) are named per level via TOOLBAR_BUTTONS.
 function slotLabel(slot, level) {
-  if (slot === "opening") return contentTypeLabel(level, "opening");
-  if (slot === "ending") return contentTypeLabel(level, "ending");
-  if (slot === "game") return contentTypeLabel(level, "wordGame");
-  if (slot === "unit") return contentTypeLabel(level, "sentenceGame");
+  const item = toolbarButtons(level).find((b) => b.slot === slot);
+  if (item) return item.label;
   const m = slot.match(/^w(\d)-(\w+)$/);
   if (m) {
     const dayIndex = weekdays.indexOf(m[2]);
@@ -1931,14 +1950,13 @@ function renderAdminBoard() {
   if (adminMonthSelect) adminMonthSelect.value = adminState.month;
   adminBoard.innerHTML = "";
 
+  // Top row mirrors the user toolbar exactly (same slots, same order, same
+  // level-aware labels) — one column per toolbar button.
   const songs = document.createElement("div");
   songs.className = "admin-songs";
-  songs.append(
-    adminSlotButton("opening"),
-    adminSlotButton("ending"),
-    adminSlotButton("game"),
-    adminSlotButton("unit"),
-  );
+  const toolbar = toolbarButtons(adminState.level);
+  songs.style.gridTemplateColumns = `repeat(${toolbar.length}, 1fr)`;
+  toolbar.forEach((item) => songs.append(adminSlotButton(item.slot)));
   adminBoard.append(songs);
 
   const grid = document.createElement("div");
@@ -1989,6 +2007,19 @@ function openSlotEditor(slot) {
     adminSlotTitle.textContent = slotLabel(slot, adminState.level);
   if (adminSlotSub)
     adminSlotSub.textContent = `${levelLabel(adminState.level)} · ${adminState.month}`;
+  // Game slots (I Sit Game / I Like School Game / Beginner's Game) open their
+  // URL in the game modal, not the video player — say so in the editor.
+  const item = toolbarButtons(adminState.level).find((b) => b.slot === slot);
+  const isGame = Boolean(item && item.kind === "game");
+  const label = document.querySelector("#adminSlotLabel");
+  if (label)
+    label.textContent = isGame
+      ? "게임 URL (사용자 화면에서 모달창으로 열림)"
+      : "영상 URL (Vimeo 또는 YouTube)";
+  if (adminSlotInput)
+    adminSlotInput.placeholder = isGame
+      ? "https://... (게임 페이지 주소)"
+      : "https://vimeo.com/123456789  또는  https://youtu.be/abc123XYZ45";
   if (adminSlotInput) adminSlotInput.value = url || "";
   if (adminSlotModal) adminSlotModal.hidden = false;
   document.body.classList.add("admin-modal-open");
