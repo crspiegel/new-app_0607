@@ -1638,6 +1638,9 @@ body:not(.subpage-active) main {
 #contentScreen .content-type {
   box-shadow: 0 6px 0 #d8d8d8;
   font-size: 17px;
+  /* Base 12px side padding + 15px requested widening = 27px. The buttons are
+     content-sized, so this widens each pill by 30px total. */
+  padding: 0 27px;
 }
 
 /* Drop Opening Song's yellow "active" accent so it matches Ending Song's
@@ -2845,7 +2848,9 @@ body:not(.subpage-active) main {
      /1440) so their size relative to the page matches PC. */
   #contentScreen .content-type {
     min-height: 42px;
-    padding: 0 10px;
+    /* PC widened its side padding by 15px; this block scales the pills to
+       ~75% of PC, so add ~11px here to keep the same width ratio. */
+    padding: 0 21px;
     gap: 6px;
     font-size: clamp(12px, 1.2vw, 14px);
     /* Scale the radius + 3D bevel down with the shorter button so it stays a
@@ -3661,8 +3666,9 @@ body:not(.subpage-active) main {
     flex: 0 0 auto;
     width: 100%;
     /* ~60% of the previous width (was 272). Label + icon trimmed a touch so the
-       text stays inside the narrower button. */
-    max-width: 164px;
+       text stays inside the narrower button. PC widened by 30px total; at this
+       block's ~60% scale that is +18px. */
+    max-width: 182px;
     min-height: 64px;
     gap: 6px;
     padding: 0 10px;
@@ -4634,6 +4640,150 @@ body.noaccess-open {
   }
 }
 
+/* ---- Game modal ---------------------------------------------------------
+   Opens the admin-entered game URL (videos slot "game") in an iframe.
+   Default = 70% of the viewport; .game-maximized fills the screen. The
+   top bar keeps Restore / Maximize / Close at the top right. */
+.game-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-modal[hidden] {
+  display: none;
+}
+
+body.game-open {
+  overflow: hidden;
+}
+
+.game-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 28, 28, 0.62);
+  backdrop-filter: blur(2px);
+  animation: vp-fade 0.18s ease both;
+}
+
+.game-modal-card {
+  position: relative;
+  display: flex;
+  width: 70vw;
+  height: 70vh;
+  flex-direction: column;
+  background: #1c1c1c;
+  border-radius: var(--radius-card);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  transition:
+    width 0.2s ease,
+    height 0.2s ease,
+    border-radius 0.2s ease;
+}
+
+/* 100% of the .game-modal container (inset: 0), not 100vw — the reserved
+   scrollbar gutter makes 100vw 15px wider than the visible area. */
+.game-modal-card.game-maximized {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+/* Transparent overlay (no title strip) — the buttons float over the game
+   iframe at the top right. */
+.game-modal-bar {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+
+/* Bare icons (no circle fill) so the game stays as visible as possible:
+   70% opacity at rest; hover = full opacity + a thin circular outline. */
+.game-bar-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  color: var(--canvas);
+  cursor: pointer;
+  opacity: 0.7;
+  transition:
+    opacity 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.game-bar-btn svg {
+  width: 20px;
+  height: 20px;
+  /* Keep the white icon readable over light game content. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+
+.game-bar-btn:hover {
+  border-color: var(--canvas);
+  opacity: 1;
+}
+
+.game-bar-btn:focus-visible {
+  border-color: var(--canvas);
+  opacity: 1;
+  outline: none;
+}
+
+/* Only two controls at a time: default size shows Maximize + Close;
+   maximized shows Restore (default) + Close. */
+.game-modal-card:not(.game-maximized) #gameRestore,
+.game-modal-card.game-maximized #gameMax {
+  display: none;
+}
+
+/* Tablet and below (PC starts at 1181px): the 70% default is too small, so
+   the game always opens full-screen and only the Close button shows. */
+@media (max-width: 1180px) {
+  .game-modal-card {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .game-modal-card #gameMax,
+  .game-modal-card #gameRestore {
+    display: none;
+  }
+}
+
+.game-frame-wrap {
+  /* The control bar floats above, so the iframe fills the whole card. */
+  position: absolute;
+  inset: 0;
+}
+
+#gameFrame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-modal-overlay,
+  .game-modal-card {
+    animation: none;
+    transition: none;
+  }
+}
+
 /* ====================================================================
    Admin content manager (Phase 2) — a simplified GRAY mirror of the
    user content board. Header entry buttons, the board, and the slot
@@ -4999,7 +5149,9 @@ body.noaccess-open {
 }
 .admin-songs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* Mirrors the user toolbar: Opening Song · Ending Song · Game (game-modal
+     URL) · Unit Song (video URL). */
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 .admin-grid {

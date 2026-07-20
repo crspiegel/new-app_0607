@@ -7,19 +7,22 @@ test("main level-to-month-to-content flow renders", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#homeTitle")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Level 1" }).first(),
+    page.getByRole("button", { name: "Beginner" }).first(),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Level 1" }).first().click();
+  // Internal key stays "Level 1" (URL hash / data-level); the label shows
+  // "Beginner".
+  await page.getByRole("button", { name: "Beginner" }).first().click();
   await expect(page).toHaveURL(/#months\/Level%201$/);
-  await expect(page.locator("#monthLevelTag")).toHaveText("Level 1");
+  await expect(page.locator("#monthLevelTag")).toHaveText("Beginner");
 
   await page.getByRole("button", { name: /March/i }).click();
   await expect(page).toHaveURL(/#content\/Level%201\/March$/);
   await expect(page.locator("#contentLevelName")).toBeVisible();
-  await expect(page.locator("#contentLevelName")).toHaveText("Level 1");
+  await expect(page.locator("#contentLevelName")).toHaveText("Beginner");
+  // Beginner renames the song buttons (other levels keep "Opening Song").
   await expect(
-    page.getByRole("button", { name: /Opening Song/i }).first(),
+    page.getByRole("button", { name: /Good Morning Song/i }).first(),
   ).toBeVisible();
 
   expect(failedRequests.filter((url) => url.includes("/assets/"))).toEqual([]);

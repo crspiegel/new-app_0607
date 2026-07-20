@@ -28,6 +28,10 @@ deploying for client review. The app is **live**: https://new-app0607.vercel.app
 
 - User preference: work locally; commit & deploy only on request. Keep approved visuals exactly
   as-is unless a change is requested.
+- **Rule: the admin mode must always mirror the user screen.** Every user-visible content
+  element (toolbar buttons, covers, slots) needs a matching admin editor, same order,
+  level-aware label. Update `renderAdminBoard()` / `slotLabel()` together with any user-side
+  content UI change.
 - Small, specific design tweaks → just execute + verify. Non-trivial/architectural work →
   use Plan mode first.
 
@@ -746,6 +750,43 @@ Delivery is **phased**; content access gate is **UI-level** (grade 3 → cute po
   (`210024645`) — see "Design changes done so far". No separate `modal.js` was created.
 - Not built yet: `contentData.js`, `calendarData.js`; per-button distinct video URLs; rolling
   the modal out to other levels/months once real content is ready.
+
+- **Level display labels remapped (`2026-07-20`, local only — awaiting review before push):**
+  on-screen labels are now Beginner / Level 1 / Level 2 / Level 3 (old Level 1→Beginner, 2→1,
+  3→2, 4→3). Internal keys stay `"Level 1".."Level 4"` everywhere (DB `content_pages.level`,
+  URL hash, `data-level`, `adminState`) — only display is remapped via `levelLabel()` /
+  `LEVEL_LABELS` in `app.js`. Header nav Beginner book shows big "B" + small "Beginner" label.
+  Admin level dropdown shows the new labels (option values unchanged). Smoke test updated.
+
+- **Beginner content-button renames (`2026-07-20`, local only — awaiting review before push):**
+  on the Beginner content page (all 10 months) the four visible toolbar buttons are renamed:
+  Opening Song→**Good Morning Song**, Ending Song→**Good Bye Song**, Word Game→**Game**,
+  Sentence Game→**Unit Song**. Other levels keep the defaults. Driven by `CONTENT_TYPE_LABELS`
+  / `contentTypeLabel()` / `refreshContentTypeLabels()` in `app.js` + `data-label-key` on the
+  toolbar buttons; `slotLabel(slot, level)` makes the admin song-slot labels level-aware
+  (admin has no game slots). Video-player title follows the button text automatically.
+
+- **Game modal (`2026-07-20`, local only — awaiting review before push):** the (Word) Game
+  toolbar button on 페이지2 now opens the admin-entered URL in an iframe modal (`#gameModal`).
+  Opens at **70vw×70vh**; top-right buttons: Restore (70%), Maximize (fills the visible
+  viewport — CSS `100%` of the fixed container, NOT `100vw`, because of the reserved scrollbar
+  gutter), Close (X, red). Esc/overlay also close; closing clears the iframe src to stop audio.
+  URL lives in the existing `content_pages.videos` JSON under slot key **`game`** (per
+  level/month, no DB migration needed); admin board's top row now has a third slot button
+  (Opening · Ending · Game, `.admin-songs` grid 2→3 cols), labels level-aware via `slotLabel`.
+  Same gating as videos: grade 3 → no-access popup, empty slot → coming-soon popup.
+
+- **Unit Song video slot + game-modal chrome fix (`2026-07-20`, local only):** the 4th toolbar
+  button (Unit Song / Sentence Game) now plays a video from new slot key **`unit`**
+  (`data-slot="unit"` → the shared song/video player, YouTube/Vimeo both fine). Admin top row
+  mirrors the user toolbar exactly: Opening · Ending · Game · Unit (`.admin-songs` 4 cols).
+  Game modal: gray title strip removed — controls float top-right over the iframe
+  (`.game-modal-bar` absolute + transparent, `.game-frame-wrap` fills the card). Controls show
+  **2 at a time** (default size → Maximize+Close; maximized → Restore+Close, CSS toggled off
+  `.game-maximized`); bare white icons (no circle fill), 70% opacity at rest, hover = 100% +
+  thin circular white outline (drop-shadow keeps them readable on light games). **Tablet and
+  below (`max-width: 1180px`)**: always opens full-screen, only the Close button shows (the 70%
+  default was too small there).
 
 ## Backlog (feature work, after design)
 

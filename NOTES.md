@@ -304,3 +304,8 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   re-CRLFs a file and `prettier --check` then fails on an otherwise-clean file, while
   `git diff --ignore-all-space` shows no content diff. Fix: `git add --renormalize .`. Avoid
   `git checkout -- <file>` on prettier-checked files unless you re-`prettier --write` after.
+- **Never round-trip source files through PowerShell 5.1 text cmdlets** (`Get-Content` /
+  `Set-Content` / `-replace` pipelines). The files are UTF-8 **without BOM**, so `Get-Content`
+  reads them as ANSI/CP949 and silently mangles every multibyte char (♪, 📖, ★, — → `??`),
+  and `-Encoding utf8` writes a BOM on top. This corrupted `app.js` once (recovered via
+  `git checkout`). Do bulk replacements with the harness Edit tool (`replace_all`) instead.

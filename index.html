@@ -34,6 +34,17 @@
             class="top-nav-link nav-level-one"
             type="button"
             data-level="Level 1"
+            aria-label="Beginner"
+          >
+            <span class="nav-book" aria-hidden="true">
+              <span class="nav-book-number">B</span>
+              <span class="nav-book-label">Beginner</span>
+            </span>
+          </button>
+          <button
+            class="top-nav-link nav-level-two"
+            type="button"
+            data-level="Level 2"
             aria-label="Level 1"
           >
             <span class="nav-book" aria-hidden="true">
@@ -42,9 +53,9 @@
             </span>
           </button>
           <button
-            class="top-nav-link nav-level-two"
+            class="top-nav-link nav-level-three"
             type="button"
-            data-level="Level 2"
+            data-level="Level 3"
             aria-label="Level 2"
           >
             <span class="nav-book" aria-hidden="true">
@@ -53,24 +64,13 @@
             </span>
           </button>
           <button
-            class="top-nav-link nav-level-three"
+            class="top-nav-link nav-level-four"
             type="button"
-            data-level="Level 3"
+            data-level="Level 4"
             aria-label="Level 3"
           >
             <span class="nav-book" aria-hidden="true">
               <span class="nav-book-number">3</span>
-              <span class="nav-book-label">Level</span>
-            </span>
-          </button>
-          <button
-            class="top-nav-link nav-level-four"
-            type="button"
-            data-level="Level 4"
-            aria-label="Level 4"
-          >
-            <span class="nav-book" aria-hidden="true">
-              <span class="nav-book-number">4</span>
               <span class="nav-book-label">Level</span>
             </span>
           </button>
@@ -252,28 +252,28 @@
                   type="button"
                   data-level="Level 1"
                 >
-                  <strong>Level 1</strong>
+                  <strong>Beginner</strong>
                 </button>
                 <button
                   class="level-button level-two"
                   type="button"
                   data-level="Level 2"
                 >
-                  <strong>Level 2</strong>
+                  <strong>Level 1</strong>
                 </button>
                 <button
                   class="level-button level-three"
                   type="button"
                   data-level="Level 3"
                 >
-                  <strong>Level 3</strong>
+                  <strong>Level 2</strong>
                 </button>
                 <button
                   class="level-button level-four"
                   type="button"
                   data-level="Level 4"
                 >
-                  <strong>Level 4</strong>
+                  <strong>Level 3</strong>
                 </button>
               </div>
             </div>
@@ -370,7 +370,7 @@
                   >
                   <h2 id="contentTitle">March Reading Plan</h2>
                   <span class="content-v2-level" id="contentPathTag"
-                    >Level 1</span
+                    >Beginner</span
                   >
                 </div>
                 <button
@@ -394,6 +394,7 @@
                   type="button"
                   class="content-type active"
                   data-slot="opening"
+                  data-label-key="opening"
                 >
                   <span class="content-type-icon" aria-hidden="true"
                     >&#9834;</span
@@ -414,19 +415,33 @@
                   <span class="content-type-icon" aria-hidden="true">S</span>
                   <span>Sentence Chant</span>
                 </button>
-                <button type="button" class="content-type" data-slot="ending">
+                <button
+                  type="button"
+                  class="content-type"
+                  data-slot="ending"
+                  data-label-key="ending"
+                >
                   <span class="content-type-icon" aria-hidden="true"
                     >&#9733;</span
                   >
                   <span>Ending Song</span>
                 </button>
-                <button type="button" class="content-type content-game">
+                <button
+                  type="button"
+                  class="content-type content-game"
+                  data-label-key="wordGame"
+                >
                   <span class="content-type-icon" aria-hidden="true"
                     >&#129513;</span
                   >
                   <span>Word Game</span>
                 </button>
-                <button type="button" class="content-type content-game">
+                <button
+                  type="button"
+                  class="content-type content-game"
+                  data-slot="unit"
+                  data-label-key="sentenceGame"
+                >
                   <span class="content-type-icon" aria-hidden="true"
                     >&#127919;</span
                   >
@@ -455,7 +470,7 @@
                   >
                   <h2 id="contentV2Title">March Reading Plan</h2>
                   <span class="content-v2-level" id="contentV2Level"
-                    >Level 1</span
+                    >Beginner</span
                   >
                 </div>
                 <button
@@ -521,7 +536,7 @@
                       >Month <strong id="contentV3MonthNumber">3</strong></span
                     >
                     <span class="content-v3-level" id="contentV3Level"
-                      >Level 1</span
+                      >Beginner</span
                     >
                   </div>
                   <h2 id="contentV3Title">March Reading Plan</h2>
@@ -1081,6 +1096,93 @@
         <button type="button" class="noaccess-ok" data-comingsoon-close>
           OK
         </button>
+      </div>
+    </div>
+
+    <!-- Game modal — opens the admin-entered game URL in an iframe. Opens at
+         70% of the viewport; Maximize fills the screen, Restore returns to
+         70%, X closes. -->
+    <div class="game-modal" id="gameModal" hidden>
+      <div class="game-modal-overlay" data-game-close></div>
+      <div
+        class="game-modal-card"
+        id="gameModalCard"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Game"
+      >
+        <div class="game-modal-bar">
+          <button
+            type="button"
+            class="game-bar-btn"
+            id="gameRestore"
+            aria-label="Default size"
+            title="Default size"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect
+                x="7"
+                y="9"
+                width="10"
+                height="8"
+                rx="1.5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.4"
+              />
+              <path
+                d="M9 6h9a1.5 1.5 0 0 1 1.5 1.5V14"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="game-bar-btn"
+            id="gameMax"
+            aria-label="Full screen"
+            title="Full screen"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="game-bar-btn game-bar-close"
+            data-game-close
+            aria-label="Close game"
+            title="Close"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M6 6l12 12M18 6L6 18"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="3"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <div class="game-frame-wrap">
+          <iframe
+            id="gameFrame"
+            title="Game"
+            allow="autoplay; fullscreen"
+            allowfullscreen
+          ></iframe>
+        </div>
       </div>
     </div>
 

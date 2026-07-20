@@ -64,6 +64,58 @@ const monthlyBooks = [
   },
 ];
 
+/* ---- Level display labels ----------------------------------------------
+   Internal keys stay "Level 1".."Level 4" (DB rows, URL hash, data-level
+   attributes all use them) — only the on-screen label is remapped. */
+const LEVEL_LABELS = {
+  "Level 1": "Beginner",
+  "Level 2": "Level 1",
+  "Level 3": "Level 2",
+  "Level 4": "Level 3",
+};
+function levelLabel(level) {
+  return LEVEL_LABELS[level] || level;
+}
+
+/* Beginner (internal "Level 1") renames the four visible content-type buttons
+   on the content page — and the matching admin slot labels. All ten months of
+   that level share the toolbar markup, so one per-level map covers them. */
+const CONTENT_TYPE_LABELS = {
+  default: {
+    opening: "Opening Song",
+    ending: "Ending Song",
+    wordGame: "Word Game",
+    sentenceGame: "Sentence Game",
+  },
+  "Level 1": {
+    opening: "Good Morning Song",
+    ending: "Good Bye Song",
+    wordGame: "Game",
+    sentenceGame: "Unit Song",
+  },
+};
+function contentTypeLabel(level, key) {
+  const set = CONTENT_TYPE_LABELS[level] || CONTENT_TYPE_LABELS.default;
+  return set[key] || CONTENT_TYPE_LABELS.default[key] || "";
+}
+
+// Repaint the content-page toolbar labels for the current level. The buttons
+// carry data-label-key (opening / ending / wordGame / sentenceGame); the same
+// span text feeds the video player title via the toolbar click handler.
+function refreshContentTypeLabels() {
+  document
+    .querySelectorAll("#contentScreen .content-type[data-label-key]")
+    .forEach((button) => {
+      const label = button.querySelector("span:last-child");
+      if (label) {
+        label.textContent = contentTypeLabel(
+          state.level,
+          button.dataset.labelKey,
+        );
+      }
+    });
+}
+
 /* ---- Content data source (Phase 1: local map) --------------------------
    Single source of truth for per-slot video URLs and per-book cover images,
    keyed by level → month. Phase 2 swaps the backing store to Supabase
@@ -261,11 +313,12 @@ function updateContentMonthNumber() {
   contentTitle.textContent = state.month
     ? `${state.month} Reading Plan`
     : "Reading Plan";
-  contentPathTag.textContent = state.level || "Level";
+  contentPathTag.textContent = levelLabel(state.level) || "Level";
   screens.content.dataset.month = state.month;
-  contentLevelName.textContent = state.level;
+  contentLevelName.textContent = levelLabel(state.level);
   contentBannerMonthNumber.textContent =
     monthIndex >= 0 ? String(monthIndex + 3) : "";
+  refreshContentTypeLabels();
   refreshCovers();
 }
 
@@ -287,7 +340,7 @@ function updateContentV2Header() {
   contentV2Title.textContent = state.month
     ? `${state.month} Reading Plan`
     : "Reading Plan";
-  contentV2Level.textContent = state.level || "Level";
+  contentV2Level.textContent = levelLabel(state.level) || "Level";
 }
 
 function updateContentV3Header() {
@@ -297,7 +350,7 @@ function updateContentV3Header() {
   contentV3Title.textContent = state.month
     ? `${state.month} Reading Plan`
     : "Reading Plan";
-  contentV3Level.textContent = state.level || "Level";
+  contentV3Level.textContent = levelLabel(state.level) || "Level";
 }
 
 function renderMonths() {
@@ -416,7 +469,7 @@ function renderCalendarV3() {
       button.dataset.day = type.day;
       button.setAttribute(
         "aria-label",
-        `${state.level || "Level"}, ${state.month}, week ${weekIndex + 1}, ${type.day}, ${type.label} sample video`,
+        `${levelLabel(state.level) || "Level"}, ${state.month}, week ${weekIndex + 1}, ${type.day}, ${type.label} sample video`,
       );
       button.innerHTML = `
         <span class="content-v3-day-name">${type.day}</span>
@@ -1147,11 +1200,70 @@ if (comingSoonModal) {
   });
 }
 
+/* ---- Game modal ---------------------------------------------------------
+   The Game toolbar button opens the admin-entered URL (videos slot "game",
+   per level/month) in an iframe. Opens at 70% of the viewport; Maximize
+   fills the screen (CSS class, not the Fullscreen API — iframes may block
+   it), Restore returns to 70%, X / Escape closes. */
+const gameModal = document.querySelector("#gameModal");
+const gameModalCard = document.querySelector("#gameModalCard");
+const gameFrame = document.querySelector("#gameFrame");
+const gameMaxBtn = document.querySelector("#gameMax");
+const gameRestoreBtn = document.querySelector("#gameRestore");
+
+function setGameMaximized(maximized) {
+  if (gameModalCard)
+    gameModalCard.classList.toggle("game-maximized", maximized);
+}
+
+function openGameModal(url) {
+  if (!gameModal || !gameFrame) return;
+  setGameMaximized(false);
+  gameFrame.src = url;
+  gameModal.hidden = false;
+  document.body.classList.add("game-open");
+}
+
+function closeGameModal() {
+  if (!gameModal || !gameFrame) return;
+  gameFrame.src = ""; // unload the game (stops audio/loops)
+  gameModal.hidden = true;
+  document.body.classList.remove("game-open");
+}
+
+// Same gating as videos: grade 3 sees the no-access popup, an empty slot the
+// coming-soon popup.
+function openGameSlot() {
+  if (isBlockedByGrade()) {
+    showNoAccessPopup();
+    return;
+  }
+  const url = getVideoUrl(state.level, state.month, "game");
+  if (!url) {
+    showComingSoon();
+    return;
+  }
+  openGameModal(url);
+}
+
+if (gameModal) {
+  gameModal.querySelectorAll("[data-game-close]").forEach((el) => {
+    el.addEventListener("click", closeGameModal);
+  });
+  if (gameMaxBtn)
+    gameMaxBtn.addEventListener("click", () => setGameMaximized(true));
+  if (gameRestoreBtn)
+    gameRestoreBtn.addEventListener("click", () => setGameMaximized(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !gameModal.hidden) closeGameModal();
+  });
+}
+
 document.querySelectorAll("[data-level]").forEach((button) => {
   button.addEventListener("click", () => {
     state.level = button.dataset.level;
     state.month = "";
-    monthLevelTag.textContent = state.level;
+    monthLevelTag.textContent = levelLabel(state.level);
     applyLevelTheme();
     setHash("months");
     showScreen("months");
@@ -1187,12 +1299,15 @@ document.querySelectorAll(".content-type").forEach((button) => {
       .querySelectorAll(".content-type")
       .forEach((item) => item.classList.remove("active"));
     button.classList.add("active");
-    // Only Opening Song / Ending Song are clickable on #contentScreen (the
-    // middle three are hidden); they carry data-slot ("opening" / "ending").
+    // Visible #contentScreen buttons: Opening/Ending Song and Unit Song play
+    // a video from their data-slot ("opening" / "ending" / "unit"); the
+    // (Word) Game button opens the game modal from its own "game" slot.
     const slot = button.dataset.slot;
     if (slot) {
       const label = button.querySelector("span:last-child");
       openSlot(slot, label ? label.textContent.trim() : "");
+    } else if (button.dataset.labelKey === "wordGame") {
+      openGameSlot();
     }
   });
 });
@@ -1306,10 +1421,13 @@ function setAdminStatus(text) {
   if (adminStatus) adminStatus.textContent = text || "";
 }
 
-// Human label for a slot key, e.g. "Week 1 · Mon · Story".
-function slotLabel(slot) {
-  if (slot === "opening") return "Opening Song";
-  if (slot === "ending") return "Ending Song";
+// Human label for a slot key, e.g. "Week 1 · Mon · Story". The song slots are
+// named per level (Beginner uses Good Morning/Good Bye Song).
+function slotLabel(slot, level) {
+  if (slot === "opening") return contentTypeLabel(level, "opening");
+  if (slot === "ending") return contentTypeLabel(level, "ending");
+  if (slot === "game") return contentTypeLabel(level, "wordGame");
+  if (slot === "unit") return contentTypeLabel(level, "sentenceGame");
   const m = slot.match(/^w(\d)-(\w+)$/);
   if (m) {
     const dayIndex = weekdays.indexOf(m[2]);
@@ -1462,7 +1580,7 @@ function populateAdminSelectors() {
     levels.forEach((lvl) => {
       const opt = document.createElement("option");
       opt.value = lvl;
-      opt.textContent = lvl;
+      opt.textContent = levelLabel(lvl);
       adminLevelSelect.append(opt);
     });
   }
@@ -1774,7 +1892,7 @@ function adminSlotButton(slot) {
   button.dataset.filled = String(Boolean(url));
   const name = document.createElement("span");
   name.className = "admin-slot-name";
-  name.textContent = slotLabel(slot);
+  name.textContent = slotLabel(slot, adminState.level);
   const value = document.createElement("span");
   value.className = "admin-slot-url";
   value.textContent = url || "미설정";
@@ -1815,7 +1933,12 @@ function renderAdminBoard() {
 
   const songs = document.createElement("div");
   songs.className = "admin-songs";
-  songs.append(adminSlotButton("opening"), adminSlotButton("ending"));
+  songs.append(
+    adminSlotButton("opening"),
+    adminSlotButton("ending"),
+    adminSlotButton("game"),
+    adminSlotButton("unit"),
+  );
   adminBoard.append(songs);
 
   const grid = document.createElement("div");
@@ -1862,9 +1985,10 @@ let editingSlot = null;
 function openSlotEditor(slot) {
   editingSlot = slot;
   const url = getVideoUrl(adminState.level, adminState.month, slot);
-  if (adminSlotTitle) adminSlotTitle.textContent = slotLabel(slot);
+  if (adminSlotTitle)
+    adminSlotTitle.textContent = slotLabel(slot, adminState.level);
   if (adminSlotSub)
-    adminSlotSub.textContent = `${adminState.level} · ${adminState.month}`;
+    adminSlotSub.textContent = `${levelLabel(adminState.level)} · ${adminState.month}`;
   if (adminSlotInput) adminSlotInput.value = url || "";
   if (adminSlotModal) adminSlotModal.hidden = false;
   document.body.classList.add("admin-modal-open");
@@ -1980,7 +2104,7 @@ renderCalendarV3();
 const [view, hashLevel, hashMonth] = window.location.hash.slice(1).split("/");
 if (view === "months" && hashLevel) {
   state.level = decodeURIComponent(hashLevel);
-  monthLevelTag.textContent = state.level;
+  monthLevelTag.textContent = levelLabel(state.level);
   applyLevelTheme();
   showScreen("months");
 }
@@ -1996,7 +2120,7 @@ if (view === "login") {
 if (view === "content" && hashLevel && hashMonth) {
   state.level = decodeURIComponent(hashLevel);
   state.month = decodeURIComponent(hashMonth);
-  monthLevelTag.textContent = state.level;
+  monthLevelTag.textContent = levelLabel(state.level);
   updateContentMonthNumber();
   applyLevelTheme();
   showScreen("content");
@@ -2005,7 +2129,7 @@ if (view === "content" && hashLevel && hashMonth) {
 if (view === "content-v2" && hashLevel && hashMonth) {
   state.level = decodeURIComponent(hashLevel);
   state.month = decodeURIComponent(hashMonth);
-  monthLevelTag.textContent = state.level;
+  monthLevelTag.textContent = levelLabel(state.level);
   updateContentV2Header();
   applyLevelTheme();
   showScreen("contentV2");
@@ -2014,7 +2138,7 @@ if (view === "content-v2" && hashLevel && hashMonth) {
 if (view === "content-v3" && hashLevel && hashMonth) {
   state.level = decodeURIComponent(hashLevel);
   state.month = decodeURIComponent(hashMonth);
-  monthLevelTag.textContent = state.level;
+  monthLevelTag.textContent = levelLabel(state.level);
   updateContentV3Header();
   renderCalendarV3();
   applyLevelTheme();
