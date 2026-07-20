@@ -12,6 +12,15 @@ what's next, so any new session can continue without losing prior context.
 - Supporting docs: `PRODUCT_SPEC.md`, `DESIGN.md`, `PLATFORM_ROADMAP.md`, `NOTES.md`.
 - The later Next.js/Supabase/Capacitor rebuild is out of scope for now (`PLATFORM_ROADMAP.md`).
 
+## ⏳ In-progress work (다음 세션에서 이어서)
+
+**Check this FIRST when resuming.** If a session ends mid-task, record here: what was being
+done, what's finished vs. remaining, the next concrete step, and any files touched but not
+yet verified/committed. Clear the entry once the work is completed and logged below.
+
+- _(비어 있음 — 진행 중 작업 없음. 모든 작업이 완료·배포된 상태: 마지막 배포 `c6a001f`,
+  2026-07-21.)_
+
 ## Current phase: DESIGN ITERATION (live for client review)
 
 We are polishing the visual design per the user's requests — one change at a time — and
@@ -838,7 +847,11 @@ Delivery is **phased**; content access gate is **UI-level** (grade 3 → cute po
 
 ## Resume checklist
 
-1. Read this file (status + workflow), then `CLAUDE.md` (doc map) and `NOTES.md` (gotchas).
-2. Skim `PRODUCT_SPEC.md` + `DESIGN.md` for product/visual constraints relevant to the task.
-3. Design phase: make the change locally + verify; commit/deploy only on request.
-4. Run `npm.cmd run qa` before committing; `git push` auto-deploys to production.
+1. **Check "⏳ In-progress work" at the top of this file** — if a task was cut off mid-way,
+   continue it from the recorded next step before taking new work.
+2. Read this file (status + workflow), then `CLAUDE.md` (doc map) and `NOTES.md` (gotchas).
+3. Skim `PRODUCT_SPEC.md` + `DESIGN.md` for product/visual constraints relevant to the task.
+4. Design phase: make the change locally + verify; commit/deploy only on request.
+5. Run `npm.cmd run qa` before committing; `git push` auto-deploys to production.
+6. **Session wrap-up:** log completed work in "Design changes done so far" (dated, with the
+   why/how); anything unfinished goes into "⏳ In-progress work" with the next concrete step.
