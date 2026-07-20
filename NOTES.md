@@ -312,3 +312,8 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   reads them as ANSI/CP949 and silently mangles every multibyte char (♪, 📖, ★, — → `??`),
   and `-Encoding utf8` writes a BOM on top. This corrupted `app.js` once (recovered via
   `git checkout`). Do bulk replacements with the harness Edit tool (`replace_all`) instead.
+- **No double quotes (`"`) inside `git commit -m` messages under PowerShell 5.1** — even in a
+  single-quoted here-string (`@'…'@`), PS 5.1's native-arg requoting breaks at embedded `"`,
+  splitting the message into bogus pathspecs (`error: pathspec '…' did not match`) and failing
+  the commit. Symptom seen 2026-07-21. Fix: reword without `"`, or write the message to a temp
+  file and use `git commit -F <file>`.
