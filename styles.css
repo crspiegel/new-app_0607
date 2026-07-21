@@ -5601,3 +5601,38 @@ body.bg-editing .page-bg-layer {
   pointer-events: auto;
   z-index: 10;
 }
+.bg-library-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.bg-lib-item {
+  display: grid;
+  gap: 4px;
+}
+.bg-lib-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: #f2f2f2;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  cursor: pointer;
+}
+.bg-lib-actions {
+  display: flex;
+  gap: 4px;
+}
+.bg-lib-actions button {
+  flex: 1;
+  padding: 3px 4px;
+  font-size: 11px;
+}
+.bg-lib-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: #888;
+}

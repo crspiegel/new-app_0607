@@ -70,8 +70,122 @@ function refreshBgSourceLine() {
     : "현재 이 월은 레벨 기본값을 사용 중입니다.";
 }
 
+function bgPublicUrl(path) {
+  return sb.storage.from(BG_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+async function renderBgLibrary() {
+  bgLibraryGrid.innerHTML = "";
+  const { data, error } = await sb.storage
+    .from(BG_BUCKET)
+    .list(BG_LIB_PREFIX, {
+      limit: 200,
+      sortBy: { column: "created_at", order: "desc" },
+    });
+  if (error) {
+    setBgStatus("라이브러리를 불러올 수 없습니다.");
+    return;
+  }
+  if (!data.length) {
+    bgLibraryGrid.innerHTML =
+      '<p class="bg-lib-empty">아직 이미지가 없습니다 — 업로드로 시작하세요.</p>';
+    return;
+  }
+  data.forEach((item) => {
+    const path = `${BG_LIB_PREFIX}/${item.name}`;
+    const url = bgPublicUrl(path);
+    const card = document.createElement("div");
+    card.className = "bg-lib-item";
+    const thumb = document.createElement("button");
+    thumb.type = "button";
+    thumb.className = "bg-lib-thumb";
+    thumb.title = "클릭하면 화면 중앙에 요소로 추가";
+    thumb.style.backgroundImage = `url("${url}")`;
+    thumb.addEventListener("click", () => {
+      bgEdit.data.elements.push({
+        src: url,
+        x: 50,
+        y: 40,
+        w: 20,
+        r: 0,
+        fx: false,
+        z: bgEdit.data.elements.length,
+      });
+      bgEdit.selected = bgEdit.data.elements.length - 1;
+      bgMarkDirty();
+      renderBgEditCanvas();
+    });
+    const actions = document.createElement("div");
+    actions.className = "bg-lib-actions";
+    const asFull = document.createElement("button");
+    asFull.type = "button";
+    asFull.textContent = "전체 배경";
+    asFull.addEventListener("click", () => {
+      bgEdit.data.full = url;
+      bgMarkDirty();
+      renderBgEditCanvas();
+    });
+    const del = document.createElement("button");
+    del.type = "button";
+    del.textContent = "삭제";
+    // Two-step confirm (no window.confirm — matches the codebase's modal-free
+    // inline patterns and keeps automation-safe).
+    del.addEventListener("click", async () => {
+      if (del.dataset.armed !== "1") {
+        del.dataset.armed = "1";
+        del.textContent = "정말 삭제?";
+        setBgStatus("이 이미지를 쓰는 페이지에서는 요소가 사라집니다.");
+        return;
+      }
+      const { error: rmErr } = await sb.storage.from(BG_BUCKET).remove([path]);
+      if (rmErr) setBgStatus("삭제 실패.");
+      else {
+        setBgStatus("라이브러리에서 삭제했습니다.");
+        await renderBgLibrary();
+      }
+    });
+    actions.append(asFull, del);
+    card.append(thumb, actions);
+    bgLibraryGrid.append(card);
+  });
+}
+
+bgUploadBtn.addEventListener("click", () => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = BG_TYPES.join(",");
+  input.multiple = true;
+  input.addEventListener("change", async () => {
+    for (const file of input.files) await bgUploadFile(file);
+  });
+  input.click();
+});
+
+async function bgUploadFile(file) {
+  if (!BG_TYPES.includes(file.type)) {
+    setBgStatus("PNG / JPG / WebP 파일만 올릴 수 있습니다.");
+    return;
+  }
+  if (file.size > BG_MAX_BYTES) {
+    setBgStatus("파일당 5MB 이하만 올릴 수 있습니다.");
+    return;
+  }
+  setBgStatus("업로드 중…");
+  const safe = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+  const { error } = await sb.storage
+    .from(BG_BUCKET)
+    .upload(`${BG_LIB_PREFIX}/${Date.now()}-${safe}`, file, {
+      contentType: file.type,
+    });
+  if (error) {
+    setBgStatus("업로드 실패.");
+    return;
+  }
+  setBgStatus("업로드 완료.");
+  await renderBgLibrary();
+}
+
 // Stubs — Task 4 (library) and Task 5 (canvas) fill these in.
-async function renderBgLibrary() {}
 function renderBgEditCanvas() {}
 
 function enterBgEdit() {
