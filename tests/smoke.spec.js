@@ -111,6 +111,8 @@ test("background edit button hidden for non-admin visitors", async ({
   await page.goto("/#content/Level%201/March");
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   // FAB exists in the DOM but CSS keeps it display:none without body.is-admin.
+  await expect(page.locator("#bgEditFab")).toHaveCount(1);
+  await expect(page.locator("#bgEditorPanel")).toHaveCount(1);
   await expect(page.locator("#bgEditFab")).toBeHidden();
   await expect(page.locator("#bgEditorPanel")).toBeHidden();
 });

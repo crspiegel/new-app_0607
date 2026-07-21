@@ -59,6 +59,7 @@ function bgMarkDirty() {
 // Which source row is the page currently using? (page2 only — page1 has no
 // override concept.)
 function refreshBgSourceLine() {
+  if (!bgSourceLine) return;
   if (bgEdit.page !== "page2") {
     bgSourceLine.textContent = "";
     return;
