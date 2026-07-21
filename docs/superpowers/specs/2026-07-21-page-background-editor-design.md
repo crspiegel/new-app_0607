@@ -56,7 +56,7 @@
 
 ### 테이블 `page_backgrounds`
 
-- 컬럼: `id`, `level`(text), `page`(text: `page1`|`page2`),
+- 컬럼: `level`(text), `page`(text: `page1`|`page2`),
   `month`(text, `''` = 레벨 기본값), `data`(jsonb), `updated_at`
 - 기본키: (level, page, month) — month는 '' 기본값의 not null 컬럼 (Supabase upsert onConflict 호환)
 - `data` 스키마:
