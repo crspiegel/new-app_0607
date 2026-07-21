@@ -185,8 +185,64 @@ async function bgUploadFile(file) {
   await renderBgLibrary();
 }
 
-// Stubs — Task 4 (library) and Task 5 (canvas) fill these in.
-function renderBgEditCanvas() {}
+function renderBgEditCanvas() {
+  const layer = bgLayer();
+  layer.innerHTML = "";
+  if (bgEdit.data.full) {
+    const full = document.createElement("div");
+    full.className = "page-bg-full";
+    full.style.backgroundImage = `url("${bgEdit.data.full}")`;
+    layer.append(full);
+  }
+  bgFullClear.hidden = !bgEdit.data.full;
+  bgFullHint.hidden = Boolean(bgEdit.data.full);
+  bgEdit.data.elements.forEach((item, index) => {
+    layer.append(bgEditShell(item, index));
+  });
+  bgElTools.hidden = bgEdit.selected < 0;
+}
+
+// One positioned wrapper per element: the img mirrors the viewer geometry
+// (center-% left/top, width-%, rotate on the shell, flip on the img), plus
+// resize/rotate handles when selected.
+function bgEditShell(item, index) {
+  const shell = document.createElement("div");
+  shell.className = "bg-edit-el";
+  if (index === bgEdit.selected) shell.classList.add("selected");
+  shell.style.left = `${item.x}%`;
+  shell.style.top = `${item.y}%`;
+  shell.style.width = `${item.w}%`;
+  shell.style.transform = `translate(-50%, -50%) rotate(${item.r || 0}deg)`;
+  const img = document.createElement("img");
+  img.src = item.src;
+  img.alt = "";
+  img.draggable = false;
+  img.style.transform = `scaleX(${item.fx ? -1 : 1})`;
+  shell.append(img);
+  if (index === bgEdit.selected) {
+    const resize = document.createElement("span");
+    resize.className = "bg-edit-handle bg-edit-resize";
+    resize.title = "크기";
+    const rotate = document.createElement("span");
+    rotate.className = "bg-edit-handle bg-edit-rotate";
+    rotate.title = "회전";
+    shell.append(resize, rotate);
+    wireBgHandle(resize, index, "resize");
+    wireBgHandle(rotate, index, "rotate");
+  }
+  shell.addEventListener("pointerdown", (event) => {
+    if (event.target.classList.contains("bg-edit-handle")) return;
+    selectBgElement(index);
+    startBgDrag(event, index, "move");
+  });
+  return shell;
+}
+
+function selectBgElement(index) {
+  if (bgEdit.selected === index) return;
+  bgEdit.selected = index;
+  renderBgEditCanvas();
+}
 
 function enterBgEdit() {
   const name = document.body.dataset.screen;
@@ -221,6 +277,101 @@ function enterBgEdit() {
   renderBgLibrary();
   renderBgEditCanvas();
 }
+
+// One pointer session drives move / resize (ratio-locked width) / rotate.
+// The listeners live on document, so re-rendering the shells mid-drag is safe.
+function startBgDrag(event, index, mode) {
+  event.preventDefault();
+  const item = bgEdit.data.elements[index];
+  const rect = bgLayer().getBoundingClientRect();
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const start = { x: item.x, y: item.y, w: item.w, r: item.r || 0 };
+  const centerPx = {
+    x: rect.left + (item.x / 100) * rect.width,
+    y: rect.top + (item.y / 100) * rect.height,
+  };
+  const startDist = Math.max(
+    8,
+    Math.hypot(startX - centerPx.x, startY - centerPx.y),
+  );
+  const startAngle = Math.atan2(startY - centerPx.y, startX - centerPx.x);
+
+  function onMove(move) {
+    if (mode === "move") {
+      item.x = start.x + ((move.clientX - startX) / rect.width) * 100;
+      item.y = start.y + ((move.clientY - startY) / rect.height) * 100;
+      // Decorations may bleed off the edges, but never get lost entirely.
+      item.x = Math.min(150, Math.max(-50, item.x));
+      item.y = Math.min(150, Math.max(-50, item.y));
+    } else if (mode === "resize") {
+      const dist = Math.hypot(
+        move.clientX - centerPx.x,
+        move.clientY - centerPx.y,
+      );
+      item.w = Math.min(200, Math.max(2, start.w * (dist / startDist)));
+    } else {
+      const angle = Math.atan2(
+        move.clientY - centerPx.y,
+        move.clientX - centerPx.x,
+      );
+      item.r = Math.round(start.r + ((angle - startAngle) * 180) / Math.PI);
+    }
+    bgMarkDirty();
+    renderBgEditCanvas();
+  }
+  function onUp() {
+    document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
+  }
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerup", onUp);
+}
+
+function wireBgHandle(handle, index, mode) {
+  handle.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+    startBgDrag(event, index, mode);
+  });
+}
+
+bgElTools.addEventListener("click", (event) => {
+  const act = event.target.dataset.elAct;
+  if (!act || bgEdit.selected < 0) return;
+  const els = bgEdit.data.elements;
+  const index = bgEdit.selected;
+  if (act === "flip") els[index].fx = !els[index].fx;
+  if (act === "delete") {
+    els.splice(index, 1);
+    bgEdit.selected = -1;
+  }
+  // Array order IS the stacking order (normalized to z on save).
+  if (act === "forward" && index < els.length - 1) {
+    [els[index], els[index + 1]] = [els[index + 1], els[index]];
+    bgEdit.selected = index + 1;
+  }
+  if (act === "backward" && index > 0) {
+    [els[index], els[index - 1]] = [els[index - 1], els[index]];
+    bgEdit.selected = index - 1;
+  }
+  bgMarkDirty();
+  renderBgEditCanvas();
+});
+
+bgFullClear.addEventListener("click", () => {
+  bgEdit.data.full = null;
+  bgMarkDirty();
+  renderBgEditCanvas();
+});
+
+// Clicking empty layer space clears the selection.
+document.addEventListener("pointerdown", (event) => {
+  if (!bgEdit.on) return;
+  if (event.target === bgLayer()) {
+    bgEdit.selected = -1;
+    renderBgEditCanvas();
+  }
+});
 
 function exitBgEdit() {
   bgEdit.on = false;

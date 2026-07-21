@@ -5636,3 +5636,39 @@ body.bg-editing .page-bg-layer {
   font-size: 12px;
   color: #888;
 }
+
+.bg-edit-el {
+  position: absolute;
+  cursor: grab;
+  touch-action: none;
+}
+.bg-edit-el img {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+}
+.bg-edit-el.selected {
+  outline: 2px dashed #1f5fa8;
+  outline-offset: 2px;
+}
+.bg-edit-handle {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #1f5fa8;
+  border-radius: 50%;
+  background: #fff;
+}
+.bg-edit-resize {
+  right: -10px;
+  bottom: -10px;
+  cursor: nwse-resize;
+}
+.bg-edit-rotate {
+  top: -26px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: grab;
+}
