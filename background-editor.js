@@ -367,7 +367,8 @@ bgFullClear.addEventListener("click", () => {
 // Clicking empty layer space clears the selection.
 document.addEventListener("pointerdown", (event) => {
   if (!bgEdit.on) return;
-  if (event.target === bgLayer()) {
+  const target = event.target;
+  if (target === bgLayer() || target.classList.contains("page-bg-full")) {
     bgEdit.selected = -1;
     renderBgEditCanvas();
   }
