@@ -778,6 +778,53 @@
       </footer>
     </div>
 
+    <!-- Admin-only page-background editor (see background-editor.js).
+         The FAB shows only via CSS on body.is-admin + data-screen months/
+         content; the panel is toggled by enterBgEdit/exitBgEdit. -->
+    <button type="button" class="bg-edit-fab" id="bgEditFab">배경 편집</button>
+    <aside
+      class="bg-editor-panel"
+      id="bgEditorPanel"
+      hidden
+      aria-label="배경 편집"
+    >
+      <div class="bg-editor-head">
+        <strong>배경 편집</strong>
+        <span id="bgEditorTarget"></span>
+        <button type="button" id="bgEditorClose" aria-label="편집 닫기">
+          ✕
+        </button>
+      </div>
+      <p class="bg-editor-source" id="bgEditorSource"></p>
+      <div class="bg-editor-section">
+        <strong>전체 배경</strong>
+        <div class="bg-full-slot" id="bgFullSlot">
+          <span id="bgFullHint">라이브러리의 [전체 배경] 버튼으로 지정</span>
+          <button type="button" id="bgFullClear" hidden>전체 배경 제거</button>
+        </div>
+      </div>
+      <div class="bg-editor-section">
+        <strong>라이브러리</strong>
+        <button type="button" id="bgUploadBtn">
+          이미지 업로드 (PNG/JPG/WebP, 5MB)
+        </button>
+        <div class="bg-library-grid" id="bgLibraryGrid"></div>
+      </div>
+      <div class="bg-editor-el-tools" id="bgElTools" hidden>
+        <button type="button" data-el-act="flip">좌우반전</button>
+        <button type="button" data-el-act="forward">앞으로</button>
+        <button type="button" data-el-act="backward">뒤로</button>
+        <button type="button" data-el-act="delete">요소 삭제</button>
+      </div>
+      <div class="bg-editor-save">
+        <span class="bg-editor-status" id="bgEditorStatus"></span>
+        <button type="button" id="bgSaveMonth">이 월에만 저장</button>
+        <button type="button" id="bgSaveDefault">레벨 기본값으로 저장</button>
+        <button type="button" id="bgDeleteOverride">이 월 개별설정 삭제</button>
+        <button type="button" id="bgSavePage1">저장</button>
+      </div>
+    </aside>
+
     <!-- Video player modal (Level 1 / March only). Hidden until a lesson or
          Opening/Ending Song button is clicked on that page. Custom shell with
          our own Play / Pause / Stop / Repeat / Maximize controls + progress
@@ -1240,5 +1287,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
+    <script src="background-editor.js"></script>
   </body>
 </html>

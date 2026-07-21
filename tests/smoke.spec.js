@@ -104,3 +104,13 @@ test("seeded background renders full image and elements, month row wins", async 
   await expect(page.locator("body")).not.toHaveClass(/page-bg-active/);
   await expect(page.locator("#pageBgLayer .page-bg-el")).toHaveCount(0);
 });
+
+test("background edit button hidden for non-admin visitors", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%201/March");
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  // FAB exists in the DOM but CSS keeps it display:none without body.is-admin.
+  await expect(page.locator("#bgEditFab")).toBeHidden();
+  await expect(page.locator("#bgEditorPanel")).toBeHidden();
+});
