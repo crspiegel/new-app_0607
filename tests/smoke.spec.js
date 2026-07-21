@@ -60,3 +60,47 @@ test("calendar version 3 renders Mon-Fri learning calendar", async ({
     page.locator(".content-v3-day-cell[data-content-type]").first(),
   ).toBeVisible();
 });
+
+test("page background layer stays inert for visitors", async ({ page }) => {
+  await page.goto("/#content/Level%201/March");
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  // No saved background → body class off, layer empty, page unchanged.
+  await expect(page.locator("body")).not.toHaveClass(/page-bg-active/);
+  await expect(page.locator("#pageBgLayer")).toHaveCount(1);
+  await expect(page.locator("#pageBgLayer .page-bg-el")).toHaveCount(0);
+});
+
+test("seeded background renders full image and elements, month row wins", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%201/March");
+  await page.evaluate(() => {
+    const { bgCache, bgKey, applyPageBackground } = window.craBg;
+    bgCache[bgKey("Level 1", "page2", "")] = {
+      full: "assets/l1-march-book-1.jpg",
+      elements: [
+        {
+          src: "assets/l1-march-book-2.jpg",
+          x: 20,
+          y: 30,
+          w: 10,
+          r: 15,
+          fx: true,
+          z: 0,
+        },
+      ],
+    };
+    applyPageBackground("content");
+  });
+  await expect(page.locator("body")).toHaveClass(/page-bg-active/);
+  await expect(page.locator("#pageBgLayer .page-bg-full")).toHaveCount(1);
+  await expect(page.locator("#pageBgLayer .page-bg-el")).toHaveCount(1);
+  // A month row REPLACES the level default entirely (no merging).
+  await page.evaluate(() => {
+    const { bgCache, bgKey, applyPageBackground } = window.craBg;
+    bgCache[bgKey("Level 1", "page2", "March")] = { full: null, elements: [] };
+    applyPageBackground("content");
+  });
+  await expect(page.locator("body")).not.toHaveClass(/page-bg-active/);
+  await expect(page.locator("#pageBgLayer .page-bg-el")).toHaveCount(0);
+});

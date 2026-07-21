@@ -5455,3 +5455,47 @@ body.admin-modal-open {
     grid-template-columns: 56px repeat(5, minmax(0, 1fr));
   }
 }
+
+/* ==== Page background layer (admin-composed, 페이지1/페이지2) ============
+   #pageBgLayer sits above the body/footer tints but below all content; the
+   opaque sticky topbar (z-index 20) paints over its top edge, which is what
+   excludes the header area. While active, the layer takes over painting the
+   level tint so main/footer can go transparent — a full image then reaches
+   every edge of body+footer with no seam. */
+.app-shell {
+  position: relative;
+}
+.page-bg-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+}
+body.page-bg-active .page-bg-layer {
+  display: block;
+  background: var(--level-accent-soft, var(--canvas));
+}
+.page-bg-full {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+.page-bg-el {
+  position: absolute;
+  height: auto;
+  user-select: none;
+}
+body.page-bg-active main,
+body.page-bg-active .site-footer {
+  position: relative;
+  z-index: 2;
+  background: transparent;
+}
+body.page-bg-active #monthScreen[class*="level-theme-"] .section-white,
+body.page-bg-active #contentScreen .section-blue {
+  background: transparent;
+}

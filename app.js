@@ -179,6 +179,78 @@ function getCover(level, month, book) {
   return (page && page.covers && page.covers[book]) || "";
 }
 
+/* ---- Page backgrounds (페이지1 = month grid, 페이지2 = weekday board) ---
+   Admin-composed decorative backgrounds for the body+footer area of the two
+   level pages. Rows live in Supabase page_backgrounds keyed (level, page,
+   month) where month '' = the level-wide default; a month row REPLACES the
+   default entirely (no merging). data: { full, elements: [{ src, x, y, w, r,
+   fx, z }] } — x/y = center %, w = width % of the layer, r = deg, fx = flip.
+   The layer paints the level tint itself while active so the main/footer
+   tints can go transparent without a visible change (seamless body+footer). */
+const bgCache = {};
+function bgKey(level, page, month) {
+  return `${level}||${page}||${month || ""}`;
+}
+function getBackgroundEntry(level, page, month) {
+  return (
+    bgCache[bgKey(level, page, month)] ||
+    bgCache[bgKey(level, page, "")] ||
+    null
+  );
+}
+
+const appShell = document.querySelector(".app-shell");
+// Which screens have an editable background, and their storage page key.
+const SCREEN_BG_PAGE = { months: "page1", content: "page2" };
+
+function ensureBgLayer() {
+  let layer = document.querySelector("#pageBgLayer");
+  if (!layer) {
+    layer = document.createElement("div");
+    layer.id = "pageBgLayer";
+    layer.className = "page-bg-layer";
+    layer.setAttribute("aria-hidden", "true");
+    appShell.append(layer);
+  }
+  return layer;
+}
+
+function applyPageBackground(screenName) {
+  const layer = ensureBgLayer();
+  const page = SCREEN_BG_PAGE[screenName];
+  const entry = page
+    ? getBackgroundEntry(state.level, page, page === "page2" ? state.month : "")
+    : null;
+  layer.innerHTML = "";
+  const active = Boolean(
+    entry && (entry.full || (entry.elements && entry.elements.length)),
+  );
+  document.body.classList.toggle("page-bg-active", active);
+  if (!active) return;
+  if (entry.full) {
+    const full = document.createElement("div");
+    full.className = "page-bg-full";
+    full.style.backgroundImage = `url("${entry.full}")`;
+    layer.append(full);
+  }
+  [...(entry.elements || [])]
+    .sort((a, b) => (a.z || 0) - (b.z || 0))
+    .forEach((item) => {
+      const img = document.createElement("img");
+      img.className = "page-bg-el";
+      img.alt = "";
+      img.draggable = false;
+      img.src = item.src;
+      img.style.left = `${item.x}%`;
+      img.style.top = `${item.y}%`;
+      img.style.width = `${item.w}%`;
+      img.style.transform = `translate(-50%, -50%) rotate(${item.r || 0}deg) scaleX(${item.fx ? -1 : 1})`;
+      // A deleted library file must never break the page — drop just the img.
+      img.addEventListener("error", () => img.remove());
+      layer.append(img);
+    });
+}
+
 const screens = {
   home: document.querySelector("#homeScreen"),
   overview: document.querySelector("#overviewScreen"),
@@ -239,6 +311,8 @@ function showScreen(name) {
   if (!screens[name]) {
     document.body.classList.remove("subpage-active");
     screens.home.classList.add("screen-active");
+    document.body.dataset.screen = "home";
+    applyPageBackground("home");
     return;
   }
   document.body.classList.toggle("subpage-active", name !== "home");
@@ -249,6 +323,8 @@ function showScreen(name) {
     }
   }
   screens[name].classList.add("screen-active");
+  document.body.dataset.screen = name;
+  applyPageBackground(name);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1469,6 +1545,22 @@ async function hydrateContent() {
   if (screens.content.classList.contains("screen-active")) refreshCovers();
 }
 
+// Load every page_backgrounds row so the two level pages paint saved
+// backgrounds. Mirrors hydrateContent: fetch-all into the cache, then
+// repaint whichever screen is showing.
+async function hydrateBackgrounds() {
+  if (!sb) return;
+  const { data, error } = await sb.from("page_backgrounds").select("*");
+  if (error || !data) return;
+  data.forEach((row) => {
+    bgCache[bgKey(row.level, row.page, row.month)] = row.data || {};
+  });
+  const active = Object.entries(screens).find(([, el]) =>
+    el.classList.contains("screen-active"),
+  );
+  if (active) applyPageBackground(active[0]);
+}
+
 // Mutable working copy of a page's data (for editing/saving).
 function pageEntry(level, month) {
   const key = pageKey(level, month);
@@ -2184,6 +2276,7 @@ if (view === "content-v3" && hashLevel && hashMonth) {
   updateAdminUI();
   refreshSignupUI();
   await hydrateContent();
+  await hydrateBackgrounds();
   if (view === "admin") {
     // Mirror openAdmin() so a REFRESH on #admin restores the FULL admin view —
     // board AND member list (+ default tab). Previously this path rendered only
@@ -2193,3 +2286,6 @@ if (view === "content-v3" && hashLevel && hashMonth) {
     openAdmin();
   }
 })();
+
+// Bridge for background-editor.js (separate classic script) and Playwright.
+window.craBg = { bgCache, bgKey, getBackgroundEntry, applyPageBackground };
