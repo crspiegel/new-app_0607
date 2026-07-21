@@ -244,6 +244,48 @@ create policy covers_admin_write on storage.objects
   using (bucket_id = 'covers' and public.is_admin())
   with check (bucket_id = 'covers' and public.is_admin());
 
+-- ---------------------------------------------------------------------------
+-- Page backgrounds (페이지1/페이지2 body+footer 배경, 관리자 편집)
+--   One row per (level, page, month). page = 'page1' | 'page2'.
+--   month = '' means "level default" (page1 rows always use '').
+--   A month row REPLACES the level default entirely (no merging).
+--   data: { "full": "<public url>" | null,
+--           "elements": [ { "src", "x", "y", "w", "r", "fx", "z" } ] }
+--   x/y = element center as % of the layer, w = width % of the layer,
+--   r = rotation deg, fx = horizontal flip, z = stacking order.
+-- ---------------------------------------------------------------------------
+create table if not exists public.page_backgrounds (
+  level      text not null,
+  page       text not null check (page in ('page1', 'page2')),
+  month      text not null default '',
+  data       jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (level, page, month)
+);
+
+alter table public.page_backgrounds enable row level security;
+
+drop policy if exists page_backgrounds_read on public.page_backgrounds;
+create policy page_backgrounds_read on public.page_backgrounds
+  for select using (true);
+
+drop policy if exists page_backgrounds_write on public.page_backgrounds;
+create policy page_backgrounds_write on public.page_backgrounds
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- Storage policies for the "backgrounds" bucket
+-- (Create the bucket first in the Dashboard: Storage → New bucket → name
+--  "backgrounds" → PUBLIC. Then these policies allow public read + admin writes.)
+drop policy if exists backgrounds_public_read on storage.objects;
+create policy backgrounds_public_read on storage.objects
+  for select using (bucket_id = 'backgrounds');
+
+drop policy if exists backgrounds_admin_write on storage.objects;
+create policy backgrounds_admin_write on storage.objects
+  for all
+  using (bucket_id = 'backgrounds' and public.is_admin())
+  with check (bucket_id = 'backgrounds' and public.is_admin());
+
 -- ============================================================================
 -- AFTER running the above: register your first admin.
 -- 1) Dashboard → Authentication → Users → Add user (email + password).
