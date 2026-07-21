@@ -472,3 +472,19 @@ document.addEventListener(
   },
   true,
 );
+
+// Admin-screen shortcut: jump to the selected level/month's 페이지2 and start
+// editing right away (work rule: the admin screen mirrors the user screen).
+const adminBgBtn = document.querySelector("#adminBgBtn");
+if (adminBgBtn) {
+  adminBgBtn.addEventListener("click", () => {
+    state.level = adminState.level;
+    state.month = adminState.month;
+    monthLevelTag.textContent = levelLabel(state.level);
+    updateContentMonthNumber();
+    applyLevelTheme();
+    setHash("content");
+    showScreen("content");
+    enterBgEdit();
+  });
+}
