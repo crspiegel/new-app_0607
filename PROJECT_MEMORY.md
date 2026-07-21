@@ -18,9 +18,8 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-- _(배경 편집기 실사용 검증 중 — Supabase 수동 단계 완료, 전체 배경 버그 수정
-  (`5f70c34`), 사용자 확인 완료. 남은 수동 QA 항목과 push는 배경 편집기 섹션 참조.
-  최신 커밋: `fix: 전체 배경이 body를 못 덮던 버그`, 2026-07-22.)_
+- _(비어 있음 — 진행 중 작업 없음. 배경 편집기 구현→검증→배포까지 완료, 2026-07-22.
+  최신 커밋: `docs: 배경 편집기 실사용 검증 진행 상태 기록` 이후 세션 종료 정리 커밋.)_
 
 ## Current phase: DESIGN ITERATION (live for client review)
 
@@ -843,9 +842,12 @@ Delivery is **phased**; content access gate is **UI-level** (grade 3 → cute po
     목록에서 누락된 것이 원인, 수정 완료(`5f70c34`). computed-style 회귀 테스트 추가.
     부수 수정: smoke 배경 테스트가 실서비스 Supabase 데이터에 의존하던 문제 →
     `resetBgCache()`로 결정적으로 변경 (NOTES.md 참조).
-  - ✅ 수동 QA: 전체 배경 적용(body+footer) 사용자 확인 완료 (2026-07-22).
-  - ⚠ **남은 수동 QA**: 요소 배치/드래그 저장, 페이지2 기본값→월 오버라이드→삭제 흐름,
-    4레벨×페이지1, 반응형 스케일, 이미지 로드 실패 폴백. **push(배포)는 사용자 요청 대기.**
+  - ✅ **수동 QA 전체 완료 (2026-07-22, 사용자 직접 확인):** 전체 배경(body+footer),
+    요소 배치/드래그 저장, 페이지2 기본값→월 오버라이드→삭제 흐름, 미저장 이동 가드,
+    반응형 스케일 — 모두 정상.
+  - ✅ **배포 완료 (2026-07-22):** push `e67d0b8 → 7abe59e`(17커밋) → Vercel 자동 배포.
+    new-app0607.vercel.app 및 cambridgereading.com(→ www 308 리다이렉트) 모두 새 빌드
+    서빙 확인. 사용자가 **라이브 사이트에서 배경 편집 정상 동작 최종 확인**.
 
 ## Backlog (feature work, after design)
 
