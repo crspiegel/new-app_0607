@@ -393,3 +393,81 @@ bgCloseBtn.addEventListener("click", () => {
   }
   exitBgEdit();
 });
+
+/* ---- persistence -------------------------------------------------------- */
+
+function bgNormalized() {
+  return {
+    full: bgEdit.data.full || null,
+    elements: bgEdit.data.elements.map((item, index) => ({
+      ...item,
+      z: index,
+    })),
+  };
+}
+
+async function bgSave(month) {
+  setBgStatus("저장 중…");
+  const data = bgNormalized();
+  const { error } = await sb.from("page_backgrounds").upsert(
+    { level: state.level, page: bgEdit.page, month: month || "", data },
+    { onConflict: "level,page,month" },
+  );
+  if (error) {
+    setBgStatus("저장 실패.");
+    return;
+  }
+  window.craBg.bgCache[window.craBg.bgKey(state.level, bgEdit.page, month)] =
+    data;
+  bgEdit.dirty = false;
+  bgEdit.discardArmed = false;
+  setBgStatus("저장 완료.");
+  refreshBgSourceLine();
+}
+
+bgSavePage1.addEventListener("click", () => bgSave(""));
+bgSaveMonth.addEventListener("click", () => bgSave(state.month));
+bgSaveDefault.addEventListener("click", () => bgSave(""));
+
+bgDeleteOverride.addEventListener("click", async () => {
+  setBgStatus("삭제 중…");
+  const { error } = await sb
+    .from("page_backgrounds")
+    .delete()
+    .match({ level: state.level, page: "page2", month: state.month });
+  if (error) {
+    setBgStatus("삭제 실패.");
+    return;
+  }
+  delete window.craBg.bgCache[
+    window.craBg.bgKey(state.level, "page2", state.month)
+  ];
+  // The editor falls back to the level default, same as the public page will.
+  bgEdit.data = bgDeepCopy(
+    window.craBg.getBackgroundEntry(state.level, "page2", state.month),
+  );
+  if (!Array.isArray(bgEdit.data.elements)) bgEdit.data.elements = [];
+  bgEdit.dirty = false;
+  bgEdit.selected = -1;
+  setBgStatus("개별설정 삭제 — 이 월은 레벨 기본값을 사용합니다.");
+  refreshBgSourceLine();
+  renderBgEditCanvas();
+});
+
+// While editing with unsaved changes, swallow in-app navigation clicks
+// (month Back/Next, month grid, top nav, brand, admin button) in the capture
+// phase — before app.js's own handlers run.
+document.addEventListener(
+  "click",
+  (event) => {
+    if (!bgEdit.on || !bgEdit.dirty) return;
+    const nav = event.target.closest(
+      ".content-nav-prev, .content-nav-next, .month-button, .top-nav-link, .brand, [data-view], .admin-nav-button",
+    );
+    if (!nav || bgPanel.contains(nav)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setBgStatus("저장하지 않은 변경이 있습니다 — 저장하거나 ✕로 닫아 주세요.");
+  },
+  true,
+);
