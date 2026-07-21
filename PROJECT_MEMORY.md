@@ -18,9 +18,9 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-- _(비어 있음 — 진행 중 작업 없음. 배경 편집기 8/8 태스크 완료·문서 갱신: 최신 커밋
-  `docs: 배경 편집기 완료 기록 + gotcha`, 2026-07-22. 단, Supabase 수동 단계 2개가 대기
-  중이므로 편집 기능은 아직 미동작 — 위 배경 편집기 항목의 수동 단계 참조.)_
+- _(배경 편집기 실사용 검증 중 — Supabase 수동 단계 완료, 전체 배경 버그 수정
+  (`5f70c34`), 사용자 확인 완료. 남은 수동 QA 항목과 push는 배경 편집기 섹션 참조.
+  최신 커밋: `fix: 전체 배경이 body를 못 덮던 버그`, 2026-07-22.)_
 
 ## Current phase: DESIGN ITERATION (live for client review)
 
@@ -836,13 +836,16 @@ Delivery is **phased**; content access gate is **UI-level** (grade 3 → cute po
   [이 월 개별설정 삭제](페이지2) · [저장](페이지1) 버튼; 비저장 이탈 가드. 뷰어(`app.js`):
   `#pageBgLayer`, `body.page-bg-active` 틴트 핸드오프, `bgCache` / `hydrateBackgrounds()` /
   `window.craBg` 브릿지. 신규 파일: `background-editor.js`. Supabase: 신규 테이블
-  `page_backgrounds` + Storage 버킷 `backgrounds`. Playwright 18/18 pass.
-  - ⚠ **대기 중인 수동 단계 (이거 전까지 편집 기능 동작 안 함):**
-    1. Supabase 대시보드 → Storage → "backgrounds" 버킷 PUBLIC으로 생성.
-    2. Supabase SQL Editor → `supabase/migration.sql` 의 `-- BACKGROUND EDITOR` 섹션 실행.
-  - ⚠ **수동 QA 체크리스트 미실시** (Supabase 미연결로 인해 차단됨): 4레벨×페이지1 저장/표시,
-    페이지2 기본값→월 오버라이드→삭제 흐름, 반응형 스케일, 이미지 로드 실패 폴백 — 사용자가
-    Supabase 수동 단계 완료 후 직접 확인 필요.
+  `page_backgrounds` + Storage 버킷 `backgrounds`. Playwright 21/21 pass.
+  - ✅ **Supabase 수동 단계 완료** (2026-07-22, 사용자): "backgrounds" 버킷 생성 +
+    `migration.sql` 실행. 실사용 테스트에서 **전체 배경이 footer만 덮는 버그** 발견 →
+    `#contentScreen.screen-active` / `#monthScreen[...].screen-active` 틴트 2곳이 투명화
+    목록에서 누락된 것이 원인, 수정 완료(`5f70c34`). computed-style 회귀 테스트 추가.
+    부수 수정: smoke 배경 테스트가 실서비스 Supabase 데이터에 의존하던 문제 →
+    `resetBgCache()`로 결정적으로 변경 (NOTES.md 참조).
+  - ✅ 수동 QA: 전체 배경 적용(body+footer) 사용자 확인 완료 (2026-07-22).
+  - ⚠ **남은 수동 QA**: 요소 배치/드래그 저장, 페이지2 기본값→월 오버라이드→삭제 흐름,
+    4레벨×페이지1, 반응형 스케일, 이미지 로드 실패 폴백. **push(배포)는 사용자 요청 대기.**
 
 ## Backlog (feature work, after design)
 
