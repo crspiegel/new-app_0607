@@ -317,3 +317,26 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   splitting the message into bogus pathspecs (`error: pathspec '…' did not match`) and failing
   the commit. Symptom seen 2026-07-21. Fix: reword without `"`, or write the message to a temp
   file and use `git commit -F <file>`.
+- **PowerShell `@'…'@` here-string = `@` 리터럴 오염 재발 위험.** 멀티라인 커밋 메시지를
+  PowerShell here-string(`@'…'@`)으로 `git commit -m`에 넘기면 `@` 문자가 메시지에 남는 사례
+  확인(2026-07-22). **권장: Git Bash heredoc 사용** — `git commit -F - <<'MSG' … MSG` 형식은
+  `@` 오염이 없고 한국어·특수문자도 안전. PowerShell 5.1에서 멀티라인 커밋이 꼭 필요하면
+  `git commit -F <tempfile>` (Bash `echo … > tmp && git commit -F tmp`)을 쓸 것.
+
+## 배경 편집기 (`background-editor.js`)
+
+- **`page_backgrounds.month`는 `null` 대신 `''` (빈 문자열).** Supabase `upsert`의 `onConflict`
+  옵션은 표현식 유니크 인덱스(`COALESCE(month,'')`)를 인식 못 해 PK 충돌을 올바르게 처리하지
+  못한다. 해결책: `month` 컬럼을 `NOT NULL DEFAULT ''`로 PK에 포함시키고, 레벨 기본값 행에는
+  `''`을 저장. 절대 `null`을 upsert하지 말 것 — 같은 행이 중복 삽입된다.
+- **배경 레이어 스태킹 — 틴트 투명화는 `body.page-bg-active` 스코프.** 페이지 배경이 활성화되면
+  `body.page-bg-active`가 붙고, 이 스코프 안에서 기존 per-level 틴트(`.section-blue`,
+  `.section-white` 등)를 `background: transparent`로 초기화해 `#pageBgLayer`가 보이게 한다.
+  이 규칙들은 `styles.css` 끝의 배경 섹션에 있으며, specificity 동률일 때는 **소스 순서가
+  후순위**이므로 같은 specificity의 배경 관련 오버라이드는 반드시 **파일 끝 배경 섹션에 이어서**
+  작성해야 앞에 있는 틴트 규칙을 이긴다. 배경 규칙을 파일 앞에 두면 틴트에 밀린다.
+- **`background-editor.js`는 `app.js` 전역 렉시컬 스코프 의존.** 편집기는 `app.js`가 전역
+  스크립트(`<script src="app.js">`)로 노출하는 변수·함수(`state`, `sb`, `showScreen` 등)를
+  직접 참조한다. `app.js`를 ES 모듈(`type="module"`)로 바꾸면 전역 노출이 사라져 편집기가
+  즉시 깨진다. 모듈 전환 시에는 반드시 `window.craBg` 브릿지처럼 명시적 export/window 노출로
+  교체할 것.
