@@ -434,20 +434,21 @@ bgDeleteOverride.addEventListener("click", async () => {
   const { error } = await sb
     .from("page_backgrounds")
     .delete()
-    .match({ level: state.level, page: "page2", month: state.month });
+    .match({ level: state.level, page: bgEdit.page, month: state.month });
   if (error) {
     setBgStatus("삭제 실패.");
     return;
   }
   delete window.craBg.bgCache[
-    window.craBg.bgKey(state.level, "page2", state.month)
+    window.craBg.bgKey(state.level, bgEdit.page, state.month)
   ];
   // The editor falls back to the level default, same as the public page will.
   bgEdit.data = bgDeepCopy(
-    window.craBg.getBackgroundEntry(state.level, "page2", state.month),
+    window.craBg.getBackgroundEntry(state.level, bgEdit.page, state.month),
   );
   if (!Array.isArray(bgEdit.data.elements)) bgEdit.data.elements = [];
   bgEdit.dirty = false;
+  bgEdit.discardArmed = false;
   bgEdit.selected = -1;
   setBgStatus("개별설정 삭제 — 이 월은 레벨 기본값을 사용합니다.");
   refreshBgSourceLine();
