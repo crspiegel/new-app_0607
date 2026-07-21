@@ -116,3 +116,20 @@ test("background edit button hidden for non-admin visitors", async ({
   await expect(page.locator("#bgEditFab")).toBeHidden();
   await expect(page.locator("#bgEditorPanel")).toBeHidden();
 });
+
+test("page background clears when leaving a level page", async ({ page }) => {
+  await page.goto("/#content/Level%201/March");
+  await page.evaluate(() => {
+    const { bgCache, bgKey, applyPageBackground } = window.craBg;
+    bgCache[bgKey("Level 1", "page2", "")] = {
+      full: "assets/l1-march-book-1.jpg",
+      elements: [],
+    };
+    applyPageBackground("content");
+  });
+  await expect(page.locator("body")).toHaveClass(/page-bg-active/);
+  // Navigating to a non-background screen must clear the layer and the flag.
+  await page.locator(".brand").click();
+  await expect(page.locator("body")).not.toHaveClass(/page-bg-active/);
+  await expect(page.locator("#pageBgLayer .page-bg-full")).toHaveCount(0);
+});

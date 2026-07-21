@@ -248,6 +248,15 @@ function enterBgEdit() {
   const name = document.body.dataset.screen;
   const page = name === "months" ? "page1" : name === "content" ? "page2" : "";
   if (!page || !isAdmin || !sb) return;
+  // Don't open on a cold cache — saving an empty working copy could overwrite
+  // a real row that simply hasn't arrived yet.
+  if (!window.craBg.ready) {
+    bgFab.textContent = "불러오는 중… 잠시 후 다시 시도";
+    setTimeout(() => {
+      bgFab.textContent = "배경 편집";
+    }, 1500);
+    return;
+  }
   bgEdit.on = true;
   bgEdit.screen = name;
   bgEdit.page = page;
@@ -455,23 +464,33 @@ bgDeleteOverride.addEventListener("click", async () => {
   renderBgEditCanvas();
 });
 
-// While editing with unsaved changes, swallow in-app navigation clicks
-// (month Back/Next, month grid, top nav, brand, admin button) in the capture
-// phase — before app.js's own handlers run.
+// While editing, intercept in-app navigation clicks (month Back/Next, month
+// grid, top nav, brand, admin button) in the capture phase — before app.js's
+// own handlers run. Dirty sessions block the nav; clean sessions auto-exit.
 document.addEventListener(
   "click",
   (event) => {
-    if (!bgEdit.on || !bgEdit.dirty) return;
+    if (!bgEdit.on) return;
     const nav = event.target.closest(
       ".content-nav-prev, .content-nav-next, .month-button, .top-nav-link, .brand, [data-view], .admin-nav-button",
     );
     if (!nav || bgPanel.contains(nav)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    setBgStatus("저장하지 않은 변경이 있습니다 — 저장하거나 ✕로 닫아 주세요.");
+    if (bgEdit.dirty) {
+      event.preventDefault();
+      event.stopPropagation();
+      setBgStatus("저장하지 않은 변경이 있습니다 — 저장하거나 ✕로 닫아 주세요.");
+      return;
+    }
+    // Clean session: close the editor first, then let the navigation proceed.
+    exitBgEdit();
   },
   true,
 );
+
+// Refresh / tab close with unsaved edits — standard browser confirm.
+window.addEventListener("beforeunload", (event) => {
+  if (bgEdit.on && bgEdit.dirty) event.preventDefault();
+});
 
 // Admin-screen shortcut: jump to the selected level/month's 페이지2 and start
 // editing right away (work rule: the admin screen mirrors the user screen).

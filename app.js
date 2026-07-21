@@ -1555,6 +1555,9 @@ async function hydrateBackgrounds() {
   data.forEach((row) => {
     bgCache[bgKey(row.level, row.page, row.month)] = row.data || {};
   });
+  window.craBg.ready = true;
+  // Never repaint over an in-progress edit session (would wipe the canvas).
+  if (document.body.classList.contains("bg-editing")) return;
   const active = Object.entries(screens).find(([, el]) =>
     el.classList.contains("screen-active"),
   );
