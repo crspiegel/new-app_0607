@@ -5495,6 +5495,8 @@ body.page-bg-active .site-footer {
   z-index: 2;
   background: transparent;
 }
+body.page-bg-active #contentScreen.screen-active,
+body.page-bg-active #monthScreen[class*="level-theme-"].screen-active,
 body.page-bg-active #monthScreen[class*="level-theme-"] .section-white,
 body.page-bg-active #contentScreen .section-blue {
   background: transparent;

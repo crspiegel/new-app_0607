@@ -335,6 +335,13 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   이 규칙들은 `styles.css` 끝의 배경 섹션에 있으며, specificity 동률일 때는 **소스 순서가
   후순위**이므로 같은 specificity의 배경 관련 오버라이드는 반드시 **파일 끝 배경 섹션에 이어서**
   작성해야 앞에 있는 틴트 규칙을 이긴다. 배경 규칙을 파일 앞에 두면 틴트에 밀린다.
+  **틴트 페인터는 전부 투명화해야 한다**: `main`, `#contentScreen.screen-active`,
+  `#monthScreen[...].screen-active`, `.section-white`/`.section-blue`, `.site-footer`.
+  실제로 `.screen-active` 2곳을 빠뜨려 "footer만 배경이 보이는" 버그가 났었다(2026-07-22).
+  smoke 테스트의 computed-style 단언이 이제 이를 감시한다.
+- **smoke 테스트는 실서비스 Supabase에 연결된다.** 배경 데이터가 실제로 저장돼 있으면 "배경
+  없음" 가정의 테스트가 깨진다. 배경 테스트는 반드시 `resetBgCache()`(hydrate `settled` 대기
+  후 클라이언트 캐시 클리어)로 시작할 것 — DB는 건드리지 않는다.
 - **`background-editor.js`는 `app.js` 전역 렉시컬 스코프 의존.** 편집기는 `app.js`가 전역
   스크립트(`<script src="app.js">`)로 노출하는 변수·함수(`state`, `sb`, `showScreen` 등)를
   직접 참조한다. `app.js`를 ES 모듈(`type="module"`)로 바꾸면 전역 노출이 사라져 편집기가

@@ -1549,8 +1549,15 @@ async function hydrateContent() {
 // backgrounds. Mirrors hydrateContent: fetch-all into the cache, then
 // repaint whichever screen is showing.
 async function hydrateBackgrounds() {
-  if (!sb) return;
+  // "settled" = the fetch attempt finished (success OR failure) — tests wait
+  // on it to seed the cache without racing the hydrate repaint. "ready"
+  // (success only) stays the editor's save-safety gate.
+  if (!sb) {
+    window.craBg.settled = true;
+    return;
+  }
   const { data, error } = await sb.from("page_backgrounds").select("*");
+  window.craBg.settled = true;
   if (error || !data) return;
   data.forEach((row) => {
     bgCache[bgKey(row.level, row.page, row.month)] = row.data || {};
