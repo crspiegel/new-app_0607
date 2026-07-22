@@ -36,6 +36,11 @@ yet verified/committed. Clear the entry once the work is completed and logged be
     배경 없는 페이지는 변화 없음. qa 24/24 green.
   - **스크림 수정 3 (사용자 지시):** 페이드 끝점 294→**382px**(+30%), 100% 유지 구간(120px)은
     그대로. 최종 형태: 0~120px 레벨 틴트 100% → 382px 투명.
+  - ✅ **배포 완료 (`2026-07-23`):** 커밋 `b670534` push → Vercel 자동 배포.
+    new-app0607.vercel.app + cambridgereading.com 모두 새 styles.css(382px 스크림)·
+    background-editor.js(고스트 토글) 서빙 확인. 라이브 확인 시점에 L1/March의
+    `page_backgrounds` 데이터가 비어 있어(full:null, elements:[]) 배경 미표시 — 코드가 아니라
+    DB 데이터 상태(사용자 테스트 중 비워진 것)로, 배경을 다시 저장하면 스크림·글로우가 적용됨.
 
 ## Current phase: DESIGN ITERATION (live for client review)
 
