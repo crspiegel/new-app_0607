@@ -347,3 +347,26 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   직접 참조한다. `app.js`를 ES 모듈(`type="module"`)로 바꾸면 전역 노출이 사라져 편집기가
   즉시 깨진다. 모듈 전환 시에는 반드시 `window.craBg` 브릿지처럼 명시적 export/window 노출로
   교체할 것.
+- **`[hidden]` 속성은 같은 요소에 `display` 규칙이 있으면 무력화된다.** UA의
+  `[hidden]{display:none}`보다 author 규칙(`display:grid` 등)이 항상 이긴다 —
+  `.admin-view[hidden]` 때와 같은 패턴으로 `#bgElTools`가 항상 노출되는 버그가 있었다
+  (2026-07-22 수정). 패널 전체에 `.bg-editor-panel [hidden]{display:none !important}` 가드를
+  두었으니, 패널 안에서 `hidden`을 쓰는 새 요소는 자동으로 안전하다. 패널 밖에서 `hidden` +
+  display 규칙 조합을 쓸 때는 반드시 `[hidden]` 가드를 함께 작성할 것.
+- **패널 안 툴팁은 `position: fixed`(오프셋 전부 auto)로 클리핑을 탈출한다.** 패널이
+  `overflow-y:auto`면 x축도 함께 클리핑되어 `absolute` 툴팁은 패널 밖에서 잘린다.
+  `.bg-help::after`는 `position:fixed` + 오프셋 auto("static position" 배치, 뷰포트 기준이라
+  클리핑 무시) + `transform: translate(-100%…)`로 아이콘 왼쪽(페이지 위)에 띄운다.
+  ⚠ 조상에 `transform`/`filter`가 생기면 fixed의 기준이 그 조상으로 바뀌어 다시 잘린다 —
+  패널에 transform을 추가하지 말 것.
+- **고스트 미리보기 스태킹 (`body.bg-editing.bg-ghost`).** 편집 중 실제 페이지 내용을
+  `main`/`.site-footer`에 `z-index:11; opacity:.45; pointer-events:none`으로 편집 레이어(z10)
+  위에 반투명하게 띄운다(기본 ON, 패널 체크박스로 토글). z 순서: 레이어 10 < 고스트 11 <
+  topbar 20 < 패널 45. 이 중 하나라도 바꾸면 나머지를 함께 검토할 것. `pointer-events:none`
+  덕에 드래그는 레이어로 통과한다 — 편집 중 페이지 내 버튼(월그리드·Back/Next)이 안 눌리는
+  것은 의도된 동작.
+- **ESLint는 `background-editor.js`도 검사한다 (`eslint.config.mjs` 별도 블록).** app.js와
+  공유하는 식별자(`sb`, `state`, `isAdmin`, `hydrateBackgrounds` 등)는 그 블록의 `globals`에
+  선언돼 있다. 편집기에서 app.js의 **새** 전역을 참조하면 lint가 no-undef로 깨진다 —
+  `eslint.config.mjs`의 globals 목록에 추가할 것. (`setTimeout`류는 여전히 `window.` 접두
+  필수.)

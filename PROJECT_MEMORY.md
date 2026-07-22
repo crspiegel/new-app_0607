@@ -18,8 +18,24 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-- _(비어 있음 — 진행 중 작업 없음. 배경 편집기 구현→검증→배포까지 완료, 2026-07-22.
-  최신 커밋: `docs: 배경 편집기 실사용 검증 진행 상태 기록` 이후 세션 종료 정리 커밋.)_
+- _(비어 있음 — 진행 중 작업 없음. 배경 편집기 UX/코드 개선 + 배너 가독성 스크림까지
+  커밋·배포 완료, 2026-07-23. 상세는 "배경 편집기 UX/코드 개선" 항목 참조.)_
+- **+ 배너 가독성 스크림 (같은 세션, 인터뷰로 사용자 선택):** 전체 배경 이미지가 있으면
+  레벨명·월 아이콘이 안 보이는 문제 → 사용자가 4안 중 **상단 흰색 그라데이션** 선택,
+  페이지1+2 모두 적용. 구현: `.page-bg-layer.has-full::after`(0→280px α.95→.88, 420px에서
+  투명; 배너 하단은 데스크톱 271px/모바일 282px로 측정). `has-full` 클래스는
+  `applyPageBackground`(뷰어)와 `renderBgEditCanvas`(편집기, WYSIWYG)가 토글. **요소만 있고
+  전체 이미지가 없으면 스크림 없음**(틴트가 이미 밝음). smoke 테스트에 has-full/gradient
+  단언 추가. qa 24/24 green.
+  - **스크림 수정 (사용자 지시):** 흰색 → **레벨 틴트색**(`var(--level-accent-soft)` 그대로
+    사용 — 레벨 전환 시 자동 추종), 시작 불투명도 **100%**, 높이 420→**294px**(70%).
+  - **스크림 수정 2 (`2026-07-23`, 사용자 스샷 피드백):** 0px 시작이면 100% 지점이 불투명
+    헤더(86px) 뒤에 숨어 첫 가시 지점이 이미 ~70%로 빠져 보이는 문제 → **0~120px 100% 유지**
+    후 294px에서 투명 (3-stop). + **레벨명 텍스트 흰색 글로우**: `body.page-bg-active`
+    스코프에서 `#contentLevelName`/`#monthLevelTag`에 3겹 white text-shadow(6/14/28px) —
+    배경 없는 페이지는 변화 없음. qa 24/24 green.
+  - **스크림 수정 3 (사용자 지시):** 페이드 끝점 294→**382px**(+30%), 100% 유지 구간(120px)은
+    그대로. 최종 형태: 0~120px 레벨 틴트 100% → 382px 투명.
 
 ## Current phase: DESIGN ITERATION (live for client review)
 
@@ -848,6 +864,29 @@ Delivery is **phased**; content access gate is **UI-level** (grade 3 → cute po
   - ✅ **배포 완료 (2026-07-22):** push `e67d0b8 → 7abe59e`(17커밋) → Vercel 자동 배포.
     new-app0607.vercel.app 및 cambridgereading.com(→ www 308 리다이렉트) 모두 새 빌드
     서빙 확인. 사용자가 **라이브 사이트에서 배경 편집 정상 동작 최종 확인**.
+
+- **배경 편집기 UX/코드 개선 (`2026-07-22b`, 커밋 대기):** 관리자 실사용 시뮬레이션(Playwright
+  스텁) + 웹빌더 관례 비교 + 시니어 코드 리뷰로 발견한 문제를 일괄 개선. **UX:**
+  ① **고스트 미리보기(신규, 기본 ON)** — 편집 중 실제 페이지 내용이 반투명(45%)으로 배경 위에
+  겹쳐 보여 배치를 실제 레이아웃 기준으로 할 수 있음(이전엔 불투명 틴트가 내용을 전부 가림);
+  패널 체크박스로 토글. ② **'?' 도움말 툴팁** — 겹쳐보기/전체 배경/라이브러리/선택한 요소/저장
+  5곳에 hover·focus 툴팁(구현 트릭은 NOTES 참조). ③ **핸들 구분** — 크기=모서리 사각형,
+  회전=위쪽 ↻ 원형+연결선; 드래그 중 **수치 배지**(크기 %, 각도 °), Shift=15° 스냅.
+  ④ **키보드** — Delete=요소 삭제, 화살표=미세 이동(Shift=크게), Esc=선택 해제→(재차) 닫기
+  (미저장 가드 동일). ⑤ **저장 버튼 위계** — 주 액션 초록, 위험 액션(개별설정 삭제/요소 삭제)
+  빨강 계열; 요소 도구에 **복제** 추가, 섹션 제목("선택한 요소") 추가. ⑥ 라이브러리에
+  "썸네일 클릭 = 추가" 캡션 + 업로드 후 안내문구, 다중 업로드 진행 표시(n/m).
+  ⑦ **월 오버라이드가 있는 상태에서 [레벨 기본값으로 저장] 시** "이 화면에는 보이지 않음"을
+  상태줄에 명시(저장이 안 된 걸로 오해하던 함정). **버그/코드:** ⑧ `#bgElTools`가 `[hidden]`인데
+  항상 노출되던 버그(`display:grid`가 UA hidden을 이김) → 패널 전역 `[hidden]` 가드로 수정+
+  회귀 테스트. ⑨ 드래그 성능 — pointermove마다 레이어 전체 innerHTML 재구축하던 것을 해당
+  요소 인라인 스타일만 갱신(마무리에 1회 재렌더)으로 변경. ⑩ `pointercancel` 처리(터치 중단 시
+  리스너 누수 방지). ⑪ 라이브러리 삭제 2단계 확인이 **영구 arm**되던 문제 → 4초 후 자동 해제.
+  ⑫ hydrate 실패 시 편집 영구 불가 → FAB 클릭이 `hydrateBackgrounds()` 재시도 후 자동 진입.
+  ⑬ 저장/삭제 중복 클릭 가드(`bgEdit.saving`). ⑭ **ESLint가 background-editor.js를 검사 안
+  하던 것** → lint 대상 + 공유 전역 선언 추가(`eslint.config.mjs`), bare `setTimeout` →
+  `window.setTimeout`. 신규 테스트: 요소도구 hidden/고스트 스태킹/키보드 삭제/Esc 닫기
+  (3뷰포트 ×). `npm.cmd run qa` 24/24 green. 스크린샷 검증 완료(툴팁·배지·고스트·핸들).
 
 ## Backlog (feature work, after design)
 

@@ -5484,6 +5484,40 @@ body.page-bg-active .page-bg-layer {
   background-repeat: no-repeat;
   background-size: cover;
 }
+/* Readability scrim: when a FULL background image is set (.has-full, toggled
+   by applyPageBackground + the editor), a top gradient in the LEVEL's own
+   tint (--level-accent-soft, inherited from the body's level-theme-N class)
+   keeps the level name / month badge readable over any artwork. The opaque
+   run must extend BELOW the opaque topbar (~86px desktop / ~105px mobile
+   portrait) — a 0px start would hide the 100% point behind the header and
+   the first visible row would already be faded. Solid to 120px, fully faded
+   by 382px (294 × 1.3 — user asked the fade to reach ~30% further down).
+   Element-only backgrounds keep the plain tint, which is already light — no
+   scrim. */
+.page-bg-layer.has-full::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 382px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    var(--level-accent-soft, #ffffff) 0,
+    var(--level-accent-soft, #ffffff) 120px,
+    transparent 382px
+  );
+}
+/* Soft white glow behind the level name on background pages only — lifts the
+   text off busy artwork without touching the no-background pages. */
+body.page-bg-active #contentLevelName,
+body.page-bg-active #monthLevelTag {
+  text-shadow:
+    0 0 6px rgba(255, 255, 255, 0.9),
+    0 0 14px rgba(255, 255, 255, 0.75),
+    0 0 28px rgba(255, 255, 255, 0.6);
+}
 .page-bg-el {
   position: absolute;
   height: auto;
@@ -5571,6 +5605,12 @@ body.bg-editing .bg-edit-fab {
   display: grid;
   gap: 8px;
 }
+/* The panel toggles sections/buttons via the hidden attribute; without this
+   guard any display rule (grid/flex) on the same element silently wins over
+   the UA's [hidden] → display:none (same bug as .admin-view[hidden]). */
+.bg-editor-panel [hidden] {
+  display: none !important;
+}
 .bg-editor-panel button {
   font: inherit;
   font-size: 13px;
@@ -5580,16 +5620,92 @@ body.bg-editing .bg-edit-fab {
   background: #fafafa;
   cursor: pointer;
 }
+.bg-editor-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* '?' help icon + hover/focus tooltip bubble. */
+.bg-editor-panel .bg-help {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #bbb;
+  border-radius: 50%;
+  background: #f2f2f2;
+  color: #666;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+/* position:fixed with auto offsets = "static position but relative to the
+   viewport", which escapes the panel's overflow clipping (overflow-y:auto
+   also clips x). The translate then hangs the bubble to the LEFT of the ?
+   icon, over the page — never cut off by the panel edge. */
+.bg-editor-panel .bg-help::after {
+  content: attr(data-tip);
+  position: fixed;
+  z-index: 50;
+  transform: translate(calc(-100% + 10px), 12px);
+  width: 230px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #333;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.bg-editor-panel .bg-help:hover::after,
+.bg-editor-panel .bg-help:focus-visible::after {
+  opacity: 1;
+}
+.bg-ghost-toggle {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.bg-ghost-toggle input {
+  accent-color: var(--owl-green, #2e7d32);
+}
 .bg-editor-el-tools {
-  margin-top: 14px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 6px;
+}
+.bg-editor-el-tools .bg-el-delete {
+  grid-column: 1 / -1;
 }
 .bg-editor-save {
   margin-top: 16px;
   display: grid;
   gap: 6px;
+}
+.bg-editor-panel .bg-btn-primary {
+  border-color: var(--owl-green, #2e7d32);
+  background: var(--owl-green, #2e7d32);
+  color: #fff;
+  font-weight: 700;
+}
+.bg-editor-panel .bg-btn-danger {
+  border-color: #d9534f;
+  background: #fff;
+  color: #c9302c;
+}
+.bg-editor-panel .bg-armed {
+  background: #c9302c;
+  border-color: #c9302c;
+  color: #fff;
 }
 .bg-editor-status {
   min-height: 18px;
@@ -5602,6 +5718,15 @@ body.bg-editing .page-bg-layer {
   display: block;
   pointer-events: auto;
   z-index: 10;
+}
+/* Ghost preview (default ON): the real page content floats semi-transparent above the
+   background so the admin can place decorations against the actual layout.
+   pointer-events:none lets every drag/click fall through to the edit layer. */
+body.bg-editing.bg-ghost main,
+body.bg-editing.bg-ghost .site-footer {
+  z-index: 11;
+  opacity: 0.45;
+  pointer-events: none;
 }
 .bg-library-grid {
   display: grid;
@@ -5638,6 +5763,11 @@ body.bg-editing .page-bg-layer {
   font-size: 12px;
   color: #888;
 }
+.bg-lib-caption {
+  margin: 0;
+  font-size: 11px;
+  color: #888;
+}
 
 .bg-edit-el {
   position: absolute;
@@ -5660,19 +5790,53 @@ body.bg-editing .page-bg-layer {
   width: 16px;
   height: 16px;
   border: 2px solid #1f5fa8;
-  border-radius: 50%;
   background: #fff;
+  box-sizing: border-box;
 }
+/* Resize = corner SQUARE (web-builder convention), rotate = round ↻ handle on
+   a stem — visually distinct so no tooltip is needed to tell them apart. */
 .bg-edit-resize {
   right: -10px;
   bottom: -10px;
+  border-radius: 3px;
   cursor: nwse-resize;
 }
 .bg-edit-rotate {
-  top: -26px;
+  top: -30px;
   left: 50%;
   transform: translateX(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
   cursor: grab;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  line-height: 1;
+  color: #1f5fa8;
+}
+.bg-edit-rotate::before {
+  content: "↻";
+}
+.bg-edit-rotate::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  width: 2px;
+  height: 10px;
+  background: #1f5fa8;
+}
+/* Live value badge (width % while resizing / angle while rotating). */
+.bg-edit-badge {
+  position: fixed;
+  z-index: 46;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #333;
+  color: #fff;
+  font-size: 12px;
+  pointer-events: none;
 }
 
 .admin-bg-btn {

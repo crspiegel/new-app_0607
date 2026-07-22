@@ -226,6 +226,8 @@ function applyPageBackground(screenName) {
     entry && (entry.full || (entry.elements && entry.elements.length)),
   );
   document.body.classList.toggle("page-bg-active", active);
+  // Full-image pages get a white top scrim so the banner stays readable.
+  layer.classList.toggle("has-full", Boolean(active && entry.full));
   if (!active) return;
   if (entry.full) {
     const full = document.createElement("div");

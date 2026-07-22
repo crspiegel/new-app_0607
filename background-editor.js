@@ -28,6 +28,7 @@ const bgSaveDefault = document.querySelector("#bgSaveDefault");
 const bgDeleteOverride = document.querySelector("#bgDeleteOverride");
 const bgSavePage1 = document.querySelector("#bgSavePage1");
 const bgCloseBtn = document.querySelector("#bgEditorClose");
+const bgGhostToggle = document.querySelector("#bgGhostToggle");
 
 const bgEdit = {
   on: false,
@@ -37,6 +38,7 @@ const bgEdit = {
   dirty: false,
   selected: -1, // index into data.elements
   discardArmed: false, // two-step "discard changes" on close
+  saving: false, // guards double-click on save / delete-override
 };
 
 function bgLayer() {
@@ -76,12 +78,10 @@ function bgPublicUrl(path) {
 
 async function renderBgLibrary() {
   bgLibraryGrid.innerHTML = "";
-  const { data, error } = await sb.storage
-    .from(BG_BUCKET)
-    .list(BG_LIB_PREFIX, {
-      limit: 200,
-      sortBy: { column: "created_at", order: "desc" },
-    });
+  const { data, error } = await sb.storage.from(BG_BUCKET).list(BG_LIB_PREFIX, {
+    limit: 200,
+    sortBy: { column: "created_at", order: "desc" },
+  });
   if (error) {
     setBgStatus("라이브러리를 불러올 수 없습니다.");
     return;
@@ -129,12 +129,20 @@ async function renderBgLibrary() {
     del.type = "button";
     del.textContent = "삭제";
     // Two-step confirm (no window.confirm — matches the codebase's modal-free
-    // inline patterns and keeps automation-safe).
+    // inline patterns and keeps automation-safe). The armed state auto-resets
+    // after 4s so a stale first click can never turn a later click into an
+    // instant permanent delete.
     del.addEventListener("click", async () => {
       if (del.dataset.armed !== "1") {
         del.dataset.armed = "1";
         del.textContent = "정말 삭제?";
+        del.classList.add("bg-armed");
         setBgStatus("이 이미지를 쓰는 페이지에서는 요소가 사라집니다.");
+        window.setTimeout(() => {
+          del.dataset.armed = "";
+          del.textContent = "삭제";
+          del.classList.remove("bg-armed");
+        }, 4000);
         return;
       }
       const { error: rmErr } = await sb.storage.from(BG_BUCKET).remove([path]);
@@ -156,21 +164,32 @@ bgUploadBtn.addEventListener("click", () => {
   input.accept = BG_TYPES.join(",");
   input.multiple = true;
   input.addEventListener("change", async () => {
-    for (const file of input.files) await bgUploadFile(file);
+    const files = [...input.files];
+    let ok = 0;
+    for (let i = 0; i < files.length; i += 1) {
+      if (files.length > 1)
+        setBgStatus(`업로드 중… (${i + 1}/${files.length})`);
+      if (await bgUploadFile(files[i], files.length > 1)) ok += 1;
+    }
+    if (files.length > 1)
+      setBgStatus(
+        `업로드 완료 (${ok}/${files.length}) — 썸네일을 클릭해 추가하세요.`,
+      );
   });
   input.click();
 });
 
-async function bgUploadFile(file) {
+// Returns true on success so multi-file uploads can report a total.
+async function bgUploadFile(file, quiet) {
   if (!BG_TYPES.includes(file.type)) {
-    setBgStatus("PNG / JPG / WebP 파일만 올릴 수 있습니다.");
-    return;
+    setBgStatus(`"${file.name}"은 PNG / JPG / WebP가 아니라 건너뜁니다.`);
+    return false;
   }
   if (file.size > BG_MAX_BYTES) {
-    setBgStatus("파일당 5MB 이하만 올릴 수 있습니다.");
-    return;
+    setBgStatus(`"${file.name}"은 5MB를 넘어 건너뜁니다.`);
+    return false;
   }
-  setBgStatus("업로드 중…");
+  if (!quiet) setBgStatus("업로드 중…");
   const safe = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
   const { error } = await sb.storage
     .from(BG_BUCKET)
@@ -179,15 +198,18 @@ async function bgUploadFile(file) {
     });
   if (error) {
     setBgStatus("업로드 실패.");
-    return;
+    return false;
   }
-  setBgStatus("업로드 완료.");
+  if (!quiet) setBgStatus("업로드 완료 — 썸네일을 클릭해 화면에 추가하세요.");
   await renderBgLibrary();
+  return true;
 }
 
 function renderBgEditCanvas() {
   const layer = bgLayer();
   layer.innerHTML = "";
+  // Same readability scrim as the viewer (WYSIWYG).
+  layer.classList.toggle("has-full", Boolean(bgEdit.data.full));
   if (bgEdit.data.full) {
     const full = document.createElement("div");
     full.className = "page-bg-full";
@@ -249,12 +271,20 @@ function enterBgEdit() {
   const page = name === "months" ? "page1" : name === "content" ? "page2" : "";
   if (!page || !isAdmin || !sb) return;
   // Don't open on a cold cache — saving an empty working copy could overwrite
-  // a real row that simply hasn't arrived yet.
+  // a real row that simply hasn't arrived yet. Instead of asking the admin to
+  // retry by hand, re-run the hydrate and auto-open when it lands.
   if (!window.craBg.ready) {
-    bgFab.textContent = "불러오는 중… 잠시 후 다시 시도";
-    setTimeout(() => {
+    bgFab.textContent = "불러오는 중…";
+    hydrateBackgrounds().then(() => {
       bgFab.textContent = "배경 편집";
-    }, 1500);
+      if (window.craBg.ready) enterBgEdit();
+      else {
+        bgFab.textContent = "연결 실패 — 다시 시도";
+        window.setTimeout(() => {
+          bgFab.textContent = "배경 편집";
+        }, 2500);
+      }
+    });
     return;
   }
   bgEdit.on = true;
@@ -271,6 +301,7 @@ function enterBgEdit() {
   // page-bg-active turns on the tint hand-off CSS even before anything is
   // saved, so what the admin sees while editing is exactly what saving gives.
   document.body.classList.add("bg-editing", "page-bg-active");
+  document.body.classList.toggle("bg-ghost", bgGhostToggle.checked);
   bgPanel.hidden = false;
   bgTargetTag.textContent =
     page === "page1"
@@ -288,11 +319,15 @@ function enterBgEdit() {
 }
 
 // One pointer session drives move / resize (ratio-locked width) / rotate.
-// The listeners live on document, so re-rendering the shells mid-drag is safe.
+// The listeners live on document, so the selection re-render that may happen
+// on pointerdown is safe: the live shell is re-queried AFTER it. During the
+// drag only that shell's inline styles (and a value badge) are updated —
+// rebuilding the whole layer per pointermove caused visible churn.
 function startBgDrag(event, index, mode) {
   event.preventDefault();
   const item = bgEdit.data.elements[index];
   const rect = bgLayer().getBoundingClientRect();
+  const shell = bgLayer().querySelectorAll(".bg-edit-el")[index];
   const startX = event.clientX;
   const startY = event.clientY;
   const start = { x: item.x, y: item.y, w: item.w, r: item.r || 0 };
@@ -305,8 +340,25 @@ function startBgDrag(event, index, mode) {
     Math.hypot(startX - centerPx.x, startY - centerPx.y),
   );
   const startAngle = Math.atan2(startY - centerPx.y, startX - centerPx.x);
+  let badge = null;
+  let moved = false;
+
+  function showBadge(move, text) {
+    if (!badge) {
+      badge = document.createElement("div");
+      badge.className = "bg-edit-badge";
+      document.body.append(badge);
+    }
+    badge.style.left = `${move.clientX + 14}px`;
+    badge.style.top = `${move.clientY + 14}px`;
+    badge.textContent = text;
+  }
 
   function onMove(move) {
+    if (!moved) {
+      moved = true;
+      bgMarkDirty();
+    }
     if (mode === "move") {
       item.x = start.x + ((move.clientX - startX) / rect.width) * 100;
       item.y = start.y + ((move.clientY - startY) / rect.height) * 100;
@@ -319,22 +371,36 @@ function startBgDrag(event, index, mode) {
         move.clientY - centerPx.y,
       );
       item.w = Math.min(200, Math.max(2, start.w * (dist / startDist)));
+      showBadge(move, `${Math.round(item.w)}%`);
     } else {
       const angle = Math.atan2(
         move.clientY - centerPx.y,
         move.clientX - centerPx.x,
       );
-      item.r = Math.round(start.r + ((angle - startAngle) * 180) / Math.PI);
+      let deg = start.r + ((angle - startAngle) * 180) / Math.PI;
+      // Web-builder convention: Shift snaps rotation to 15° steps.
+      if (move.shiftKey) deg = Math.round(deg / 15) * 15;
+      item.r = Math.round(deg);
+      showBadge(move, `${((item.r % 360) + 360) % 360}°`);
     }
-    bgMarkDirty();
-    renderBgEditCanvas();
+    if (shell) {
+      shell.style.left = `${item.x}%`;
+      shell.style.top = `${item.y}%`;
+      shell.style.width = `${item.w}%`;
+      shell.style.transform = `translate(-50%, -50%) rotate(${item.r || 0}deg)`;
+    }
   }
   function onUp() {
     document.removeEventListener("pointermove", onMove);
     document.removeEventListener("pointerup", onUp);
+    document.removeEventListener("pointercancel", onUp);
+    if (badge) badge.remove();
+    // One clean re-render so handles/outline resync with the final geometry.
+    if (moved) renderBgEditCanvas();
   }
   document.addEventListener("pointermove", onMove);
   document.addEventListener("pointerup", onUp);
+  document.addEventListener("pointercancel", onUp);
 }
 
 function wireBgHandle(handle, index, mode) {
@@ -350,6 +416,12 @@ bgElTools.addEventListener("click", (event) => {
   const els = bgEdit.data.elements;
   const index = bgEdit.selected;
   if (act === "flip") els[index].fx = !els[index].fx;
+  if (act === "dup") {
+    // Slight offset so the copy is visibly a new element, then select it.
+    const copy = { ...els[index], x: els[index].x + 3, y: els[index].y + 3 };
+    els.splice(index + 1, 0, copy);
+    bgEdit.selected = index + 1;
+  }
   if (act === "delete") {
     els.splice(index, 1);
     bgEdit.selected = -1;
@@ -385,22 +457,71 @@ document.addEventListener("pointerdown", (event) => {
 
 function exitBgEdit() {
   bgEdit.on = false;
-  document.body.classList.remove("bg-editing");
+  document.body.classList.remove("bg-editing", "bg-ghost");
   bgPanel.hidden = true;
   bgElTools.hidden = true;
   // Repaint from the saved cache (also recomputes body.page-bg-active).
   window.craBg.applyPageBackground(bgEdit.screen);
 }
 
-bgFab.addEventListener("click", enterBgEdit);
-
-bgCloseBtn.addEventListener("click", () => {
+// Shared close-with-guard: dirty sessions need a second request to discard.
+function requestBgClose() {
   if (bgEdit.dirty && !bgEdit.discardArmed) {
     bgEdit.discardArmed = true;
     setBgStatus("저장하지 않은 변경이 있습니다 — 한 번 더 누르면 버립니다.");
     return;
   }
   exitBgEdit();
+}
+
+bgFab.addEventListener("click", enterBgEdit);
+
+bgCloseBtn.addEventListener("click", requestBgClose);
+
+// Ghost preview toggle: overlay the real page content semi-transparent.
+bgGhostToggle.addEventListener("change", () => {
+  document.body.classList.toggle("bg-ghost", bgGhostToggle.checked);
+});
+
+// Keyboard: Delete removes the selected element, arrows nudge it
+// (Shift = bigger steps), Esc deselects first and then closes (with the
+// same unsaved-changes guard as ✕).
+document.addEventListener("keydown", (event) => {
+  if (!bgEdit.on) return;
+  if (event.target.closest("input, textarea, select")) return;
+  const els = bgEdit.data.elements;
+  const index = bgEdit.selected;
+  if (event.key === "Escape") {
+    if (index >= 0) {
+      bgEdit.selected = -1;
+      renderBgEditCanvas();
+    } else {
+      requestBgClose();
+    }
+    return;
+  }
+  if (index < 0) return;
+  if (event.key === "Delete" || event.key === "Backspace") {
+    event.preventDefault();
+    els.splice(index, 1);
+    bgEdit.selected = -1;
+    bgMarkDirty();
+    renderBgEditCanvas();
+    return;
+  }
+  const nudge = event.shiftKey ? 2 : 0.5;
+  const item = els[index];
+  let handled = true;
+  if (event.key === "ArrowLeft") item.x = Math.max(-50, item.x - nudge);
+  else if (event.key === "ArrowRight") item.x = Math.min(150, item.x + nudge);
+  else if (event.key === "ArrowUp") item.y = Math.max(-50, item.y - nudge);
+  else if (event.key === "ArrowDown") item.y = Math.min(150, item.y + nudge);
+  else handled = false;
+  if (handled) {
+    event.preventDefault();
+    bgMarkDirty();
+    renderBgEditCanvas();
+  }
 });
 
 /* ---- persistence -------------------------------------------------------- */
@@ -416,12 +537,17 @@ function bgNormalized() {
 }
 
 async function bgSave(month) {
+  if (bgEdit.saving) return;
+  bgEdit.saving = true;
   setBgStatus("저장 중…");
   const data = bgNormalized();
-  const { error } = await sb.from("page_backgrounds").upsert(
-    { level: state.level, page: bgEdit.page, month: month || "", data },
-    { onConflict: "level,page,month" },
-  );
+  const { error } = await sb
+    .from("page_backgrounds")
+    .upsert(
+      { level: state.level, page: bgEdit.page, month: month || "", data },
+      { onConflict: "level,page,month" },
+    );
+  bgEdit.saving = false;
   if (error) {
     setBgStatus("저장 실패.");
     return;
@@ -430,7 +556,17 @@ async function bgSave(month) {
     data;
   bgEdit.dirty = false;
   bgEdit.discardArmed = false;
-  setBgStatus("저장 완료.");
+  // Saving the LEVEL DEFAULT while this month has its own override is legal
+  // but invisible here — say so, or the admin thinks the save didn't work.
+  const overridden =
+    !month &&
+    bgEdit.page === "page2" &&
+    window.craBg.bgCache[window.craBg.bgKey(state.level, "page2", state.month)];
+  setBgStatus(
+    overridden
+      ? `기본값 저장 완료 — 단, ${state.month}은 개별 설정이 있어 이 화면에는 보이지 않습니다.`
+      : "저장 완료.",
+  );
   refreshBgSourceLine();
 }
 
@@ -439,11 +575,14 @@ bgSaveMonth.addEventListener("click", () => bgSave(state.month));
 bgSaveDefault.addEventListener("click", () => bgSave(""));
 
 bgDeleteOverride.addEventListener("click", async () => {
+  if (bgEdit.saving) return;
+  bgEdit.saving = true;
   setBgStatus("삭제 중…");
   const { error } = await sb
     .from("page_backgrounds")
     .delete()
     .match({ level: state.level, page: bgEdit.page, month: state.month });
+  bgEdit.saving = false;
   if (error) {
     setBgStatus("삭제 실패.");
     return;
@@ -478,7 +617,9 @@ document.addEventListener(
     if (bgEdit.dirty) {
       event.preventDefault();
       event.stopPropagation();
-      setBgStatus("저장하지 않은 변경이 있습니다 — 저장하거나 ✕로 닫아 주세요.");
+      setBgStatus(
+        "저장하지 않은 변경이 있습니다 — 저장하거나 ✕로 닫아 주세요.",
+      );
       return;
     }
     // Clean session: close the editor first, then let the navigation proceed.

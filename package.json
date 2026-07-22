@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "check:assets": "node scripts/check-assets-case.mjs",
-    "lint": "eslint app.js",
-    "format:check": "prettier --check index.html styles.css app.js scripts tests *.md",
+    "lint": "eslint app.js background-editor.js",
+    "format:check": "prettier --check index.html styles.css app.js background-editor.js scripts tests *.md",
     "check": "npm run check:assets && npm run lint && npm run format:check",
     "test:e2e": "node scripts/run-playwright.mjs",
     "qa": "npm run check && npm run test:e2e"

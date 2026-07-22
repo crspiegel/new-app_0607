@@ -124,6 +124,15 @@ test("seeded background renders full image and elements, month row wins", async 
     ),
   );
   for (const color of tints) expect(color).toBe("rgba(0, 0, 0, 0)");
+  // A FULL image also gets the white top scrim (banner readability).
+  await expect(page.locator("#pageBgLayer")).toHaveClass(/has-full/);
+  const scrim = await page.evaluate(() =>
+    getComputedStyle(
+      document.querySelector("#pageBgLayer"),
+      "::after",
+    ).backgroundImage.includes("linear-gradient"),
+  );
+  expect(scrim).toBe(true);
   // A month row REPLACES the level default entirely (no merging).
   await page.evaluate(() => {
     const { bgCache, bgKey, applyPageBackground } = window.craBg;
@@ -132,6 +141,7 @@ test("seeded background renders full image and elements, month row wins", async 
   });
   await expect(page.locator("body")).not.toHaveClass(/page-bg-active/);
   await expect(page.locator("#pageBgLayer .page-bg-el")).toHaveCount(0);
+  await expect(page.locator("#pageBgLayer")).not.toHaveClass(/has-full/);
 });
 
 test("background edit button hidden for non-admin visitors", async ({
@@ -143,6 +153,68 @@ test("background edit button hidden for non-admin visitors", async ({
   await expect(page.locator("#bgEditFab")).toHaveCount(1);
   await expect(page.locator("#bgEditorPanel")).toHaveCount(1);
   await expect(page.locator("#bgEditFab")).toBeHidden();
+  await expect(page.locator("#bgEditorPanel")).toBeHidden();
+});
+
+test("editor: element tools stay hidden until a selection exists, ghost preview overlays content", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%201/March");
+  await resetBgCache(page);
+  // Stub the admin flag client-side (UI gate only; no Supabase writes here).
+  await page.evaluate(() => {
+    /* global isAdmin, updateAdminUI */
+    isAdmin = true;
+    updateAdminUI();
+    window.craBg.ready = true;
+  });
+  await page.locator("#bgEditFab").click();
+  await expect(page.locator("#bgEditorPanel")).toBeVisible();
+  // [hidden] must actually hide the element-tools section (regressed once:
+  // a display:grid rule on the same element beat the UA's [hidden] rule).
+  await expect(page.locator("#bgElTools")).toBeHidden();
+  // Ghost preview (default ON): the page content sits above the edit layer,
+  // semi-transparent and click-through, so placement is done against the
+  // real layout instead of a blank tint.
+  const ghost = await page.evaluate(() => {
+    const style = getComputedStyle(document.querySelector("main"));
+    return {
+      bodyGhost: document.body.classList.contains("bg-ghost"),
+      opacity: style.opacity,
+      pointerEvents: style.pointerEvents,
+      zIndex: style.zIndex,
+    };
+  });
+  expect(ghost.bodyGhost).toBe(true);
+  expect(Number(ghost.opacity)).toBeLessThan(1);
+  expect(ghost.pointerEvents).toBe("none");
+  expect(Number(ghost.zIndex)).toBeGreaterThan(10);
+  // Selecting an element reveals the tools; Delete removes it via keyboard.
+  // bgEdit / renderBgEditCanvas live in background-editor.js's top-level
+  // scope, which classic scripts (and evaluate) share.
+  await page.evaluate(() => {
+    /* global bgEdit, renderBgEditCanvas */
+    bgEdit.data.elements.push({
+      src: "assets/l1-march-book-1.jpg",
+      x: 50,
+      y: 40,
+      w: 20,
+      r: 0,
+      fx: false,
+      z: 0,
+    });
+    bgEdit.selected = 0;
+    renderBgEditCanvas();
+  });
+  await expect(page.locator("#bgElTools")).toBeVisible();
+  await page.keyboard.press("Delete");
+  await expect(page.locator("#pageBgLayer .bg-edit-el")).toHaveCount(0);
+  await expect(page.locator("#bgElTools")).toBeHidden();
+  // Esc with no selection closes the (clean) session.
+  await page.evaluate(() => {
+    bgEdit.dirty = false;
+  });
+  await page.keyboard.press("Escape");
   await expect(page.locator("#bgEditorPanel")).toBeHidden();
 });
 
