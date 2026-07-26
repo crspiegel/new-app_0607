@@ -18,7 +18,9 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-- **배경 영상 URL 기능 (`2026-07-26`) — 구현·qa 완료, 커밋 대기.** 플랜 승인 후 구현
+- _(진행 중 작업 없음 — 배경 영상 URL 기능까지 커밋·배포 완료, 2026-07-26. 아래 참조.)_
+- ✅ **배경 영상 URL 기능 배포 완료 (`2026-07-26`):** 커밋 `f76dd57` push → Vercel 자동
+  배포. 사용자 로컬 테스트 완료 후 배포. 플랜 승인 후 구현
   (플랜: `C:\Users\USER\.claude\plans\fancy-cooking-simon.md`). 배경 편집기(페이지1·2)의
   전체 배경 섹션에 **영상 URL 입력란**([적용]/[영상 제거], Enter 지원) 추가 — YouTube /
   Vimeo / mp4·webm 직접 URL을 `parseBgVideoUrl()`(app.js, craBg 노출)로 판별해
@@ -29,7 +31,6 @@ yet verified/committed. Clear the entry once the work is completed and logged be
   스크림 적용. 편집기 캔버스는 라이브 프리뷰 — iframe 리로드 방지 위해 `bgEdit.videoNode`를
   선택적 wipe 밖에서 관리(NOTES.md gotcha 참조). 변경 파일: app.js, background-editor.js,
   index.html, styles.css, tests/smoke.spec.js(테스트 3개 추가). qa 33/33 green.
-  **다음 단계: 사용자 지시 시 커밋·push(Vercel 자동 배포) + 실브라우저 수동 확인.**
   ⚠ Vimeo `background=1` 파라미터는 영상 소유자가 유료 플랜일 때만 동작(아니면 무음
   루프까지만, 컨트롤 노출 가능). 기존 저장 요소 재배치 사용자 작업은 여전히 남음(아래 ⚠).
 - ✅ **아래 1~4차 전부 배포 완료 (`2026-07-26`):** 커밋 `05d95ed` push → Vercel 자동 배포.
