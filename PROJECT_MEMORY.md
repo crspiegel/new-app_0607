@@ -18,6 +18,8 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
+- _(비어 있음 — 진행 중 작업 없음. 배경 편집기 개선 1~4차 커밋·배포 완료, 2026-07-26.
+  아래 항목 참조. 단 하나 남은 사용자 작업: 기존 저장 요소 재배치 — 아래 ⚠ 참조.)_
 - ✅ **아래 1~4차 전부 배포 완료 (`2026-07-26`):** 커밋 `05d95ed` push → Vercel 자동 배포.
   new-app0607.vercel.app + www.cambridgereading.com 모두 새
   styles.css(`.page-bg-el-frame`)·app.js(`positionBgElFrame`)·background-editor.js·
