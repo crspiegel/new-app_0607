@@ -18,7 +18,12 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-- **배경 편집기 위젯 개선 (`2026-07-26`, 검증 완료 — 아직 미커밋):** 사용자 요청 2건.
+- ✅ **아래 1~4차 전부 배포 완료 (`2026-07-26`):** 커밋 `05d95ed` push → Vercel 자동 배포.
+  new-app0607.vercel.app + www.cambridgereading.com 모두 새
+  styles.css(`.page-bg-el-frame`)·app.js(`positionBgElFrame`)·background-editor.js·
+  index.html(원형 FAB) 서빙 확인. ⚠ 남은 사용자 작업: **기존 저장 요소는 편집기에서 한 번
+  재배치 후 저장**(4차 좌표계 전환 때문 — 아래 참조).
+- **배경 편집기 위젯 개선 (`2026-07-26`):** 사용자 요청 2건.
   (1) **편집 패널 = 드래그 가능한 플로팅 창** — 오른쪽 고정 패널이 화면 오른쪽에 요소를
   배치할 때 가리는 문제. `.bg-editor-head`가 드래그 핸들(cursor:move, user-select/touch-action
   none); 첫 드래그에서 auto top/right/bottom 지오메트리를 명시적 left/top + 고정 height로
@@ -29,8 +34,7 @@ yet verified/committed. Clear the entry once the work is completed and logged be
   `bgFabIcon`(innerHTML 백업) + `.bg-fab-wide`(필 형태 복원) 클래스로 처리 후 2.5s 뒤 복구.
   smoke 테스트에 패널 드래그 회귀 검증 추가(모바일은 좌측 0px 클램프라 상대 이동만 단언).
   `npm.cmd run qa` 24/24 green + Playwright 스크린샷으로 페이지1/2 FAB·드래그 실측 확인.
-  다음 단계: 사용자 확인 후 커밋·배포.
-- **배경 편집기 위젯 개선 2차 (`2026-07-26`, 같은 세션 — 여전히 미커밋):** 사용자 스샷
+- **배경 편집기 위젯 개선 2차 (같은 세션):** 사용자 스샷
   피드백 3건. (1) **라이브러리 썸네일이 안 보이거나 잘리던 버그** — `.bg-editor-panel
 button`의 `background:#fafafa` **단축 속성**(0,1,1)이 `.bg-lib-thumb`(0,1,0)의
   `background-size:contain`을 덮어써 원본 크기 좌상단 크롭으로 렌더 → 썸네일을 CSS 배경
@@ -45,7 +49,7 @@ button`의 `background:#fafafa` **단축 속성**(0,1,1)이 `.bg-lib-thumb`(0,1,
 - **3차 (같은 세션):** 요소 **리사이즈 핸들을 오른쪽 아래 → 오른쪽 위 모서리로 이동**
   (사용자: 아래쪽 잡기가 불편). 리사이즈 수학은 중심-거리 기반이라 CSS만 변경
   (`.bg-edit-resize` top:-10/right:-10, cursor `nesw-resize`). Playwright로 핸들 위치 +
-  드래그 확대(22→32%) 실측, qa 24/24 green. 여전히 미커밋 — 로컬 확인 대기.
+  드래그 확대(22→32%) 실측, qa 24/24 green.
 - **4차 (같은 세션, 플랜 승인 후 구현):** **PC↔태블릿 요소 위치 불일치 해결** — 요소
   좌표계를 뷰포트(`.app-shell` 박스)에서 **콘텐츠 열 프레임**(`.page-bg-el-frame`,
   `.section-inner` 실측 추종)으로 변경. `positionBgElFrame()`(app.js, craBg로 노출) +
@@ -53,7 +57,7 @@ button`의 `background:#fafafa` **단축 속성**(0,1,1)이 `.bg-lib-thumb`(0,1,
   `C:\Users\USER\.claude\plans\concurrent-swinging-blossom.md`. 검증: 1280/1024/800
   뷰포트에서 요소 중심의 콘텐츠-상대 좌표 소수 3자리까지 일치, qa 24/24 green(시드
   테스트에 프레임 정렬 단언 추가). ⚠ **기존 저장 요소는 좌표 의미가 바뀌어 재배치
-  필요**(사용자에게 안내함). 상세 gotcha → NOTES.md 배경 편집기 섹션. 미커밋.
+  필요**(사용자에게 안내함). 상세 gotcha → NOTES.md 배경 편집기 섹션.
 - **+ 배너 가독성 스크림 (같은 세션, 인터뷰로 사용자 선택):** 전체 배경 이미지가 있으면
   레벨명·월 아이콘이 안 보이는 문제 → 사용자가 4안 중 **상단 흰색 그라데이션** 선택,
   페이지1+2 모두 적용. 구현: `.page-bg-layer.has-full::after`(0→280px α.95→.88, 420px에서
