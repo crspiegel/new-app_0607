@@ -22,6 +22,9 @@ const bgLibraryGrid = document.querySelector("#bgLibraryGrid");
 const bgUploadBtn = document.querySelector("#bgUploadBtn");
 const bgFullClear = document.querySelector("#bgFullClear");
 const bgFullHint = document.querySelector("#bgFullHint");
+const bgVideoInput = document.querySelector("#bgVideoUrl");
+const bgVideoApply = document.querySelector("#bgVideoApply");
+const bgVideoClear = document.querySelector("#bgVideoClear");
 const bgElTools = document.querySelector("#bgElTools");
 const bgSaveMonth = document.querySelector("#bgSaveMonth");
 const bgSaveDefault = document.querySelector("#bgSaveDefault");
@@ -37,11 +40,13 @@ const bgEdit = {
   on: false,
   screen: "", // "months" | "content" — key for applyPageBackground on exit
   page: "", // "page1" | "page2"
-  data: { full: null, elements: [] }, // working copy (saved only on demand)
+  data: { full: null, elements: [], videoUrl: null }, // working copy (saved only on demand)
   dirty: false,
   selected: -1, // index into data.elements
   discardArmed: false, // two-step "discard changes" on close
   saving: false, // guards double-click on save / delete-override
+  videoNode: null, // live video preview node — survives canvas rebuilds
+  videoNodeUrl: "", // URL the node was built from (rebuild only on change)
 };
 
 function bgLayer() {
@@ -53,7 +58,7 @@ function setBgStatus(text) {
 function bgDeepCopy(entry) {
   return entry
     ? JSON.parse(JSON.stringify(entry))
-    : { full: null, elements: [] };
+    : { full: null, elements: [], videoUrl: null };
 }
 function bgMarkDirty() {
   bgEdit.dirty = true;
@@ -225,22 +230,50 @@ function bgElFrame() {
 
 function renderBgEditCanvas() {
   const layer = bgLayer();
-  layer.innerHTML = "";
-  // Same readability scrim as the viewer (WYSIWYG).
-  layer.classList.toggle("has-full", Boolean(bgEdit.data.full));
+  // Wipe everything EXCEPT the live video node — re-inserting an iframe
+  // reloads it, which would visibly restart the video on every select/drag.
+  [...layer.children].forEach((child) => {
+    if (child !== bgEdit.videoNode) child.remove();
+  });
+  // Same readability scrim as the viewer (WYSIWYG) — video counts too.
+  layer.classList.toggle(
+    "has-full",
+    Boolean(bgEdit.data.full || bgEdit.data.videoUrl),
+  );
   if (bgEdit.data.full) {
     const full = document.createElement("div");
     full.className = "page-bg-full";
     full.style.backgroundImage = `url("${bgEdit.data.full}")`;
-    layer.append(full);
+    // prepend keeps the viewer's DOM order (full → video → el-frame).
+    layer.prepend(full);
   }
+  syncBgVideoPreview(layer);
   bgFullClear.hidden = !bgEdit.data.full;
   bgFullHint.hidden = Boolean(bgEdit.data.full);
+  bgVideoClear.hidden = !bgEdit.data.videoUrl;
   const frame = bgElFrame();
   bgEdit.data.elements.forEach((item, index) => {
     frame.append(bgEditShell(item, index));
   });
   bgElTools.hidden = bgEdit.selected < 0;
+}
+
+// Keep at most one video preview node alive across canvas rebuilds; rebuild
+// only when the URL actually changed.
+function syncBgVideoPreview(layer) {
+  const url = bgEdit.data.videoUrl || "";
+  if (bgEdit.videoNode && bgEdit.videoNodeUrl === url) return;
+  if (bgEdit.videoNode) {
+    bgEdit.videoNode.remove();
+    bgEdit.videoNode = null;
+  }
+  bgEdit.videoNodeUrl = url;
+  if (!url) return;
+  const node = window.craBg.buildBgVideoLayer(url);
+  if (!node) return;
+  bgEdit.videoNode = node;
+  layer.append(node);
+  window.craBg.sizeBgVideoCover();
 }
 
 // One positioned wrapper per element: the img mirrors the viewer geometry
@@ -316,9 +349,15 @@ function enterBgEdit() {
     window.craBg.getBackgroundEntry(state.level, page, month),
   );
   if (!Array.isArray(bgEdit.data.elements)) bgEdit.data.elements = [];
+  if (typeof bgEdit.data.videoUrl !== "string") bgEdit.data.videoUrl = null;
   bgEdit.dirty = false;
   bgEdit.selected = -1;
   bgEdit.discardArmed = false;
+  // Any preview node from a previous session is already gone from the DOM
+  // (exit repaints from cache) — drop the stale reference too.
+  bgEdit.videoNode = null;
+  bgEdit.videoNodeUrl = "";
+  bgVideoInput.value = bgEdit.data.videoUrl || "";
   // page-bg-active turns on the tint hand-off CSS even before anything is
   // saved, so what the admin sees while editing is exactly what saving gives.
   document.body.classList.add("bg-editing", "page-bg-active");
@@ -468,6 +507,44 @@ bgFullClear.addEventListener("click", () => {
   renderBgEditCanvas();
 });
 
+// 영상 URL: [적용] (or Enter) commits the input. An unsupported shape only
+// shows a status message — it never dirties the session.
+function bgApplyVideoUrl() {
+  const raw = bgVideoInput.value.trim();
+  if (!raw) {
+    if (!bgEdit.data.videoUrl) return;
+    bgEdit.data.videoUrl = null;
+    bgMarkDirty();
+    renderBgEditCanvas();
+    return;
+  }
+  if (!window.craBg.parseBgVideoUrl(raw)) {
+    setBgStatus(
+      "지원하지 않는 주소입니다 — YouTube / Vimeo / mp4·webm URL만 가능합니다.",
+    );
+    return;
+  }
+  if (bgEdit.data.videoUrl === raw) return;
+  bgEdit.data.videoUrl = raw;
+  bgMarkDirty();
+  renderBgEditCanvas();
+}
+
+bgVideoApply.addEventListener("click", bgApplyVideoUrl);
+
+bgVideoInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  bgApplyVideoUrl();
+});
+
+bgVideoClear.addEventListener("click", () => {
+  bgVideoInput.value = "";
+  bgEdit.data.videoUrl = null;
+  bgMarkDirty();
+  renderBgEditCanvas();
+});
+
 // Clicking empty layer space clears the selection. (The el-frame itself is
 // pointer-events:none, so empty clicks over it land on the layer.)
 document.addEventListener("pointerdown", (event) => {
@@ -485,6 +562,8 @@ document.addEventListener("pointerdown", (event) => {
 
 function exitBgEdit() {
   bgEdit.on = false;
+  bgEdit.videoNode = null;
+  bgEdit.videoNodeUrl = "";
   document.body.classList.remove("bg-editing", "bg-ghost");
   bgPanel.hidden = true;
   bgElTools.hidden = true;
@@ -615,6 +694,7 @@ document.addEventListener("keydown", (event) => {
 function bgNormalized() {
   return {
     full: bgEdit.data.full || null,
+    videoUrl: bgEdit.data.videoUrl || null,
     elements: bgEdit.data.elements.map((item, index) => ({
       ...item,
       z: index,

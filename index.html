@@ -854,6 +854,28 @@
               전체 배경 제거
             </button>
           </div>
+          <div class="bg-video-row">
+            <div class="bg-editor-sec-head">
+              <strong>영상 URL</strong>
+              <button
+                type="button"
+                class="bg-help"
+                aria-label="도움말"
+                data-tip="YouTube · Vimeo · mp4/webm 주소를 넣고 [적용]하면 페이지 배경으로 자동재생(무음·반복)됩니다. 영상이 있으면 전체 배경 이미지는 영상 로딩 전/실패 시 대체 화면이 됩니다."
+              >
+                ?
+              </button>
+            </div>
+            <input
+              type="url"
+              id="bgVideoUrl"
+              placeholder="YouTube / Vimeo / mp4 주소"
+            />
+            <div class="bg-video-actions">
+              <button type="button" id="bgVideoApply">적용</button>
+              <button type="button" id="bgVideoClear" hidden>영상 제거</button>
+            </div>
+          </div>
         </div>
         <div class="bg-editor-section">
           <div class="bg-editor-sec-head">

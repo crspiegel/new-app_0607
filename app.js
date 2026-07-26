@@ -255,11 +255,66 @@ function positionBgElFrame(screenName) {
 
 window.addEventListener("resize", () => {
   if (bgFrameScreen) positionBgElFrame(bgFrameScreen);
+  sizeBgVideoCover();
 });
 // Fonts/images finishing can change the content height after the first paint.
 window.addEventListener("load", () => {
   if (bgFrameScreen) positionBgElFrame(bgFrameScreen);
+  sizeBgVideoCover();
 });
+
+// Background video layer. Appended AFTER .page-bg-full in DOM order, so the
+// still image underneath doubles as the loading/failure fallback. Direct
+// files self-remove on error; embed iframes can't report failure, in which
+// case the image simply stays visible behind them.
+function buildBgVideoLayer(videoUrl) {
+  const source = parseBgVideoUrl(videoUrl);
+  if (!source) return null;
+  const wrap = document.createElement("div");
+  wrap.className = "page-bg-video";
+  if (source.kind === "file") {
+    const video = document.createElement("video");
+    video.autoplay = true;
+    video.loop = true;
+    // Autoplay policies check the property, not just the attribute — set
+    // both, before src, so playback starts muted everywhere.
+    video.muted = true;
+    video.setAttribute("muted", "");
+    video.setAttribute("playsinline", "");
+    video.addEventListener("error", () => wrap.remove());
+    video.src = source.url;
+    wrap.append(video);
+    return wrap;
+  }
+  const iframe = document.createElement("iframe");
+  iframe.title = "";
+  iframe.tabIndex = -1;
+  iframe.setAttribute("allow", "autoplay; encrypted-media");
+  // Vimeo's background=1 needs the owner's paid plan; when unsupported the
+  // remaining params still give a muted autoplay loop (with controls).
+  iframe.src =
+    source.kind === "youtube"
+      ? `https://www.youtube-nocookie.com/embed/${source.id}?autoplay=1&mute=1&loop=1&playlist=${source.id}&controls=0&disablekb=1&modestbranding=1&playsinline=1&rel=0&iv_load_policy=3`
+      : `https://player.vimeo.com/video/${source.id}?background=1&autoplay=1&muted=1&loop=1&autopause=0`;
+  wrap.append(iframe);
+  return wrap;
+}
+
+// Embeds can't use object-fit, so "cover" is done by hand: size the iframe
+// to the smallest 16:9 box that covers the wrapper (px) and let the CSS
+// translate center it. Re-run on resize/load — the layer spans .app-shell,
+// so its height follows the content, not the viewport.
+function sizeBgVideoCover() {
+  const iframe = document.querySelector("#pageBgLayer .page-bg-video iframe");
+  if (!iframe) return;
+  const rect = iframe.parentElement.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const wide = rect.width / rect.height > 16 / 9;
+  const w = wide ? rect.width : (rect.height * 16) / 9;
+  const h = wide ? (rect.width * 9) / 16 : rect.height;
+  iframe.style.width = `${Math.ceil(w)}px`;
+  iframe.style.height = `${Math.ceil(h)}px`;
+}
 
 function applyPageBackground(screenName) {
   const layer = ensureBgLayer();
@@ -269,11 +324,15 @@ function applyPageBackground(screenName) {
     : null;
   layer.innerHTML = "";
   const active = Boolean(
-    entry && (entry.full || (entry.elements && entry.elements.length)),
+    entry &&
+    (entry.full || entry.videoUrl || (entry.elements && entry.elements.length)),
   );
   document.body.classList.toggle("page-bg-active", active);
-  // Full-image pages get a white top scrim so the banner stays readable.
-  layer.classList.toggle("has-full", Boolean(active && entry.full));
+  // Full-image (or video) pages get a top scrim so the banner stays readable.
+  layer.classList.toggle(
+    "has-full",
+    Boolean(active && (entry.full || entry.videoUrl)),
+  );
   if (!active) {
     bgFrameScreen = "";
     return;
@@ -283,6 +342,11 @@ function applyPageBackground(screenName) {
     full.className = "page-bg-full";
     full.style.backgroundImage = `url("${entry.full}")`;
     layer.append(full);
+  }
+  const video = buildBgVideoLayer(entry.videoUrl);
+  if (video) {
+    layer.append(video);
+    sizeBgVideoCover();
   }
   const frame = positionBgElFrame(screenName);
   [...(entry.elements || [])]
@@ -696,6 +760,23 @@ function parseVideoSource(source) {
   if (yt) return { kind: "youtube", id: yt[1] };
   if (/^\d+$/.test(str)) return { kind: "vimeo", id: Number(str) };
   return { kind: "vimeo", url: str };
+}
+
+// Classify a background-video URL (배경 편집기's 영상 URL field). Unlike
+// parseVideoSource, which trusts any non-YouTube string to be Vimeo, this
+// only accepts shapes we can actually render as a page background — anything
+// else is invalid (null). Direct files are checked first so a ".mp4" URL on
+// some host never falls through to the embed branches.
+function parseBgVideoUrl(value) {
+  if (!value) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  if (/\.(mp4|webm)(\?|#|$)/i.test(str)) return { kind: "file", url: str };
+  const yt = str.match(YT_ID_RE);
+  if (yt) return { kind: "youtube", id: yt[1] };
+  const vm = str.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vm) return { kind: "vimeo", id: vm[1] };
+  return null;
 }
 
 // Current viewer grade. Phase 3 sets state.grade on login; until then everyone
@@ -2356,4 +2437,7 @@ window.craBg = {
   getBackgroundEntry,
   applyPageBackground,
   positionBgElFrame,
+  parseBgVideoUrl,
+  buildBgVideoLayer,
+  sizeBgVideoCover,
 };

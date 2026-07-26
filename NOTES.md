@@ -384,4 +384,22 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   공유하는 식별자(`sb`, `state`, `isAdmin`, `hydrateBackgrounds` 등)는 그 블록의 `globals`에
   선언돼 있다. 편집기에서 app.js의 **새** 전역을 참조하면 lint가 no-undef로 깨진다 —
   `eslint.config.mjs`의 globals 목록에 추가할 것. (`setTimeout`류는 여전히 `window.` 접두
-  필수.)
+  필수.) 영상 URL 기능은 이 문제를 피하려고 `window.craBg.parseBgVideoUrl` 식으로 브릿지
+  경유 호출만 쓴다.
+- **편집 캔버스에 iframe이 있으면 `layer.innerHTML = ""` 전체 wipe 금지 (`2026-07-26`,
+  배경 영상 기능).** iframe은 DOM에서 떼었다 다시 붙이기만 해도 **전체 리로드**된다 —
+  `renderBgEditCanvas()`는 선택/드래그 종료마다 실행되므로 전체 wipe면 영상 프리뷰가 매번
+  재시작한다. 해결: 영상 노드를 `bgEdit.videoNode`/`videoNodeUrl`로 wipe 밖에서 관리하고
+  (`syncBgVideoPreview()`), URL이 실제로 바뀐 때만 재생성. wipe는 `child !== bgEdit.videoNode`
+  선택 삭제, DOM 순서는 full `prepend` + 프레임은 항상 마지막 append로 유지(full → video →
+  el-frame). `enterBgEdit`/`exitBgEdit`에서 노드 참조를 반드시 리셋할 것(밖에서
+  `applyPageBackground`가 레이어를 wipe해도 참조가 남으면 다음 세션에서 죽은 노드를 지킨다).
+- **배경 영상 = `.page-bg-video` 레이어, 이미지가 폴백.** `data.videoUrl`(jsonb 필드)이 있으면
+  `buildBgVideoLayer()`(app.js)가 full 뒤 DOM 순서로 영상을 깔고, `.page-bg-full`은 남겨서
+  로딩 전/실패 시 폴백이 된다(파일 `<video>`는 error 시 self-remove; iframe은 실패 감지가
+  안 되므로 이미지가 뒤에 있는 것 자체가 폴백). 임베드는 object-fit이 안 먹혀
+  `sizeBgVideoCover()`가 16:9 오버사이즈 px를 계산한다 — 레이어 높이는 뷰포트가 아니라
+  `.app-shell`(콘텐츠) 높이를 따르므로 resize와 load 모두에서 재계산해야 한다.
+  ⚠ 무음(`mute`/`muted`) 없이는 브라우저가 자동재생을 차단한다 — 파라미터를 빼지 말 것.
+  ⚠ Vimeo `background=1`(컨트롤 숨김)은 영상 소유자 유료 플랜 전용 — 무료 영상은 컨트롤이
+  보일 수 있다(무음 루프는 동작).

@@ -5484,6 +5484,29 @@ body.page-bg-active .page-bg-layer {
   background-repeat: no-repeat;
   background-size: cover;
 }
+/* Background video: sits after .page-bg-full in DOM order, so the still
+   image underneath doubles as the loading/failure fallback. <video> covers
+   via object-fit; embed iframes can't, so sizeBgVideoCover() (app.js) sets
+   an oversized covering 16:9 px box and the translate centers it here. */
+.page-bg-video {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.page-bg-video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.page-bg-video iframe {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 0;
+  pointer-events: none;
+}
 /* Readability scrim: when a FULL background image is set (.has-full, toggled
    by applyPageBackground + the editor), a top gradient in the LEVEL's own
    tint (--level-accent-soft, inherited from the body's level-theme-N class)
@@ -5666,6 +5689,24 @@ body.bg-editing .bg-edit-fab {
 .bg-editor-sec-head {
   display: flex;
   align-items: center;
+  gap: 6px;
+}
+/* 영상 URL row inside the 전체 배경 section. */
+.bg-video-row {
+  display: grid;
+  gap: 6px;
+}
+.bg-video-row input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+.bg-video-actions {
+  display: flex;
   gap: 6px;
 }
 /* '?' help icon + hover/focus tooltip bubble. */

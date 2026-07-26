@@ -254,6 +254,162 @@ test("editor: element tools stay hidden until a selection exists, ghost preview 
   await expect(page.locator("#bgEditorPanel")).toBeHidden();
 });
 
+test("background video URL classifier accepts only renderable shapes", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const kinds = await page.evaluate(() =>
+    [
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "https://youtu.be/dQw4w9WgXcQ",
+      "https://vimeo.com/76979871",
+      "https://vimeo.com/video/76979871",
+      "https://cdn.example.com/clip.webm?x=1",
+      "not a url",
+      "  ",
+      "",
+    ].map((value) => {
+      const parsed = window.craBg.parseBgVideoUrl(value);
+      return parsed ? parsed.kind : null;
+    }),
+  );
+  expect(kinds).toEqual([
+    "youtube",
+    "youtube",
+    "vimeo",
+    "vimeo",
+    "file",
+    null,
+    null,
+    null,
+  ]);
+});
+
+test("video background renders above the full-image fallback", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%201/March");
+  await resetBgCache(page);
+  await page.evaluate(() => {
+    const { bgCache, bgKey, applyPageBackground } = window.craBg;
+    bgCache[bgKey("Level 1", "page2", "")] = {
+      full: "assets/l1-march-book-1.jpg",
+      elements: [],
+      videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    };
+    applyPageBackground("content");
+  });
+  await expect(page.locator("body")).toHaveClass(/page-bg-active/);
+  // The still image stays underneath as the loading/failure fallback.
+  await expect(page.locator("#pageBgLayer .page-bg-full")).toHaveCount(1);
+  const iframe = page.locator("#pageBgLayer .page-bg-video iframe");
+  await expect(iframe).toHaveCount(1);
+  const src = await iframe.getAttribute("src");
+  expect(src).toContain("youtube-nocookie.com/embed/dQw4w9WgXcQ");
+  expect(src).toContain("mute=1");
+  expect(src).toContain("playlist=dQw4w9WgXcQ");
+  // A video counts as a full background for the readability scrim.
+  await expect(page.locator("#pageBgLayer")).toHaveClass(/has-full/);
+  const geom = await page.evaluate(() => {
+    const wrap = document.querySelector("#pageBgLayer .page-bg-video");
+    const embed = wrap.querySelector("iframe");
+    const wrapRect = wrap.getBoundingClientRect();
+    const embedRect = embed.getBoundingClientRect();
+    return {
+      pointerEvents: getComputedStyle(wrap).pointerEvents,
+      afterFull: Boolean(
+        wrap.previousElementSibling &&
+        wrap.previousElementSibling.classList.contains("page-bg-full"),
+      ),
+      // sizeBgVideoCover: the 16:9 box must cover the wrapper on both axes.
+      covers:
+        embedRect.width >= wrapRect.width - 1 &&
+        embedRect.height >= wrapRect.height - 1,
+    };
+  });
+  expect(geom.pointerEvents).toBe("none");
+  expect(geom.afterFull).toBe(true);
+  expect(geom.covers).toBe(true);
+  // A direct file URL renders a muted looping <video> that covers via CSS.
+  // (Inspected inside the same evaluate — the URL never resolves here, and
+  // the resulting error event removes the wrapper again moments later.)
+  const fileVideo = await page.evaluate(() => {
+    const { bgCache, bgKey, applyPageBackground } = window.craBg;
+    bgCache[bgKey("Level 1", "page2", "")].videoUrl =
+      "https://example.com/bg.mp4";
+    applyPageBackground("content");
+    const video = document.querySelector("#pageBgLayer .page-bg-video video");
+    return video
+      ? {
+          muted: video.muted,
+          loop: video.loop,
+          objectFit: getComputedStyle(video).objectFit,
+        }
+      : null;
+  });
+  expect(fileVideo).toEqual({ muted: true, loop: true, objectFit: "cover" });
+  // Clearing the URL removes the video layer; the image stays.
+  await page.evaluate(() => {
+    const { bgCache, bgKey, applyPageBackground } = window.craBg;
+    bgCache[bgKey("Level 1", "page2", "")].videoUrl = null;
+    applyPageBackground("content");
+  });
+  await expect(page.locator("#pageBgLayer .page-bg-video")).toHaveCount(0);
+  await expect(page.locator("#pageBgLayer .page-bg-full")).toHaveCount(1);
+});
+
+test("editor: 영상 URL input validates, dirties, previews, and clears", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%201/March");
+  await resetBgCache(page);
+  await page.evaluate(() => {
+    /* global isAdmin, updateAdminUI */
+    isAdmin = true;
+    updateAdminUI();
+    window.craBg.ready = true;
+  });
+  await page.locator("#bgEditFab").click();
+  await expect(page.locator("#bgEditorPanel")).toBeVisible();
+  // An unsupported URL only warns — the session must stay clean.
+  await page.locator("#bgVideoUrl").fill("not a video url");
+  await page.locator("#bgVideoApply").click();
+  await expect(page.locator("#bgEditorStatus")).toContainText(
+    "지원하지 않는 주소",
+  );
+  expect(await page.evaluate(() => bgEdit.dirty)).toBe(false);
+  await expect(page.locator("#bgVideoClear")).toBeHidden();
+  // A valid URL dirties the session, shows the live preview + clear button,
+  // and lands in the normalized save payload.
+  await page.locator("#bgVideoUrl").fill("https://vimeo.com/76979871");
+  await page.locator("#bgVideoApply").click();
+  await expect(page.locator("#bgEditorStatus")).toContainText("변경됨");
+  await expect(page.locator("#bgVideoClear")).toBeVisible();
+  await expect(page.locator("#pageBgLayer .page-bg-video iframe")).toHaveCount(
+    1,
+  );
+  await expect(page.locator("#pageBgLayer")).toHaveClass(/has-full/);
+  const saved = await page.evaluate(() => {
+    /* global bgEdit, bgNormalized */
+    return {
+      working: bgEdit.data.videoUrl,
+      normalized: bgNormalized().videoUrl,
+    };
+  });
+  expect(saved.working).toBe("https://vimeo.com/76979871");
+  expect(saved.normalized).toBe("https://vimeo.com/76979871");
+  // 영상 제거 empties the value and drops the preview.
+  await page.locator("#bgVideoClear").click();
+  await expect(page.locator("#pageBgLayer .page-bg-video")).toHaveCount(0);
+  expect(await page.evaluate(() => bgEdit.data.videoUrl)).toBe(null);
+  // Close the (deliberately un-dirtied) session.
+  await page.evaluate(() => {
+    bgEdit.dirty = false;
+  });
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#bgEditorPanel")).toBeHidden();
+});
+
 test("page background clears when leaving a level page", async ({ page }) => {
   await page.goto("/#content/Level%201/March");
   await resetBgCache(page);
