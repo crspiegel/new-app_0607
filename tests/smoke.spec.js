@@ -110,6 +110,27 @@ test("seeded background renders full image and elements, month row wins", async 
   await expect(page.locator("body")).toHaveClass(/page-bg-active/);
   await expect(page.locator("#pageBgLayer .page-bg-full")).toHaveCount(1);
   await expect(page.locator("#pageBgLayer .page-bg-el")).toHaveCount(1);
+  // Elements are positioned inside the content-anchored frame (mirrors
+  // .section-inner) so placements track the content column across PC/tablet
+  // breakpoints instead of drifting with the viewport.
+  const frameGeom = await page.evaluate(() => {
+    const frame = document.querySelector("#pageBgLayer .page-bg-el-frame");
+    const inner = document.querySelector("#contentScreen .section-inner");
+    const f = frame.getBoundingClientRect();
+    const i = inner.getBoundingClientRect();
+    return {
+      hasEl: Boolean(frame.querySelector(".page-bg-el")),
+      dLeft: Math.abs(f.left - i.left),
+      dTop: Math.abs(f.top - i.top),
+      dWidth: Math.abs(f.width - i.width),
+      dHeight: Math.abs(f.height - i.height),
+    };
+  });
+  expect(frameGeom.hasEl).toBe(true);
+  expect(frameGeom.dLeft).toBeLessThan(2);
+  expect(frameGeom.dTop).toBeLessThan(2);
+  expect(frameGeom.dWidth).toBeLessThan(2);
+  expect(frameGeom.dHeight).toBeLessThan(2);
   // Every tint painter above the layer must actually go transparent, or the
   // full image is hidden behind the body area (regressed once: the
   // #contentScreen.screen-active tint at styles.css was missed).
@@ -170,6 +191,21 @@ test("editor: element tools stay hidden until a selection exists, ghost preview 
   });
   await page.locator("#bgEditFab").click();
   await expect(page.locator("#bgEditorPanel")).toBeVisible();
+  // The panel is a floating window: dragging its header moves it (so it can
+  // be pulled off the right edge while placing elements there).
+  const panelBefore = await page.locator("#bgEditorPanel").boundingBox();
+  await page
+    .locator("#bgEditorPanel .bg-editor-head")
+    .hover({ position: { x: 12, y: 12 } });
+  await page.mouse.down();
+  await page.mouse.move(panelBefore.x - 220, panelBefore.y + 60, { steps: 4 });
+  await page.mouse.up();
+  const panelAfter = await page.locator("#bgEditorPanel").boundingBox();
+  // Moved left (mobile clamps at the viewport edge, so just "less than"),
+  // stayed inside the viewport, and followed the pointer down.
+  expect(panelAfter.x).toBeLessThan(panelBefore.x);
+  expect(panelAfter.x).toBeGreaterThanOrEqual(0);
+  expect(panelAfter.y).toBeGreaterThan(panelBefore.y);
   // [hidden] must actually hide the element-tools section (regressed once:
   // a display:grid rule on the same element beat the UA's [hidden] rule).
   await expect(page.locator("#bgElTools")).toBeHidden();

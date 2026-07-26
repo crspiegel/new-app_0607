@@ -18,8 +18,42 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-- _(비어 있음 — 진행 중 작업 없음. 배경 편집기 UX/코드 개선 + 배너 가독성 스크림까지
-  커밋·배포 완료, 2026-07-23. 상세는 "배경 편집기 UX/코드 개선" 항목 참조.)_
+- **배경 편집기 위젯 개선 (`2026-07-26`, 검증 완료 — 아직 미커밋):** 사용자 요청 2건.
+  (1) **편집 패널 = 드래그 가능한 플로팅 창** — 오른쪽 고정 패널이 화면 오른쪽에 요소를
+  배치할 때 가리는 문제. `.bg-editor-head`가 드래그 핸들(cursor:move, user-select/touch-action
+  none); 첫 드래그에서 auto top/right/bottom 지오메트리를 명시적 left/top + 고정 height로
+  동결 후 뷰포트 안에서 클램프 이동(`background-editor.js` pointerdown/move/up). 위치는
+  닫았다 열어도 유지되며 `bgClampPanel()`이 재진입 시 뷰포트 축소를 보정. (2) **FAB =
+  44px 원형 아이콘 버튼** — 녹색 '배경 편집' 텍스트 필이 디자인 검토를 방해 → 텍스트 제거,
+  이미지 라인 SVG 아이콘 + aria-label/title 유지. Supabase 연결 실패 시 텍스트 스왑은
+  `bgFabIcon`(innerHTML 백업) + `.bg-fab-wide`(필 형태 복원) 클래스로 처리 후 2.5s 뒤 복구.
+  smoke 테스트에 패널 드래그 회귀 검증 추가(모바일은 좌측 0px 클램프라 상대 이동만 단언).
+  `npm.cmd run qa` 24/24 green + Playwright 스크린샷으로 페이지1/2 FAB·드래그 실측 확인.
+  다음 단계: 사용자 확인 후 커밋·배포.
+- **배경 편집기 위젯 개선 2차 (`2026-07-26`, 같은 세션 — 여전히 미커밋):** 사용자 스샷
+  피드백 3건. (1) **라이브러리 썸네일이 안 보이거나 잘리던 버그** — `.bg-editor-panel
+button`의 `background:#fafafa` **단축 속성**(0,1,1)이 `.bg-lib-thumb`(0,1,0)의
+  `background-size:contain`을 덮어써 원본 크기 좌상단 크롭으로 렌더 → 썸네일을 CSS 배경
+  대신 **실제 `<img>` + `object-fit:contain`**으로 교체(+투명/흰 이미지용 체커보드 배경).
+  (2) **패널 4모서리 라운드** — `overflow-y:auto` 스크롤바가 패널 가장자리를 각지게 만들던
+  것을 헤더 고정 + `.bg-editor-body`(본문만 스크롤) 구조로 변경, 패널은 `overflow:hidden` +
+  radius 16. ⚠ 패널에 `display:flex`를 주면서 `[hidden]`이 깨지므로
+  `.bg-editor-panel[hidden]{display:none!important}` 가드 필수(기존 admin-view 버그와 동일
+  패턴). (3) **저장 성공 시 confirm 팝업 후 자동 닫기** — `bgSave` 끝에서 "저장 완료. 편집
+  창을 닫을까요?" `window.confirm` → 확인 시 `exitBgEdit()`, 취소 시 세션 유지. qa 24/24
+  green + 스크린샷으로 썸네일/라운드 실측 확인(저장 confirm은 Supabase 쓰기라 코드 검증만).
+- **3차 (같은 세션):** 요소 **리사이즈 핸들을 오른쪽 아래 → 오른쪽 위 모서리로 이동**
+  (사용자: 아래쪽 잡기가 불편). 리사이즈 수학은 중심-거리 기반이라 CSS만 변경
+  (`.bg-edit-resize` top:-10/right:-10, cursor `nesw-resize`). Playwright로 핸들 위치 +
+  드래그 확대(22→32%) 실측, qa 24/24 green. 여전히 미커밋 — 로컬 확인 대기.
+- **4차 (같은 세션, 플랜 승인 후 구현):** **PC↔태블릿 요소 위치 불일치 해결** — 요소
+  좌표계를 뷰포트(`.app-shell` 박스)에서 **콘텐츠 열 프레임**(`.page-bg-el-frame`,
+  `.section-inner` 실측 추종)으로 변경. `positionBgElFrame()`(app.js, craBg로 노출) +
+  뷰어/편집기 렌더·드래그 rect 모두 프레임 기준, resize/load 재계산. 플랜:
+  `C:\Users\USER\.claude\plans\concurrent-swinging-blossom.md`. 검증: 1280/1024/800
+  뷰포트에서 요소 중심의 콘텐츠-상대 좌표 소수 3자리까지 일치, qa 24/24 green(시드
+  테스트에 프레임 정렬 단언 추가). ⚠ **기존 저장 요소는 좌표 의미가 바뀌어 재배치
+  필요**(사용자에게 안내함). 상세 gotcha → NOTES.md 배경 편집기 섹션. 미커밋.
 - **+ 배너 가독성 스크림 (같은 세션, 인터뷰로 사용자 선택):** 전체 배경 이미지가 있으면
   레벨명·월 아이콘이 안 보이는 문제 → 사용자가 4안 중 **상단 흰색 그라데이션** 선택,
   페이지1+2 모두 적용. 구현: `.page-bg-layer.has-full::after`(0→280px α.95→.88, 420px에서

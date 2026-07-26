@@ -29,6 +29,9 @@ const bgDeleteOverride = document.querySelector("#bgDeleteOverride");
 const bgSavePage1 = document.querySelector("#bgSavePage1");
 const bgCloseBtn = document.querySelector("#bgEditorClose");
 const bgGhostToggle = document.querySelector("#bgGhostToggle");
+// The FAB is icon-only (SVG); keep its markup so the connection-failure
+// text swap can restore it.
+const bgFabIcon = bgFab.innerHTML;
 
 const bgEdit = {
   on: false,
@@ -100,7 +103,15 @@ async function renderBgLibrary() {
     thumb.type = "button";
     thumb.className = "bg-lib-thumb";
     thumb.title = "클릭하면 화면 중앙에 요소로 추가";
-    thumb.style.backgroundImage = `url("${url}")`;
+    // A real <img> (object-fit:contain), NOT a CSS background: the panel-wide
+    // `.bg-editor-panel button { background:#fafafa }` shorthand outranks
+    // .bg-lib-thumb (0,1,1 vs 0,1,0) and resets background-size to auto,
+    // which cropped large images to their top-left corner.
+    const thumbImg = document.createElement("img");
+    thumbImg.src = url;
+    thumbImg.alt = item.name;
+    thumbImg.loading = "lazy";
+    thumb.append(thumbImg);
     thumb.addEventListener("click", () => {
       bgEdit.data.elements.push({
         src: url,
@@ -205,6 +216,13 @@ async function bgUploadFile(file, quiet) {
   return true;
 }
 
+// Elements live in the content-anchored .page-bg-el-frame (same as the
+// viewer — see positionBgElFrame in app.js), so what the admin places is
+// what every breakpoint shows relative to the content column.
+function bgElFrame() {
+  return window.craBg.positionBgElFrame(bgEdit.screen);
+}
+
 function renderBgEditCanvas() {
   const layer = bgLayer();
   layer.innerHTML = "";
@@ -218,8 +236,9 @@ function renderBgEditCanvas() {
   }
   bgFullClear.hidden = !bgEdit.data.full;
   bgFullHint.hidden = Boolean(bgEdit.data.full);
+  const frame = bgElFrame();
   bgEdit.data.elements.forEach((item, index) => {
-    layer.append(bgEditShell(item, index));
+    frame.append(bgEditShell(item, index));
   });
   bgElTools.hidden = bgEdit.selected < 0;
 }
@@ -280,8 +299,10 @@ function enterBgEdit() {
       if (window.craBg.ready) enterBgEdit();
       else {
         bgFab.textContent = "연결 실패 — 다시 시도";
+        bgFab.classList.add("bg-fab-wide");
         window.setTimeout(() => {
-          bgFab.textContent = "배경 편집";
+          bgFab.innerHTML = bgFabIcon;
+          bgFab.classList.remove("bg-fab-wide");
         }, 2500);
       }
     });
@@ -303,6 +324,7 @@ function enterBgEdit() {
   document.body.classList.add("bg-editing", "page-bg-active");
   document.body.classList.toggle("bg-ghost", bgGhostToggle.checked);
   bgPanel.hidden = false;
+  bgClampPanel();
   bgTargetTag.textContent =
     page === "page1"
       ? `${levelLabel(state.level)} · 페이지1`
@@ -326,7 +348,8 @@ function enterBgEdit() {
 function startBgDrag(event, index, mode) {
   event.preventDefault();
   const item = bgEdit.data.elements[index];
-  const rect = bgLayer().getBoundingClientRect();
+  // % geometry is relative to the content-anchored frame, not the layer.
+  const rect = bgElFrame().getBoundingClientRect();
   const shell = bgLayer().querySelectorAll(".bg-edit-el")[index];
   const startX = event.clientX;
   const startY = event.clientY;
@@ -445,11 +468,16 @@ bgFullClear.addEventListener("click", () => {
   renderBgEditCanvas();
 });
 
-// Clicking empty layer space clears the selection.
+// Clicking empty layer space clears the selection. (The el-frame itself is
+// pointer-events:none, so empty clicks over it land on the layer.)
 document.addEventListener("pointerdown", (event) => {
   if (!bgEdit.on) return;
   const target = event.target;
-  if (target === bgLayer() || target.classList.contains("page-bg-full")) {
+  if (
+    target === bgLayer() ||
+    target.classList.contains("page-bg-full") ||
+    target.classList.contains("page-bg-el-frame")
+  ) {
     bgEdit.selected = -1;
     renderBgEditCanvas();
   }
@@ -477,6 +505,64 @@ function requestBgClose() {
 bgFab.addEventListener("click", enterBgEdit);
 
 bgCloseBtn.addEventListener("click", requestBgClose);
+
+// The panel drags by its header like a floating window, so elements placed
+// near the right screen edge (previously hidden under the docked panel) can
+// be positioned precisely. First drag freezes the auto top/right/bottom
+// geometry into explicit left/top + a fixed height, then the pointer moves
+// it, clamped to the viewport.
+const bgPanelHead = bgPanel.querySelector(".bg-editor-head");
+bgPanelHead.addEventListener("pointerdown", (event) => {
+  if (event.target.closest("button")) return;
+  event.preventDefault();
+  const rect = bgPanel.getBoundingClientRect();
+  bgPanel.style.height = `${rect.height}px`;
+  bgPanel.style.right = "auto";
+  bgPanel.style.bottom = "auto";
+  const grabX = event.clientX - rect.left;
+  const grabY = event.clientY - rect.top;
+  function move(ev) {
+    const x = Math.min(
+      Math.max(ev.clientX - grabX, 0),
+      Math.max(0, window.innerWidth - rect.width),
+    );
+    const y = Math.min(
+      Math.max(ev.clientY - grabY, 0),
+      Math.max(0, window.innerHeight - rect.height),
+    );
+    bgPanel.style.left = `${x}px`;
+    bgPanel.style.top = `${y}px`;
+  }
+  function up() {
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", up);
+    document.removeEventListener("pointercancel", up);
+  }
+  move(event);
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", up);
+  document.addEventListener("pointercancel", up);
+});
+
+// A dragged position persists across close/re-open (inline styles). If the
+// viewport shrank in between, pull the panel back inside so it stays
+// reachable.
+function bgClampPanel() {
+  if (!bgPanel.style.left) return;
+  const rect = bgPanel.getBoundingClientRect();
+  const maxH = window.innerHeight - 24;
+  if (rect.height > maxH) bgPanel.style.height = `${maxH}px`;
+  const w = Math.min(rect.width, window.innerWidth);
+  const h = Math.min(rect.height, maxH);
+  bgPanel.style.left = `${Math.min(
+    Math.max(parseFloat(bgPanel.style.left), 0),
+    Math.max(0, window.innerWidth - w),
+  )}px`;
+  bgPanel.style.top = `${Math.min(
+    Math.max(parseFloat(bgPanel.style.top), 0),
+    Math.max(0, window.innerHeight - h),
+  )}px`;
+}
 
 // Ghost preview toggle: overlay the real page content semi-transparent.
 bgGhostToggle.addEventListener("change", () => {
@@ -568,6 +654,12 @@ async function bgSave(month) {
       : "저장 완료.",
   );
   refreshBgSourceLine();
+  // Saving usually means the admin is done — one confirm, then close.
+  // (Cancel keeps the session open; the status line above stays visible.)
+  const closeAsk = overridden
+    ? `기본값 저장 완료 — 단, ${state.month}은 개별 설정이 있어 이 화면에는 보이지 않습니다.\n편집 창을 닫을까요?`
+    : "저장 완료. 편집 창을 닫을까요?";
+  if (window.confirm(closeAsk)) exitBgEdit();
 }
 
 bgSavePage1.addEventListener("click", () => bgSave(""));

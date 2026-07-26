@@ -215,6 +215,52 @@ function ensureBgLayer() {
   return layer;
 }
 
+// Elements are positioned inside a sub-frame that mirrors the content column
+// (the screen's .section-inner), so their x/y/w % track the CONTENT, not the
+// viewport — placements stay aligned across PC / tablet breakpoints. (The
+// full background + tint + scrim still cover the whole layer.) The frame is
+// measured in px relative to .app-shell (the layer's containing block) on
+// every render and again on window resize/load. The editor renders into the
+// same frame (WYSIWYG) via window.craBg.
+let bgFrameScreen = "";
+
+function positionBgElFrame(screenName) {
+  bgFrameScreen = screenName;
+  const layer = ensureBgLayer();
+  let frame = layer.querySelector(".page-bg-el-frame");
+  if (!frame) {
+    frame = document.createElement("div");
+    frame.className = "page-bg-el-frame";
+    layer.append(frame);
+  }
+  const inner =
+    screens[screenName] && screens[screenName].querySelector(".section-inner");
+  const rect = inner ? inner.getBoundingClientRect() : null;
+  if (!rect || !rect.width || !rect.height) {
+    // Screen not measurable (e.g. hidden) — fall back to covering the layer.
+    frame.style.left = "0";
+    frame.style.top = "0";
+    frame.style.width = "100%";
+    frame.style.height = "100%";
+    return frame;
+  }
+  // Both rects are viewport-relative, so the subtraction cancels the scroll.
+  const shellRect = appShell.getBoundingClientRect();
+  frame.style.left = `${rect.left - shellRect.left}px`;
+  frame.style.top = `${rect.top - shellRect.top}px`;
+  frame.style.width = `${rect.width}px`;
+  frame.style.height = `${rect.height}px`;
+  return frame;
+}
+
+window.addEventListener("resize", () => {
+  if (bgFrameScreen) positionBgElFrame(bgFrameScreen);
+});
+// Fonts/images finishing can change the content height after the first paint.
+window.addEventListener("load", () => {
+  if (bgFrameScreen) positionBgElFrame(bgFrameScreen);
+});
+
 function applyPageBackground(screenName) {
   const layer = ensureBgLayer();
   const page = SCREEN_BG_PAGE[screenName];
@@ -228,13 +274,17 @@ function applyPageBackground(screenName) {
   document.body.classList.toggle("page-bg-active", active);
   // Full-image pages get a white top scrim so the banner stays readable.
   layer.classList.toggle("has-full", Boolean(active && entry.full));
-  if (!active) return;
+  if (!active) {
+    bgFrameScreen = "";
+    return;
+  }
   if (entry.full) {
     const full = document.createElement("div");
     full.className = "page-bg-full";
     full.style.backgroundImage = `url("${entry.full}")`;
     layer.append(full);
   }
+  const frame = positionBgElFrame(screenName);
   [...(entry.elements || [])]
     .sort((a, b) => (a.z || 0) - (b.z || 0))
     .forEach((item) => {
@@ -249,7 +299,7 @@ function applyPageBackground(screenName) {
       img.style.transform = `translate(-50%, -50%) rotate(${item.r || 0}deg) scaleX(${item.fx ? -1 : 1})`;
       // A deleted library file must never break the page — drop just the img.
       img.addEventListener("error", () => img.remove());
-      layer.append(img);
+      frame.append(img);
     });
 }
 
@@ -2300,4 +2350,10 @@ if (view === "content-v3" && hashLevel && hashMonth) {
 })();
 
 // Bridge for background-editor.js (separate classic script) and Playwright.
-window.craBg = { bgCache, bgKey, getBackgroundEntry, applyPageBackground };
+window.craBg = {
+  bgCache,
+  bgKey,
+  getBackgroundEntry,
+  applyPageBackground,
+  positionBgElFrame,
+};

@@ -99,6 +99,13 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   the attribute-presence raises specificity to (1,2,0), above the media rule (1,1,0), and
   `app.js` always sets `data-month` on `#contentScreen` when the content page shows. Use
   `[data-month="April"]` for one month, `[data-month]` for any.
+- **A `background` SHORTHAND on a broader selector silently resets your longhands.**
+  `.bg-editor-panel button { background: #fafafa }` (0,1,1) beat `.bg-lib-thumb`'s (0,1,0)
+  `background-size: contain` — the shorthand resets size/position to initial, so library
+  thumbnails rendered at natural size cropped to the top-left (looked blank for big images).
+  When an image must fit a box inside such a scope, prefer a real `<img>` +
+  `object-fit: contain` over CSS backgrounds (immune to background shorthands), or out-specify
+  with the parent (`.bg-editor-panel .bg-lib-thumb`).
 
 ## Auth, grades & Supabase (Phase 2/3)
 
@@ -325,6 +332,14 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
 
 ## 배경 편집기 (`background-editor.js`)
 
+- **요소 좌표계 = 콘텐츠 열 프레임 (`2026-07-26` 변경).** 요소의 `x`/`y`/`w` %는
+  `#pageBgLayer` 직속이 아니라 그 안의 **`.page-bg-el-frame`** 기준이다. 프레임은
+  `positionBgElFrame()`(app.js)이 활성 화면의 `.section-inner`를 실측해 px로 배치하며
+  (resize/load 시 재계산), 뷰어·편집기(`bgElFrame()`) 모두 같은 프레임을 쓴다. 이렇게 해야
+  PC(고정 900px 그리드)와 태블릿(별도 미디어블록)에서 요소가 콘텐츠 기준 같은 위치에 온다.
+  ⚠ 이 변경 **이전에 저장된 요소 데이터는 좌표 의미가 달라져 위치가 틀어짐** — 편집기에서
+  재배치 후 저장해야 한다. ⚠ 전체 배경(`.page-bg-full`)·틴트·스크림은 여전히 레이어
+  전체(뷰포트) 기준 — 요소만 프레임 기준.
 - **`page_backgrounds.month`는 `null` 대신 `''` (빈 문자열).** Supabase `upsert`의 `onConflict`
   옵션은 표현식 유니크 인덱스(`COALESCE(month,'')`)를 인식 못 해 PK 충돌을 올바르게 처리하지
   못한다. 해결책: `month` 컬럼을 `NOT NULL DEFAULT ''`로 PK에 포함시키고, 레벨 기본값 행에는
