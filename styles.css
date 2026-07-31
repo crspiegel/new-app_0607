@@ -5414,6 +5414,26 @@ body.admin-modal-open {
   border-color: var(--macaw-blue);
   box-shadow: 0 0 0 3px rgba(40, 160, 220, 0.18);
 }
+/* Apply-to-whole-level checkbox row under each modal field. */
+.admin-modal-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+}
+.admin-modal-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--macaw-blue);
+  cursor: pointer;
+}
+.admin-modal-check[hidden] {
+  display: none;
+}
 .admin-modal-actions {
   display: flex;
   justify-content: flex-end;

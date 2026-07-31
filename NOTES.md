@@ -139,6 +139,23 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   same for `crypt`). Fix: `set search_path = public, extensions` on every crypto-using RPC
   (`verify_member_login`, `create_member`). This bit member-create/login in Phase 3 — the migration was
   updated and must be **re-run** in the Supabase SQL Editor (it's idempotent `create or replace`).
+- **Toolbar button labels (2026-07-31)** — custom names live in `content_pages.labels` jsonb (per
+  level+month; `getSlotLabel()` falls back to the `TOOLBAR_BUTTONS` default when unset/empty).
+  - ⚠ **`savePage` upserts `labels` — every admin save fails until the `labels` column exists.** The
+    ALTER is in `supabase/migration.sql` (idempotent); run it in the SQL Editor BEFORE testing saves.
+    Reads are safe either way (`row.labels || {}`).
+  - ⚠ **`slotLabel(slot, level, month)` now takes month** — callers must pass `adminState.month` or the
+    toolbar branch silently loses the custom name (falls back to the default).
+  - The modal's single write path is `commitSlot({url, name, applyAllName, applyAllUrl})`; each apply-all
+    flag propagates ONLY its own field to all 10 months via one batch `upsert(rows)` (arrays are fine).
+    The 지우기 button was REMOVED (user decision — clear the input and save instead).
+  - The name input holds only the CUSTOM label; the default shows as `기본: …` placeholder. Weekday
+    slots (w1-Mon…) hide the name field + both checkboxes (URL-only modal, as before).
+  - `window.craContent` bridge (+ `settled` flag, mirrors `craBg`) exists for Playwright — tests must
+    wait on `settled` then reset labels (`resetContentLabels`) because the dev server hits the REAL
+    Supabase project (a client-renamed button would otherwise flake the default-name assertions).
+  - `hydrateContent` re-renders the toolbar when the content screen is active (labels can arrive after
+    first paint); side effect: the active toolbar button resets to the first one at that moment.
 
 ## Video player modal (Vimeo)
 

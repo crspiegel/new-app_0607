@@ -23,6 +23,8 @@ create extension if not exists pgcrypto;
 -- One row per (level, month) page.
 --   videos: { "<slotKey>": "<vimeo url or id>" }   slotKey = opening | ending | w1-Mon .. w4-Fri
 --   covers: { "book-1": "<public url>", "book-2": "<public url>" }
+--   labels: { "<toolbarSlot>": "custom button name" }  toolbar slots only
+--           (missing/empty key = the hardcoded default in TOOLBAR_BUTTONS)
 create table if not exists public.content_pages (
   level      text not null,
   month      text not null,
@@ -31,6 +33,10 @@ create table if not exists public.content_pages (
   updated_at timestamptz not null default now(),
   primary key (level, month)
 );
+
+-- Admin-editable toolbar button names (added 2026-07-31).
+alter table public.content_pages
+  add column if not exists labels jsonb not null default '{}'::jsonb;
 
 -- Lightweight member accounts (grades 1-3). NOT Supabase Auth users.
 -- Password is bcrypt-hashed; the hash is only ever read inside the login RPC.

@@ -21,6 +21,8 @@ test("main level-to-month-to-content flow renders", async ({ page }) => {
   await expect(page.locator("#contentLevelName")).toBeVisible();
   await expect(page.locator("#contentLevelName")).toHaveText("Beginner");
   // Beginner renames the song buttons (other levels keep "Opening Song").
+  // Clear any real custom labels first so the default name is deterministic.
+  await resetContentLabels(page);
   await expect(
     page.getByRole("button", { name: /Good Morning Song/i }).first(),
   ).toBeVisible();
@@ -71,6 +73,22 @@ async function resetBgCache(page) {
     const { bgCache, applyPageBackground } = window.craBg;
     Object.keys(bgCache).forEach((key) => delete bgCache[key]);
     applyPageBackground("content");
+  });
+}
+
+// Toolbar-label tests follow the same idea: wait for the content hydrate
+// attempt to finish, then clear any real custom labels (content_pages.labels)
+// so the hardcoded TOOLBAR_BUTTONS defaults are deterministic.
+async function resetContentLabels(page) {
+  await page.waitForFunction(
+    () => window.craContent && window.craContent.settled,
+  );
+  await page.evaluate(() => {
+    const { contentCache, renderContentToolbar } = window.craContent;
+    Object.values(contentCache).forEach((entry) => {
+      entry.labels = {};
+    });
+    renderContentToolbar();
   });
 }
 
@@ -408,6 +426,98 @@ test("editor: 영상 URL input validates, dirties, previews, and clears", async 
   });
   await page.keyboard.press("Escape");
   await expect(page.locator("#bgEditorPanel")).toBeHidden();
+});
+
+// --- Admin-editable toolbar button names (content_pages.labels) -----------
+
+test("toolbar renders a seeded custom button name and falls back when cleared", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%201/March");
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  await resetContentLabels(page);
+  // A custom label seeded per level+month replaces the default name.
+  await page.evaluate(() => {
+    const { contentCache, pageKey, renderContentToolbar } = window.craContent;
+    contentCache[pageKey("Level 1", "March")] = {
+      videos: {},
+      covers: {},
+      labels: { opening: "우리 아침 노래" },
+    };
+    renderContentToolbar();
+  });
+  await expect(
+    page.getByRole("button", { name: "우리 아침 노래" }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".content-toolbar").getByRole("button", {
+      name: /Good Morning Song/i,
+    }),
+  ).toHaveCount(0);
+  // Clearing the custom label falls back to the TOOLBAR_BUTTONS default.
+  await resetContentLabels(page);
+  await expect(
+    page.getByRole("button", { name: /Good Morning Song/i }).first(),
+  ).toBeVisible();
+});
+
+test("admin board top row mirrors the custom toolbar name", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%201/March");
+  await resetContentLabels(page);
+  await page.evaluate(() => {
+    /* global isAdmin, updateAdminUI, openAdmin */
+    const { contentCache, pageKey } = window.craContent;
+    contentCache[pageKey("Level 1", "March")] = {
+      videos: {},
+      covers: {},
+      labels: { opening: "우리 아침 노래" },
+    };
+    // Stub the admin flag client-side (UI gate only; no Supabase writes).
+    isAdmin = true;
+    updateAdminUI();
+    openAdmin();
+  });
+  await expect(page.locator("#adminScreen")).toHaveClass(/screen-active/);
+  // First top-row slot is "opening" — it must show the custom name.
+  await expect(
+    page.locator(".admin-songs .admin-slot-name").first(),
+  ).toHaveText("우리 아침 노래");
+});
+
+test("slot modal: name field + apply-all boxes for toolbar slots only", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%201/March");
+  await resetContentLabels(page);
+  await page.evaluate(() => {
+    /* global isAdmin, updateAdminUI, openAdmin */
+    isAdmin = true;
+    updateAdminUI();
+    openAdmin();
+  });
+  // Toolbar slot → name input + both apply-to-level checkboxes; no 지우기.
+  await page.locator(".admin-songs .admin-slot").first().click();
+  await expect(page.locator("#adminSlotModal")).toBeVisible();
+  await expect(page.locator("#adminSlotNameInput")).toBeVisible();
+  await expect(page.locator("#adminSlotNameAllRow")).toBeVisible();
+  await expect(page.locator("#adminSlotUrlAllRow")).toBeVisible();
+  await expect(page.locator("#adminSlotClear")).toHaveCount(0);
+  // The name input holds only the CUSTOM label; the default is the
+  // placeholder (empty input = fall back to the default name).
+  await expect(page.locator("#adminSlotNameInput")).toHaveValue("");
+  expect(
+    await page.locator("#adminSlotNameInput").getAttribute("placeholder"),
+  ).toContain("기본:");
+  await page.locator("#adminSlotModal [data-admin-close]").last().click();
+  await expect(page.locator("#adminSlotModal")).toBeHidden();
+  // Weekday slot → URL-only modal, exactly as before.
+  await page.locator(".admin-week-row .admin-slot").first().click();
+  await expect(page.locator("#adminSlotModal")).toBeVisible();
+  await expect(page.locator("#adminSlotNameInput")).toBeHidden();
+  await expect(page.locator("#adminSlotNameAllRow")).toBeHidden();
+  await expect(page.locator("#adminSlotUrlAllRow")).toBeHidden();
 });
 
 test("page background clears when leaving a level page", async ({ page }) => {

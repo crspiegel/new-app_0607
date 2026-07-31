@@ -1315,6 +1315,27 @@
       >
         <h2 class="admin-modal-title" id="adminSlotTitle"></h2>
         <p class="admin-modal-sub" id="adminSlotSub"></p>
+        <!-- Toolbar slots only (hidden for weekday slots): custom button name.
+             Empty = fall back to the TOOLBAR_BUTTONS default (shown as
+             placeholder). Each field has its own apply-to-whole-level box. -->
+        <label
+          class="admin-modal-label"
+          id="adminSlotNameLabel"
+          for="adminSlotNameInput"
+          hidden
+          >버튼 이름</label
+        >
+        <input
+          class="admin-modal-input"
+          id="adminSlotNameInput"
+          type="text"
+          maxlength="40"
+          hidden
+        />
+        <label class="admin-modal-check" id="adminSlotNameAllRow" hidden>
+          <input type="checkbox" id="adminSlotNameAll" />
+          이름을 현재 레벨 전체(3월~12월)에 적용
+        </label>
         <!-- Label/placeholder are set per slot kind in openSlotEditor():
              video slots = Vimeo/YouTube URL, game slots = game-modal URL. -->
         <label
@@ -1329,6 +1350,10 @@
           type="text"
           placeholder="https://vimeo.com/123456789  또는  https://youtu.be/abc123XYZ45"
         />
+        <label class="admin-modal-check" id="adminSlotUrlAllRow" hidden>
+          <input type="checkbox" id="adminSlotUrlAll" />
+          URL을 현재 레벨 전체(3월~12월)에 적용
+        </label>
         <div class="admin-modal-actions">
           <button
             type="button"
@@ -1336,13 +1361,6 @@
             data-admin-close
           >
             취소
-          </button>
-          <button
-            type="button"
-            class="admin-btn admin-btn-ghost"
-            id="adminSlotClear"
-          >
-            지우기
           </button>
           <button
             type="button"

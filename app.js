@@ -129,7 +129,7 @@ function renderContentToolbar() {
     icon.setAttribute("aria-hidden", "true");
     icon.textContent = item.icon;
     const label = document.createElement("span");
-    label.textContent = item.label;
+    label.textContent = getSlotLabel(state.level, state.month, item.slot);
     button.append(icon, label);
     contentToolbar.append(button);
   });
@@ -177,6 +177,15 @@ function getCover(level, month, book) {
   if (live && live.covers && live.covers[book]) return live.covers[book];
   const page = getPageData(level, month);
   return (page && page.covers && page.covers[book]) || "";
+}
+
+// Display name for a toolbar slot: the admin's custom label (content_pages.labels,
+// per level+month) when set, else the hardcoded TOOLBAR_BUTTONS default.
+function getSlotLabel(level, month, slot) {
+  const live = contentCache[pageKey(level, month)];
+  if (live && live.labels && live.labels[slot]) return live.labels[slot];
+  const item = toolbarButtons(level).find((b) => b.slot === slot);
+  return (item && item.label) || "";
 }
 
 /* ---- Page backgrounds (페이지1 = month grid, 페이지2 = weekday board) ---
@@ -1624,7 +1633,13 @@ const adminSlotTitle = document.querySelector("#adminSlotTitle");
 const adminSlotSub = document.querySelector("#adminSlotSub");
 const adminSlotInput = document.querySelector("#adminSlotInput");
 const adminSlotSave = document.querySelector("#adminSlotSave");
-const adminSlotClear = document.querySelector("#adminSlotClear");
+// Toolbar-slot-only fields (hidden for weekday slots in openSlotEditor).
+const adminSlotNameLabel = document.querySelector("#adminSlotNameLabel");
+const adminSlotNameInput = document.querySelector("#adminSlotNameInput");
+const adminSlotNameAllRow = document.querySelector("#adminSlotNameAllRow");
+const adminSlotNameAll = document.querySelector("#adminSlotNameAll");
+const adminSlotUrlAllRow = document.querySelector("#adminSlotUrlAllRow");
+const adminSlotUrlAll = document.querySelector("#adminSlotUrlAll");
 const loginForm = document.querySelector("#loginForm");
 const loginId = document.querySelector("#loginId");
 const loginPassword = document.querySelector("#loginPassword");
@@ -1652,10 +1667,11 @@ function setAdminStatus(text) {
 }
 
 // Human label for a slot key, e.g. "Week 1 · Mon · Story". Toolbar slots
-// (songs/games) are named per level via TOOLBAR_BUTTONS.
-function slotLabel(slot, level) {
+// (songs/games) use the admin's custom name (per level+month) when set,
+// else their TOOLBAR_BUTTONS default.
+function slotLabel(slot, level, month) {
   const item = toolbarButtons(level).find((b) => b.slot === slot);
-  if (item) return item.label;
+  if (item) return getSlotLabel(level, month, slot);
   const m = slot.match(/^w(\d)-(\w+)$/);
   if (m) {
     const dayIndex = weekdays.indexOf(m[2]);
@@ -1666,16 +1682,27 @@ function slotLabel(slot, level) {
 
 // Load every content_pages row into the cache so user pages reflect saved data.
 async function hydrateContent() {
-  if (!sb) return;
+  // "settled" = the fetch attempt finished (success OR failure) — tests wait
+  // on it before seeding contentCache (mirrors craBg.settled).
+  if (!sb) {
+    window.craContent.settled = true;
+    return;
+  }
   const { data, error } = await sb.from("content_pages").select("*");
+  window.craContent.settled = true;
   if (error || !data) return;
   data.forEach((row) => {
     contentCache[pageKey(row.level, row.month)] = {
       videos: row.videos || {},
       covers: row.covers || {},
+      labels: row.labels || {},
     };
   });
-  if (screens.content.classList.contains("screen-active")) refreshCovers();
+  if (screens.content.classList.contains("screen-active")) {
+    refreshCovers();
+    // Labels may have arrived after the first toolbar paint (defaults).
+    renderContentToolbar();
+  }
 }
 
 // Load every page_backgrounds row so the two level pages paint saved
@@ -1707,19 +1734,26 @@ async function hydrateBackgrounds() {
 // Mutable working copy of a page's data (for editing/saving).
 function pageEntry(level, month) {
   const key = pageKey(level, month);
-  if (!contentCache[key]) contentCache[key] = { videos: {}, covers: {} };
+  if (!contentCache[key])
+    contentCache[key] = { videos: {}, covers: {}, labels: {} };
   if (!contentCache[key].videos) contentCache[key].videos = {};
   if (!contentCache[key].covers) contentCache[key].covers = {};
+  if (!contentCache[key].labels) contentCache[key].labels = {};
   return contentCache[key];
 }
 
-// Upsert the whole row so videos and covers never clobber each other.
+// Upsert the whole row so videos, covers and labels never clobber each other.
+// ⚠ Requires the content_pages.labels column (supabase/migration.sql ALTER).
 async function savePage(level, month) {
   if (!sb) return { error: new Error("no client") };
   const entry = pageEntry(level, month);
-  return sb
-    .from("content_pages")
-    .upsert({ level, month, videos: entry.videos, covers: entry.covers });
+  return sb.from("content_pages").upsert({
+    level,
+    month,
+    videos: entry.videos,
+    covers: entry.covers,
+    labels: entry.labels,
+  });
 }
 
 function updateAdminUI() {
@@ -2146,7 +2180,7 @@ function adminSlotButton(slot) {
   button.dataset.filled = String(Boolean(url));
   const name = document.createElement("span");
   name.className = "admin-slot-name";
-  name.textContent = slotLabel(slot, adminState.level);
+  name.textContent = slotLabel(slot, adminState.level, adminState.month);
   const value = document.createElement("span");
   value.className = "admin-slot-url";
   value.textContent = url || "미설정";
@@ -2239,7 +2273,11 @@ function openSlotEditor(slot) {
   editingSlot = slot;
   const url = getVideoUrl(adminState.level, adminState.month, slot);
   if (adminSlotTitle)
-    adminSlotTitle.textContent = slotLabel(slot, adminState.level);
+    adminSlotTitle.textContent = slotLabel(
+      slot,
+      adminState.level,
+      adminState.month,
+    );
   if (adminSlotSub)
     adminSlotSub.textContent = `${levelLabel(adminState.level)} · ${adminState.month}`;
   // Game slots (I Sit Game / I Like School Game / Beginner's Game) open their
@@ -2256,6 +2294,21 @@ function openSlotEditor(slot) {
       ? "https://... (게임 페이지 주소)"
       : "https://vimeo.com/123456789  또는  https://youtu.be/abc123XYZ45";
   if (adminSlotInput) adminSlotInput.value = url || "";
+  // Toolbar slots get the name editor + per-field apply-to-level checkboxes;
+  // weekday slots keep the URL-only modal. The name input holds only the
+  // CUSTOM label (placeholder shows the default → empty = back to default).
+  const isToolbar = Boolean(item);
+  const entry = pageEntry(adminState.level, adminState.month);
+  if (adminSlotNameLabel) adminSlotNameLabel.hidden = !isToolbar;
+  if (adminSlotNameInput) {
+    adminSlotNameInput.hidden = !isToolbar;
+    adminSlotNameInput.value = (isToolbar && entry.labels[slot]) || "";
+    adminSlotNameInput.placeholder = isToolbar ? `기본: ${item.label}` : "";
+  }
+  if (adminSlotNameAllRow) adminSlotNameAllRow.hidden = !isToolbar;
+  if (adminSlotUrlAllRow) adminSlotUrlAllRow.hidden = !isToolbar;
+  if (adminSlotNameAll) adminSlotNameAll.checked = false;
+  if (adminSlotUrlAll) adminSlotUrlAll.checked = false;
   if (adminSlotModal) adminSlotModal.hidden = false;
   document.body.classList.add("admin-modal-open");
   if (adminSlotInput) adminSlotInput.focus();
@@ -2267,14 +2320,50 @@ function closeSlotEditor() {
   document.body.classList.remove("admin-modal-open");
 }
 
-async function commitSlot(value) {
+// Save the modal's fields. Empty url/name = delete (name falls back to the
+// TOOLBAR_BUTTONS default). Each apply-all flag propagates ONLY its own field
+// to every month of the current level (one batch upsert; missing month rows
+// are created). Weekday slots ignore name/apply-all (URL-only, as before).
+async function commitSlot({ url, name, applyAllName, applyAllUrl }) {
   if (!editingSlot) return;
   const slot = editingSlot;
-  const entry = pageEntry(adminState.level, adminState.month);
-  if (value) entry.videos[slot] = value;
-  else delete entry.videos[slot];
+  const level = adminState.level;
+  const isToolbar = toolbarButtons(level).some((b) => b.slot === slot);
+  const applyName = isToolbar ? name : "";
+  const allName = isToolbar && applyAllName;
+  const allUrl = isToolbar && applyAllUrl;
+  const setUrl = (entry) => {
+    if (url) entry.videos[slot] = url;
+    else delete entry.videos[slot];
+  };
+  const setName = (entry) => {
+    if (applyName) entry.labels[slot] = applyName;
+    else delete entry.labels[slot];
+  };
+  const current = pageEntry(level, adminState.month);
+  setUrl(current);
+  if (isToolbar) setName(current);
   setAdminStatus("저장 중…");
-  const { error } = await savePage(adminState.level, adminState.month);
+  let error;
+  if (allName || allUrl) {
+    const rows = months.map((m) => {
+      const entry = pageEntry(level, m);
+      if (allUrl) setUrl(entry);
+      if (allName) setName(entry);
+      return {
+        level,
+        month: m,
+        videos: entry.videos,
+        covers: entry.covers,
+        labels: entry.labels,
+      };
+    });
+    ({ error } = sb
+      ? await sb.from("content_pages").upsert(rows)
+      : { error: new Error("no client") });
+  } else {
+    ({ error } = await savePage(level, adminState.month));
+  }
   if (error) {
     setAdminStatus("저장 실패.");
     return;
@@ -2282,6 +2371,8 @@ async function commitSlot(value) {
   setAdminStatus("저장 완료.");
   closeSlotEditor();
   renderAdminBoard();
+  // Admin mirrors the user screen — refresh an open content page's toolbar.
+  renderContentToolbar();
 }
 
 if (adminSlotModal) {
@@ -2294,11 +2385,13 @@ if (adminSlotModal) {
 }
 if (adminSlotSave) {
   adminSlotSave.addEventListener("click", () => {
-    commitSlot(adminSlotInput ? adminSlotInput.value.trim() : "");
+    commitSlot({
+      url: adminSlotInput ? adminSlotInput.value.trim() : "",
+      name: adminSlotNameInput ? adminSlotNameInput.value.trim() : "",
+      applyAllName: Boolean(adminSlotNameAll && adminSlotNameAll.checked),
+      applyAllUrl: Boolean(adminSlotUrlAll && adminSlotUrlAll.checked),
+    });
   });
-}
-if (adminSlotClear) {
-  adminSlotClear.addEventListener("click", () => commitSlot(""));
 }
 
 // --- Cover upload (drag-drop / click) ---
@@ -2440,4 +2533,15 @@ window.craBg = {
   parseBgVideoUrl,
   buildBgVideoLayer,
   sizeBgVideoCover,
+};
+
+// Content bridge for Playwright (mirrors craBg). "settled" flips when the
+// hydrateContent fetch attempt finishes — assigned here BEFORE the init IIFE's
+// continuation runs (its first await yields past this synchronous tail).
+window.craContent = {
+  contentCache,
+  pageKey,
+  renderContentToolbar,
+  getSlotLabel,
+  settled: false,
 };
