@@ -18,7 +18,21 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-- _(진행 중 작업 없음 — 배경 영상 URL 기능까지 커밋·배포 완료, 2026-07-26. 아래 참조.)_
+- ✅ **페이지2 툴바 버튼 이름 편집 기능 배포 완료 (`2026-07-31`):** 커밋 `53991f3`
+  push → Vercel 자동 배포. new-app0607.vercel.app + www.cambridgereading.com 모두
+  새 app.js(`craContent`/`getSlotLabel`)·index.html(이름란, 지우기 버튼 제거) 서빙
+  확인. 사용자 로컬 테스트 통과 후 배포. 플랜 승인 후 구현
+  (플랜: `C:\Users\USER\.claude\plans\atomic-frolicking-lampson.md`,
+  스펙: `docs/superpowers/specs/2026-07-31-toolbar-button-labels-design.md`).
+  관리자 보드 슬롯 모달에서 툴바 버튼(페이지2 요일그리드 위) 이름을 레벨+월별로
+  편집 — `content_pages.labels` jsonb + 이름/URL 각각 "현재 레벨 전체 적용"
+  체크박스(10개 월 배치 upsert), 지우기 버튼 제거(사용자 지시), 빈 이름 = 기본
+  이름 폴백. qa **42/42 green**. 변경 파일: app.js, index.html, styles.css,
+  supabase/migration.sql, tests/smoke.spec.js(+테스트 3종), 스펙 문서. 상세
+  gotcha → NOTES.md Supabase 섹션.
+  - ⚠ **labels 컬럼 ALTER**(migration.sql에 추가됨)는 Supabase SQL 편집기에서
+    실행되어야 관리자 저장이 동작. 로컬에서 저장 테스트가 성공했다면 이미 실행된
+    것 (미실행이면 이름/URL/표지 저장 전부 "저장 실패."). 읽기는 컬럼 없어도 안전.
 - ✅ **배경 영상 URL 기능 배포 완료 (`2026-07-26`):** 커밋 `f76dd57` push → Vercel 자동
   배포. 사용자 로컬 테스트 완료 후 배포. 플랜 승인 후 구현
   (플랜: `C:\Users\USER\.claude\plans\fancy-cooking-simon.md`). 배경 편집기(페이지1·2)의
