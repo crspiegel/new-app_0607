@@ -18,13 +18,20 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-- ⏭ **아이콘 원형 배경 + 태그 20% 축소 + 배너 한 줄/하단 공간 확보 (`2026-08-01`) —
-  구현 완료, 로컬만 (사용자 지시로 미커밋).** 사용자 확인 → 요청 시 커밋·배포.
-  미커밋 변경: app.js, styles.css, tests/smoke.spec.js, NOTES.md, PROJECT_MEMORY.md.
-  **커밋 전 checkout/reset 금지.**
-  - **다음 사용자 작업:** 페이지2 하단에 배경 이미지 요소 배치 테스트 (이 작업의 목적).
+진행 중인 작업 없음 (`2026-08-01` 아이콘 원형 배경 + 배너 한 줄 배치 배포 완료).
 
-- ✅ **페이지2 배너 한 줄 배치 + 하단 배경 공간 확보 (`2026-08-01`) — 로컬 완료.**
+- **다음 사용자 작업(진행 예정):** 페이지2 하단 확보 공간에 배경 이미지 요소 배치
+  테스트. PC 233px / 태블릿 가로 78px / 태블릿 세로 213px / 모바일 161px.
+  부족하면 다음 레버 → PC는 `.lesson-board` `padding-bottom` 50→20(+30),
+  태블릿 가로는 `.lesson-button`·`.week-label` `min-height` 64px 축소(4행이라 5px당 20px).
+
+- ✅ **페이지2 배너 한 줄 배치 + 하단 배경 공간 확보 배포 완료 (`2026-08-01`):**
+  커밋 `9305c23` push → Vercel 자동 배포. new-app0607.vercel.app +
+  www.cambridgereading.com 모두 새 styles.css·app.js 서빙 확인. 라이브 실측 —
+  PC 1366: 배너 top 120/h46, 원형 46px, 그리드 316, 하단 233, innerH 903;
+  태블릿 가로 1138×712: 그리드 282, 하단 78, innerH 578 — **로컬과 완전 일치**.
+  (같은 커밋에 툴바 아이콘 원형 배경 + GAME/SONG 태그 20% 축소도 포함.)
+  플랜 승인 후 구현 (플랜: `C:\Users\USER\.claude\plans\flickering-booping-moler.md`).
   플랜 승인 후 구현 (플랜: `C:\Users\USER\.claude\plans\flickering-booping-moler.md`).
   하단에 배경 아트워크를 깔 공간이 146px뿐이고 요일 버튼에 가려 효과가 없다는 요청.
   **CSS만 수정** (index.html·app.js 무변경). (1) 레벨명+월 원형을 **한 줄**로
