@@ -1451,15 +1451,35 @@ body:not(.subpage-active) main {
   font-weight: 900;
 }
 
-/* Bare full-color icon (no circle backdrop) — each SVG carries its own
-   fills/shading (colored body + darker bottom lip + white glint), so nothing
-   inherits the button color anymore. */
+/* Full-color icon on a soft tinted circle (one tint per icon family, keyed to
+   the glyph's own hue). Each SVG carries its own fills/shading (colored body +
+   darker bottom lip + white glint), so nothing inherits the button color.
+   ⚠ box-sizing is content-box ON PURPOSE (the global reset is border-box):
+   every breakpoint's width/height on this element then keeps meaning "glyph
+   size", and the circle is glyph + 2×padding. Retune the padding here once
+   instead of re-deriving box sizes in each media query. */
 .content-type-icon {
   display: grid;
+  box-sizing: content-box;
   width: 26px;
   height: 26px;
+  padding: 5px;
   flex: 0 0 auto;
   place-items: center;
+  border-radius: 50%;
+  background: var(--icon-tint, transparent);
+}
+
+.content-type-icon--video {
+  --icon-tint: #ffe4e4;
+}
+
+.content-type-icon--game {
+  --icon-tint: #ece4ff;
+}
+
+.content-type-icon--music {
+  --icon-tint: #d8f6ec;
 }
 
 .content-type-icon svg {
@@ -1510,14 +1530,21 @@ body:not(.subpage-active) main {
   color: var(--canvas);
 }
 
-/* Centered level + book-band banner at the top of the content page.
-   Text style matches the main "Start Reading" level box; color per level theme.
-   Trial: shown on the March page of each level only (pending review). */
+/* Level name + month circle on ONE centered row at the top of the content page
+   (all breakpoints). Text style matches the main "Start Reading" level box;
+   color per level theme. The single row is what frees ~67px of height for the
+   background artwork band at the bottom — see the padding-bottom compensation
+   in the @media (min-width:768px) / (max-width:767px) blocks. justify-content
+   is required: the banner is a stretched flex item of .section-inner, so
+   without it the two auto tracks pin left instead of centering. */
 #contentScreen .content-level-banner {
   display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
   justify-items: center;
-  gap: 4px;
-  margin-bottom: 26px;
+  justify-content: center;
+  gap: 4px 14px;
+  margin-bottom: 14px;
   text-align: center;
 }
 
@@ -1530,24 +1557,19 @@ body:not(.subpage-active) main {
   color: var(--level-accent-shadow, var(--ink));
 }
 
-#contentLevelBand {
-  font-family: var(--font-nav);
-  font-size: 16px;
-  font-weight: 800;
-  line-height: 1.25;
-  color: var(--level-accent-shadow, var(--muted-ink));
-}
-
-/* Banner month pill: hidden by default; shown centered under the band on April. */
+/* ⚠ Never nudge these two with margin — the banner row height is
+   max(level-name line box, pill outer height) = 46px, and the bottom padding
+   compensation is derived from exactly that. Use position/transform instead. */
 #contentScreen .content-banner-month {
   display: inline-flex;
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 /* All content pages: show the banner month as a bare number in a circle.
    Drop the "Month" label (font-size:0 hides the text node) and the pill
    background; the circle keeps its per-level theme color (var(--level-accent),
-   set on .content-v2-month-pill strong). 60px circle, Manrope 800 / 36px. */
+   set on .content-v2-month-pill strong). 46px circle, Manrope 800 / 28px —
+   sized to sit beside the 40.8px level name. */
 #contentScreen .content-banner-month {
   gap: 0;
   padding: 0;
@@ -1556,11 +1578,24 @@ body:not(.subpage-active) main {
 }
 
 #contentScreen .content-banner-month strong {
-  width: 60px;
-  height: 60px;
+  width: 46px;
+  height: 46px;
   font-family: "Manrope", sans-serif;
-  font-size: 36px;
+  font-size: 28px;
   font-weight: 800;
+}
+
+/* PC only (>1180 = above the landscape-tablet block): lift the level+month line
+   30px so it sits level with the Back/Next row instead of below it. The two nav
+   buttons hug the left/right edges and the banner is centered, so they share the
+   row without touching. The 30px is added straight back to margin-bottom — the
+   toolbar and weekday board must NOT move, and .section-inner's height (and with
+   it the bg-element frame) has to stay put. */
+@media (min-width: 1181px) {
+  #contentScreen .content-level-banner {
+    margin-top: -30px;
+    margin-bottom: 44px;
+  }
 }
 
 /* Content page: title-block hidden — level + month show in the centered banner. */
@@ -1573,7 +1608,7 @@ body:not(.subpage-active) main {
 #contentScreen[data-month] .section-inner {
   display: flex;
   flex-direction: column;
-  padding-top: 20px;
+  padding-top: 12px;
 }
 
 #contentScreen[data-month] .content-main-header {
@@ -1634,10 +1669,12 @@ body:not(.subpage-active) main {
   overflow: visible;
 }
 
+/* Side padding is trimmed from the pre-circle clamp(8px,0.85vw,13px) to pay
+   for the icon's tinted circle, so the 2-line label keeps its old width. */
 #contentScreen .content-toolbar--wide .content-type {
   flex: 1 1 0;
   min-width: 0;
-  padding: 0 clamp(8px, 0.85vw, 13px);
+  padding: 0 clamp(6px, 0.7vw, 10px);
   gap: 6px;
   font-size: clamp(11.5px, calc(1.78vw - 9px), 15.5px);
 }
@@ -1654,32 +1691,37 @@ body:not(.subpage-active) main {
   line-height: 1.15;
 }
 
+/* Tighter ring than the base 5px: on the fixed-width wide buttons every px of
+   icon box is a px the label loses. */
 #contentScreen .content-toolbar--wide .content-type-icon {
   width: 22px;
   height: 22px;
+  padding: 4px;
 }
 
 /* GAME/SONG corner ribbon (tagged slots on the 6-button levels only). Reads
-   as a strap riding over the button's top edge back-to-front: 4px sits above
-   the edge (the button is position:relative, tag top:-4px), the rounded lower
+   as a strap riding over the button's top edge back-to-front: 3px sits above
+   the edge (the button is position:relative, tag top:-3px), the rounded lower
    part lies on the button face. One flat color across the fold — the earlier
    darker back-shade read as a separate darker bar, not a fold.
+   Every value here was scaled ~20% down from the first ribbon (10px/7-9-4
+   padding/-4px) so the pill covers less of the label underneath.
    ⚠ top offset and the overhang slice of padding-top are one coupled value. */
 #contentScreen .content-type-tag {
   position: absolute;
-  top: -4px;
+  top: -3px;
   right: 10px;
-  /* 4px of the top padding = the above-the-edge segment; keeps the text on
+  /* 3px of the top padding = the above-the-edge segment; keeps the text on
      the front face only. */
-  padding: 7px 9px 4px;
-  border-radius: 3px 3px 8px 8px;
-  font-size: 10px;
+  padding: 5px 7px 4px;
+  border-radius: 2px 2px 6px 6px;
+  font-size: 8px;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
   line-height: 1;
   color: #fff;
   pointer-events: none;
-  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
 #contentScreen .content-type-tag--game {
@@ -1700,10 +1742,12 @@ body:not(.subpage-active) main {
   }
 
   #contentScreen .content-toolbar--wide .content-type {
-    /* 2-line headroom over the tablet 42px single-line height. */
+    /* 2-line headroom over the tablet 42px single-line height. Padding/gap are
+       trimmed (was clamp(8px,0.9vw,12px)/5px) to pay for the icon circle —
+       without it the longest label ellipsised from ~860px up. */
     min-height: 46px;
-    padding: 0 clamp(8px, 0.9vw, 12px);
-    gap: 5px;
+    padding: 0 clamp(4px, 0.5vw, 8px);
+    gap: 4px;
     font-size: clamp(10.5px, calc(1.9vw - 7px), 14px);
   }
 
@@ -2658,9 +2702,16 @@ body:not(.subpage-active) main {
     gap: 24px;
   }
 
+  /* padding-bottom 183 = the old 96 + the 86.8px the one-row banner freed.
+     Keeping .section-inner's total height constant matters: positionBgElFrame()
+     (app.js) sizes .page-bg-el-frame from this box and saved background
+     elements are stored as % of it, so a height change would move every
+     already-placed decoration. The freed space lands INSIDE the frame, at the
+     bottom, which is exactly the artwork band. (top 84 is inert — the
+     [data-month] rule out-specifies it.) */
   #contentScreen .section-inner {
     width: 100%;
-    padding: 84px clamp(106px, calc(6vw + 50px), 146px) 96px;
+    padding: 84px clamp(106px, calc(6vw + 50px), 146px) 183px;
   }
 
   .content-toolbar {
@@ -2829,9 +2880,19 @@ body:not(.subpage-active) main {
     padding-bottom: 24px;
   }
 
-  #contentScreen .section-inner {
-    padding-top: 16px;
-    padding-bottom: 18px;
+  /* [data-month] specificity is REQUIRED here: the plain #contentScreen
+     .section-inner selector (1,1,0) loses padding-top to the [data-month] rule
+     (1,2,0) further up the file, so this block's old 16px never actually
+     rendered — the real value was that rule's 20px.
+     The 50px trimmed off the chrome above the board (padding-top −10, header
+     −2, banner −2, toolbar margins −34, board padding-top −2) is returned here
+     as padding-bottom 18 → 68, so .section-inner keeps its 578px height: the
+     bg-element frame is measured from this box, so preserving it leaves saved
+     artwork in place while the board rises 50px and the bottom band grows
+     28 → 78px. Change one side of that pair and you must change the other. */
+  #contentScreen[data-month] .section-inner {
+    padding-top: 10px;
+    padding-bottom: 68px;
   }
 
   /* Fill the tinted section down to the footer (no white band). Same fix as the
@@ -2841,43 +2902,17 @@ body:not(.subpage-active) main {
     min-height: calc(100vh - 136px);
   }
 
-  /* Banner on TWO rows (was a single row to save height): row 1 = level name (left)
-     + month circle (right), row 2 = the book band centered below. Keeps "Level 1"
-     on its own top line with the month badge beside it. The circle is shrunk so the
-     extra row doesn't push the 4-week board past the fold on the short Galaxy Tab. */
+  /* The one-row banner + 46px circle are now the base for every breakpoint;
+     only the tighter gap/margin remain as genuine overrides here, so this short
+     viewport keeps the exact geometry it shipped with. */
   #contentScreen .content-level-banner {
-    grid-auto-flow: row;
-    grid-template-columns: auto auto;
-    align-items: center;
-    justify-content: center;
     column-gap: 12px;
-    row-gap: 2px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
   }
 
-  #contentLevelName {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  #contentScreen .content-banner-month {
-    grid-column: 2;
-    grid-row: 1;
-    margin-top: 0;
-  }
-
-  #contentLevelBand {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
-  #contentScreen .content-banner-month strong {
-    width: 46px;
-    height: 46px;
-    font-size: 28px;
-  }
-
-  #contentScreen .content-main-header {
+  /* [data-month] again — the plain selector (1,1,0) loses to the base
+     [data-month] rule (1,2,0), so this 6px never applied until now. */
+  #contentScreen[data-month] .content-main-header {
     margin-bottom: 6px;
   }
 
@@ -2887,7 +2922,7 @@ body:not(.subpage-active) main {
   }
 
   #contentScreen .lesson-board {
-    padding-top: 6px;
+    padding-top: 4px;
     padding-bottom: 10px;
   }
 
@@ -2981,10 +3016,11 @@ body:not(.subpage-active) main {
     justify-content: space-between;
     padding-left: 272px;
     padding-right: 30px;
-    margin-top: 36px;
-    /* (1) breathing room above the weekday board, within the spare space (kept
-       small enough that the shortest tablet — Galaxy Tab — still doesn't scroll). */
-    margin-bottom: 16px;
+    /* Trimmed 36 → 8 / 16 → 10: this pair was the largest pocket of slack above
+       the board, and the room it gave back went to the bottom artwork band (see
+       the section-inner padding-bottom note at the top of this block). */
+    margin-top: 8px;
+    margin-bottom: 10px;
   }
 }
 
@@ -3374,9 +3410,14 @@ body:not(.subpage-active) main {
     max-height: none;
   }
 
+  /* padding-bottom 151 = the mobile base 64 + the same 86.8px the one-row
+     banner freed, so the .page-bg-el-frame keeps its height here too (saved
+     background elements stay put) and the freed space becomes bottom artwork
+     room. See the @media (min-width:768px) twin. */
   #contentScreen .section-inner {
     padding-right: 16px;
     padding-left: 16px;
+    padding-bottom: 151px;
   }
 
   /* Opening / Ending Song buttons. Base mobile = horizontal; portrait stacks

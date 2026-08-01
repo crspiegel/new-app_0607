@@ -136,11 +136,11 @@ function toolbarButtons(level) {
   return TOOLBAR_BUTTONS[level] || TOOLBAR_BUTTONS.default;
 }
 
-// Full-color toolbar icons (soft-3D style, no backdrop shape): colored body +
-// a darker copy offset ~1.3px down as a 3D bottom lip (matches the app's
-// beveled buttons) + a small white glint. Colors are baked into each SVG —
-// the .content-type-icon CSS only sizes it — so the icons stay stable across
-// level themes and the active state. Solid fills only (no <defs> gradients:
+// Full-color toolbar icons: colored body + a darker copy offset ~1.3px down as
+// a 3D bottom lip (matches the app's beveled buttons) + a small white glint.
+// Colors are baked into each SVG — the .content-type-icon CSS only sizes it and
+// paints the tinted circle behind it — so the icons stay stable across level
+// themes and the active state. Solid fills only (no <defs> gradients:
 // duplicate url(#id) refs across repeated toolbar buttons are fragile).
 const GAMEPAD_BODY =
   "M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5Z";
@@ -170,7 +170,11 @@ function renderContentToolbar() {
     button.dataset.slot = item.slot;
     button.dataset.kind = item.kind;
     const icon = document.createElement("span");
-    icon.className = "content-type-icon";
+    // The modifier drives the tinted circular backdrop (one soft tint per
+    // icon family — see .content-type-icon--* in styles.css).
+    icon.className = item.icon
+      ? `content-type-icon content-type-icon--${item.icon}`
+      : "content-type-icon";
     icon.setAttribute("aria-hidden", "true");
     icon.innerHTML = ICON_SVGS[item.icon] || "";
     const label = document.createElement("span");

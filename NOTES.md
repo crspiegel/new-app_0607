@@ -173,8 +173,10 @@ similar work** so the same problems don't recur. Append to this as you learn mor
     (circles gone → space freed). Same-document hash `page.goto` in Playwright does NOT re-route the
     SPA — `page.reload()` after changing the hash level in a test.
   - **Feedback round (2026-08-01) — ribbon tags + full-color icons.** The tag is an over-the-edge
-    ribbon: `top:-4px` and the first 4px of `padding-top` are ONE coupled value (overhang height) —
-    change both together or the text stops sitting on the button face. Flat single color across the
+    ribbon: `top:-3px` and the first 3px of `padding-top` are ONE coupled value (overhang height) —
+    change both together or the text stops sitting on the button face. (Shrunk ~20% from the first
+    ribbon — 10px/`7 9 4`/`-4px` → 8px/`5 7 4`/`-3px` — so it covers less of the label; measure the
+    tag rect against the label rect after any resize, the two can overlap on narrow tablets.) Flat single color across the
     fold: a first pass used a darker "back of strap" shade above the edge, but the user read it as a
     separate darker bar, so `--tag-game-back`/`--tag-song-back` and the `linear-gradient` hard stop
     were dropped. Icons bake their own colors into the SVG (solid layering: dark bottom lip offset
@@ -182,6 +184,20 @@ similar work** so the same problems don't recur. Append to this as you learn mor
     toolbar buttons, so `url(#id)` refs would collide document-wide. The old `stroke: currentColor`
     svg rule and both `.active .content-type-icon` color rules were removed (icons no longer inherit
     the button color).
+  - **Icon circle backdrop (2026-08-01, 3rd feedback round).** `.content-type-icon` is
+    `box-sizing: content-box` **on purpose** (the global reset is border-box): every breakpoint's
+    `width`/`height` on it then keeps meaning _glyph size_, and the circle is glyph + 2×padding —
+    so the ring is retuned in one place instead of re-deriving box sizes in ~7 media queries.
+    Tint comes from `--icon-tint` set by a `content-type-icon--video|game|music` modifier class
+    (`renderContentToolbar` derives it from the item's `icon` key).
+  - ⚠ **On the `--wide` toolbar every px of icon box is a px the label loses.** The circle's
+    padding pushed the longest label into 2-line ellipsis from ~860px up (768/800 already
+    ellipsised before the change — that is pre-existing, not a regression). Fix was to pay for the
+    ring out of button padding: base `--wide` `0 clamp(8px,0.85vw,13px)` → `clamp(6px,0.7vw,10px)`,
+    tablet block `0 clamp(8px,0.9vw,12px)`/gap 5 → `clamp(4px,0.5vw,8px)`/gap 4. Verified by
+    sweeping 360→1600px against a "padding:0" emulation of the pre-circle build; only 1250/1366px
+    still land ~1px smaller on the longest label. **Re-run that sweep before changing icon size,
+    icon padding, or wide-button padding.**
 
 ## Video player modal (Vimeo)
 
@@ -291,11 +307,39 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   The **content page** (`#contentScreen`) hit the SAME gap in landscape tablets and took the SAME
   `calc(100vh − 136px)` fix — but it only needs the min-height corrected (its `.section-blue` already carries
   the tint, so no inner flex; the board stays top-aligned and the tint fills below it to the footer).
-- **Landscape-tablet content banner is 2-row.** Round-12 made the level banner one line
-  (`content-level-banner{grid-auto-flow:column}`), cramming `Level 1 · band · ③`. Now a 2-col×2-row grid:
-  name (r1c1) + month circle (r1c2), band spans r2. The circle is shrunk 60→46px there so the extra row
-  doesn't push the 4-week board past the fold on the 712-tall Galaxy Tab. Scoped to `768–1180 landscape`;
-  PC(>1180)/mobile keep the stacked banner.
+- **Content banner is ONE row at every breakpoint (2026-08-01).** It used to stack the level name over a
+  60px month circle (112.8px tall); it is now `grid-template-columns:auto auto` + `align-items:center` +
+  **`justify-content:center`** (required — the banner is a stretched flex item of `.section-inner`, so
+  without it the two auto tracks pin left) with a 46px/28px circle → **46px tall**. The landscape-tablet
+  block had shipped this shape since round 12 and now only keeps its tighter `column-gap:12px` /
+  `margin-bottom:8px`. Dead `#contentLevelBand` rules were deleted (the element left the markup long ago).
+- ⚠ **The 86.8px the one-row banner frees is paid back as `padding-bottom` — do not "clean that up".**
+  `positionBgElFrame()` sizes `.page-bg-el-frame` from the live `.section-inner` rect and saved background
+  elements are stored as **% of that box**, so changing `.section-inner`'s height moves every already-placed
+  decoration. The compensation is deliberate and must stay balanced: banner 112.8→46 (−66.8) + banner
+  `margin-bottom` 26→14 (−12) + `[data-month] .section-inner` `padding-top` 20→12 (−8) = **−86.8**, returned
+  as `padding-bottom` 96→**183** (`@media min-width:768px`) and 64→**151** (`@media max-width:767px`).
+  Net height change ≈ +0.2px, and the freed space lands **inside** the frame at the bottom as the artwork
+  band (146→233px desktop). **Change one side of that pair and you must change the other.**
+- ⚠ **`#contentScreen[data-month] .section-inner` (1,2,0) silently beats every `#contentScreen
+.section-inner` (1,1,0) rule — including ones inside media queries.** The landscape-tablet block's
+  `padding-top:16px` had therefore never rendered (the real value was 20px). When the base dropped to 12px
+  that block had to be **promoted to `[data-month]`** to stay frozen. The same trap hit
+  `#contentScreen .content-main-header{margin-bottom:6px}` in that block — also dead until promoted.
+  Check specificity before assuming a breakpoint override on this element applies at all.
+- **PC lifts the banner onto the Back/Next row with negative margin (`@media min-width:1181px`:
+  `margin-top:-30px; margin-bottom:44px`).** 1181 is the boundary above the landscape-tablet block, so
+  tablets and phones are untouched. The −30/+30 pair is deliberate: the toolbar and board must not move
+  and `.section-inner`'s height (= the bg-element frame) must not change. ⚠ The banner BOX is full-width
+  (a stretched flex item), so a rect-overlap test against the nav buttons is meaningless — measure
+  `#contentLevelName` / `.content-banner-month strong` instead. Real clearance is ~360px per side at
+  1181px, the narrowest PC width.
+- **Landscape tablet (Galaxy Tab S4 1138×712) reclaimed 50px for the artwork band.** The slack was above
+  the board: `.content-toolbar` `margin-top:36→8` / `margin-bottom:16→10` (the biggest pocket by far),
+  `.section-inner` `padding-top:20→10`, header + banner `margin-bottom` `8→6` each, `.lesson-board`
+  `padding-top:6→4`. All 50px went back as `padding-bottom:18→68`, so height stays 578px and the band
+  grows 28→78px. This viewport has no spare height (docH == vh, no scroll), so **do not add net height
+  here** — always trade above-the-board space for below-the-board space.
 - **Landscape-tablet month buttons are width-capped for device parity.** Buttons are `1fr` of
   `--content-width` (`min(80%,…)`), so a wider tablet gets bigger buttons (Tab 1138 vs iPad 1024). Cap with
   `#monthScreen .month-grid{max-width:800px; margin-inline:auto}` → identical ~135px squares on both.

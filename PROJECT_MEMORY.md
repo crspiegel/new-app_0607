@@ -18,7 +18,65 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-진행 중인 작업 없음 (`2026-08-01` 툴바 리디자인 배포 완료 — 아래 참조).
+- ⏭ **아이콘 원형 배경 + 태그 20% 축소 + 배너 한 줄/하단 공간 확보 (`2026-08-01`) —
+  구현 완료, 로컬만 (사용자 지시로 미커밋).** 사용자 확인 → 요청 시 커밋·배포.
+  미커밋 변경: app.js, styles.css, tests/smoke.spec.js, NOTES.md, PROJECT_MEMORY.md.
+  **커밋 전 checkout/reset 금지.**
+  - **다음 사용자 작업:** 페이지2 하단에 배경 이미지 요소 배치 테스트 (이 작업의 목적).
+
+- ✅ **페이지2 배너 한 줄 배치 + 하단 배경 공간 확보 (`2026-08-01`) — 로컬 완료.**
+  플랜 승인 후 구현 (플랜: `C:\Users\USER\.claude\plans\flickering-booping-moler.md`).
+  하단에 배경 아트워크를 깔 공간이 146px뿐이고 요일 버튼에 가려 효과가 없다는 요청.
+  **CSS만 수정** (index.html·app.js 무변경). (1) 레벨명+월 원형을 **한 줄**로
+  (`grid-template-columns:auto auto` + `align-items/justify-content:center`,
+  `gap:4px 14px`) — 배너 **112.8 → 46px**. (2) 월 원형 **60→46px / 폰트 36→28px**
+  (레벨명 40.8px 라인에 맞춤, 두 자리 "12"도 여유). (3) 배너 `margin-bottom` 26→14,
+  `[data-month] .section-inner` `padding-top` 20→12 → 그리드 **86.8px 상승**.
+  (4) 절감분을 **`padding-bottom`으로 되돌려**(768+ 96→183, 767- 64→151)
+  `.section-inner` 높이를 보존 → **하단 배치 영역 146 → 233px(+60%)**, 기존 저장
+  배경 요소 좌표 불변. (5) 태블릿 가로 블록은 중복 선언 제거 후 `column-gap:12px`/
+  `margin-bottom:8px`만 유지 + `padding-top`을 `[data-month]`로 승격해 **완전 동결**.
+  죽은 `#contentLevelBand` 규칙 삭제.
+  검증: 전 브레이크포인트 변경 전/후 대조 실측 — 프레임 높이 드리프트 데스크톱·태블릿
+  세로·모바일 **≤0.3px**, 태블릿 가로 **0px**; 페이지1(`#monthLevelTag` 40px)·V2 월
+  pill(26×26/16px) 무영향 확인. qa **57/57 green**(배너 1줄 회귀 테스트 3 추가).
+  상세 gotcha → NOTES.md.
+  - ⚠ 그리드가 86.8px 올라왔으므로 **기존에 316~403px 구간에 배치된 배경 요소는
+    새로 버튼에 가려질 수 있음** — 해당 레벨/월은 눈으로 확인 필요.
+  - **2차 조정 (`2026-08-01`, 사용자 스샷 `007.png` = Galaxy Tab S4 1138×712 피드백):**
+    - **PC(≥1181px): 레벨+월 라인만 30px 위로**, 요일 그리드는 그대로.
+      `@media (min-width:1181px)`에 `margin-top:-30px; margin-bottom:44px`
+      (−30/+30 상쇄) → 배너가 Back/Next와 같은 줄로 올라가고 툴바·보드·
+      `.section-inner` 높이·하단 233px 모두 불변. 배너 콘텐츠와 Back/Next 사이
+      여유는 최소폭 1181px에서도 좌우 ~360px.
+    - **태블릿 가로(768~1180 landscape): 상단 여백 50px을 하단으로 이관.**
+      툴바 `margin-top 36→8`·`margin-bottom 16→10`(가장 큰 여유), `.section-inner`
+      `padding-top 20→10`, 헤더·배너 `margin-bottom 8→6`, 보드 `padding-top 6→4`
+      → `padding-bottom 18→68`. 그리드 상단 332→**282**, 하단 배치 영역
+      28→**78px**, `.section-inner` 높이 578 **불변**(저장된 배경 요소 제자리).
+      이 뷰포트는 여유 높이가 0(docH==vh)이라 **순증 금지** — 위에서 빼서 아래로만.
+    - 태블릿 세로·모바일은 의도적으로 변화 없음(각각 213px·161px 유지).
+      qa **57/57 green**.
+      페이지2 툴바 아이콘 뒤에 **아이콘 색 계열의 연한 파스텔 원형 배경** 추가
+      (참고 스샷 `005.png` 스타일, 배경 도형은 원형으로). 영상 `#ffe4e4` /
+      게임 `#ece4ff` / 음악 `#d8f6ec` — `--icon-tint` + `content-type-icon--<family>`
+      모디파이어 클래스(`renderContentToolbar`가 item.icon으로 생성).
+      `.content-type-icon`을 **`box-sizing:content-box`** 로 두어 기존 브레이크포인트
+      width/height가 그대로 "글리프 크기" 의미를 유지 → 원 = 글리프 + 2×padding
+      (base 5px, --wide 4px). ⚠ **원이 라벨 폭을 잠식해 ~860px 이상에서 새 말줄임 발생**
+      → 버튼 좌우 패딩에서 상쇄(base --wide `clamp(8,0.85vw,13)`→`clamp(6,0.7vw,10)`,
+      태블릿 블록 `clamp(8,0.9vw,12)`/gap5 → `clamp(4,0.5vw,8)`/gap4). 360~1600px
+      14개 폭에서 변경 전(padding:0 에뮬레이션)과 대조 검증 — 1250/1366px에서 가장 긴
+      라벨만 1px 작음, 그 외 동일. 768/800px 말줄임은 **변경 전부터 있던 기존 현상**.
+      qa **54/54 green**(아이콘 원형 테스트 신규 3). 상세 → NOTES.md.
+  - **태그 20% 축소 (`2026-08-01`, 사용자 지시):** 태그가 라벨 일부를 가릴 수 있다는
+    우려로 리본 전체를 비례 축소 — 폰트 10→8px, 패딩 `7/9/4`→`5/7/4`, 오버행
+    `top:-4`→`-3px`(padding-top의 오버행 몫과 커플링), 라운드 `3/8`→`2/6`,
+    letter-spacing 0.5→0.4, 그림자 `0 2px 3px`→`0 1px 2px`. 실측 결과
+    **49.8×21 → 39.4×17px**(가로 21%↓, 세로 19%↓, 면적 36%↓), 태블릿 768px의
+    라벨-태그 겹침 면적 1px²→**0**. qa **54/54 green**.
+  - ⚠ 태블릿 768px 라벨 말줄임은 **원형 배경 도입 전부터 있던 것**(bare 대조로 확인).
+    이번 작업 범위 밖 — 필요하면 별도 요청.
 
 - ✅ **페이지2 툴바 리디자인 배포 완료 (`2026-08-01`).** 플랜 승인 후 구현
   (스펙: `docs/superpowers/specs/2026-08-01-content-toolbar-redesign-design.md`).

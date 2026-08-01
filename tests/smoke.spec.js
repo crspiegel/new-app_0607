@@ -565,6 +565,93 @@ test("GAME/SONG corner tags render on 6-button levels only", async ({
   ).toBeVisible();
 });
 
+test("content banner keeps the level name and month circle on one row", async ({
+  page,
+}) => {
+  // December = a two-digit month number, the tightest fit for the circle.
+  await page.goto("/#content/Level%202/December");
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  const banner = await page.evaluate(() => {
+    const q = (s) => document.querySelector(s);
+    const name = q("#contentLevelName").getBoundingClientRect();
+    const pill = q("#contentScreen .content-banner-month");
+    const circle = q("#contentScreen .content-banner-month strong");
+    const cr = circle.getBoundingClientRect();
+    return {
+      // Same row = vertical centers align AND the circle sits to the right.
+      centerGap: Math.abs(
+        (name.top + name.bottom) / 2 - (cr.top + cr.bottom) / 2,
+      ),
+      circleIsRightOfName: cr.left >= name.right,
+      circleH: Math.round(cr.height),
+      circleW: Math.round(cr.width),
+      bannerH: Math.round(
+        q("#contentScreen .content-level-banner").getBoundingClientRect()
+          .height,
+      ),
+      // The literal "Month " text node is suppressed by font-size:0 on the
+      // pill; the number restores its own size on the inner <strong>.
+      pillFontSize: getComputedStyle(pill).fontSize,
+      digitsFitCircle: circle.scrollWidth <= circle.clientWidth + 1,
+      month: q("#contentBannerMonthNumber").textContent,
+    };
+  });
+  expect(banner.month).toBe("12");
+  expect(banner.circleIsRightOfName).toBe(true);
+  expect(banner.centerGap).toBeLessThan(1.5);
+  expect(banner.circleH).toBe(46);
+  expect(banner.circleW).toBe(46);
+  // One row only — the stacked banner was 112.8px tall.
+  expect(banner.bannerH).toBe(46);
+  expect(banner.pillFontSize).toBe("0px");
+  expect(banner.digitsFitCircle).toBe(true);
+});
+
+test("toolbar icons sit on a tinted circle keyed to the icon family", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%202/March");
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  await resetContentLabels(page);
+  const icons = await page.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        "#contentScreen .content-toolbar .content-type-icon",
+      ),
+    ].map((el) => {
+      const cs = getComputedStyle(el);
+      const r = el.getBoundingClientRect();
+      return {
+        family: [...el.classList]
+          .find((c) => c.startsWith("content-type-icon--"))
+          ?.replace("content-type-icon--", ""),
+        bg: cs.backgroundColor,
+        radius: cs.borderTopLeftRadius,
+        // content-box + padding: the circle is wider than the declared glyph.
+        square: Math.abs(r.width - r.height) < 0.5,
+        grewOverGlyph: r.width > parseFloat(cs.width),
+      };
+    }),
+  );
+  expect(icons).toHaveLength(6);
+  expect(icons.map((i) => i.family)).toEqual([
+    "video",
+    "video",
+    "game",
+    "game",
+    "music",
+    "music",
+  ]);
+  for (const icon of icons) {
+    expect(icon.radius).toBe("50%");
+    expect(icon.square).toBe(true);
+    expect(icon.grewOverGlyph).toBe(true);
+    expect(icon.bg).not.toBe("rgba(0, 0, 0, 0)");
+  }
+  // One tint per family, and the three families differ.
+  expect(new Set(icons.map((i) => i.bg)).size).toBe(3);
+});
+
 test("video player title composes '<label> · Song' for tagged song slots", async ({
   page,
 }) => {
