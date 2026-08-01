@@ -18,13 +18,9 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-- ⏭ **다음 세션 첫 작업 (사용자 지정, `2026-08-01` 종료 시):** 아래 툴바
-  리디자인의 **사용자 검토·피드백 반영**부터 시작. 피드백 반영 → qa → 사용자
-  요청 시 커밋·배포 순서. 현재 워킹 트리에 미커밋 변경 있음: app.js, styles.css,
-  tests/smoke.spec.js, NOTES.md, PROJECT_MEMORY.md + 신규 스펙 문서(untracked).
-  **커밋 전에 실수로 checkout/reset 하지 말 것.** 로컬 확인은 `npm.cmd run dev`
-  → 페이지2 (레벨 1~3 = 태그+고정폭, Beginner = 아이콘만).
-- **페이지2 툴바 리디자인 (`2026-08-01`) — 구현 완료, 미커밋.** 플랜 승인 후 구현
+진행 중인 작업 없음 (`2026-08-01` 툴바 리디자인 배포 완료 — 아래 참조).
+
+- ✅ **페이지2 툴바 리디자인 배포 완료 (`2026-08-01`).** 플랜 승인 후 구현
   (스펙: `docs/superpowers/specs/2026-08-01-content-toolbar-redesign-design.md`).
   (1) **아이콘 통일** 전 레벨: 영상(재생▶ opening/ending)·게임(게임패드
   game/game2)·음악(음표 unit/song1/song2) 라인 SVG(`ICON_SVGS`), **원형 배경
@@ -35,8 +31,7 @@ yet verified/committed. Clear the entry once the work is completed and logged be
   도서명이 길어도 버튼 크기 불변. (5) 플레이어 제목 "도서명 · Song" 데이터 합성
   (기존 `span:last-child` 스크래핑 제거 — 태그와 충돌). qa **51/51 green** +
   6뷰포트 스크린샷 실측(모바일 --wide 50px 패딩 잠식 버그도 실측으로 발견·수정).
-  변경: app.js, styles.css, tests/smoke.spec.js(+3), 스펙. ⚠ 남은 작업: 사용자
-  로컬 확인 후 요청 시 커밋·배포. 상세 gotcha → NOTES.md.
+  변경: app.js, styles.css, tests/smoke.spec.js(+3), 스펙. 상세 gotcha → NOTES.md.
   - **피드백 1차 반영 (`2026-08-01`):** (a) GAME/SONG 태그 → **버튼 윗변을 뒤에서
     앞으로 타고 넘는 리본** — 윗변 위로 나온 구간 + 앞면이 **단색**(오렌지/블루),
     아래 모서리 라운드 8px, 폰트 9→10px·패딩 확대로 통통하게. top 오프셋과
@@ -45,14 +40,24 @@ yet verified/committed. Clear the entry once the work is completed and logged be
     버튼 점) / 티얼 음표, 공통 기법 = 어두운 립 +1.3px 오프셋 + 흰 글린트, 색상은
     SVG에 내장(defs 그라데이션 금지 — 반복 버튼의 id 충돌). `stroke:currentColor`
     규칙·active 아이콘 색 규칙 제거. qa **51/51 green** + 데스크톱/모바일/Beginner
-    스크린샷 실측(버튼 폭 157.8px 균등 유지, 클리핑 없음). 여전히 미커밋.
-  - **피드백 2차 반영 (`2026-08-01`, 로컬만):** 태그 리본의 (1) **버튼 바깥 구간
+    스크린샷 실측(버튼 폭 157.8px 균등 유지, 클리핑 없음).
+  - **피드백 2차 반영 (`2026-08-01`):** 태그 리본의 (1) **버튼 바깥 구간
     색을 안쪽과 동일한 단색으로 통일** — 1차의 어두운 뒷면색이 "접힌 면"이 아니라
     별개의 진한 막대로 보인다는 피드백(`--tag-game-back`/`--tag-song-back` 변수와
     linear-gradient 제거), (2) **바깥 구간 높이 8px → 4px(50%)** (`top:-8→-4px`,
     `padding-top:11→7px` 동반 수정 — 두 값은 커플링). 태그 총높이 25→21px.
     qa **51/51 green** + 데스크톱·모바일 실측(오버행 4px, 배경 단색 rgb(255,150,0)
     /rgb(28,176,246), 클리핑 없음).
+  - ✅ **배포 (`2026-08-01`):** 사용자 확인 후 커밋 `3450d3f` push → Vercel 자동
+    배포. new-app0607.vercel.app + www.cambridgereading.com 모두 새 styles.css
+    (리본 태그 `top:-4px`, back-shade 변수 없음)·app.js(컬러 아이콘 `#ff6b6b`)
+    서빙 확인. 라이브 페이지2(레벨2/March) 실측: 아이콘 SVG 6개, 태그 4개
+    오버행 4px·단색 — 로컬과 동일.
+  - ⚠ **테스트 러너 포트 충돌 (발견, 미수정):** `scripts/run-playwright.mjs`가
+    포트 5173을 하드코딩 — 사용자 dev 서버가 5173을 점유 중이면 테스트용 Vite는
+    5174로 밀리고 Playwright(baseURL 5173)는 **사용자 dev 서버**에 붙는다. 워커
+    3개 경합으로 간헐적 30s 타임아웃 발생(이번 세션 1건, 단독 재실행 1.4s 통과).
+    dev 서버를 끄고 qa를 돌리거나, 러너가 빈 포트를 잡도록 고칠 것.
 - ✅ **페이지2 툴바 버튼 이름 편집 기능 배포 완료 (`2026-07-31`):** 커밋 `53991f3`
   push → Vercel 자동 배포. new-app0607.vercel.app + www.cambridgereading.com 모두
   새 app.js(`craContent`/`getSlotLabel`)·index.html(이름란, 지우기 버튼 제거) 서빙
