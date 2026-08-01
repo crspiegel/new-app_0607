@@ -520,6 +520,120 @@ test("slot modal: name field + apply-all boxes for toolbar slots only", async ({
   await expect(page.locator("#adminSlotUrlAllRow")).toBeHidden();
 });
 
+// --- Toolbar redesign: SVG icons, GAME/SONG tags, fixed-size buttons ------
+
+test("GAME/SONG corner tags render on 6-button levels only", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%202/March");
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  await resetContentLabels(page);
+  // Line SVG icons replaced the glyph circles on every button.
+  await expect(
+    page.locator(".content-toolbar .content-type-icon svg"),
+  ).toHaveCount(6);
+  const tags = page.locator(".content-toolbar .content-type-tag");
+  await expect(tags).toHaveCount(4);
+  await expect(
+    page.locator(".content-toolbar .content-type-tag--game"),
+  ).toHaveCount(2);
+  await expect(
+    page.locator(".content-toolbar .content-type-tag--song"),
+  ).toHaveCount(2);
+  await expect(tags.first()).toHaveText("GAME");
+  // Trimmed defaults stay distinguishable through the tag in the name.
+  await expect(
+    page.getByRole("button", { name: /^I Sit\s+GAME$/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /^I Sit\s+SONG$/ }),
+  ).toBeVisible();
+  // Beginner: icons unified but no tags, original names kept. (Same-document
+  // hash navigation doesn't re-route the SPA — reload to boot into Level 1.)
+  await page.goto("/#content/Level%201/March");
+  await page.reload();
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  await resetContentLabels(page);
+  await expect(page.locator(".content-toolbar .content-type-tag")).toHaveCount(
+    0,
+  );
+  await expect(
+    page.locator(".content-toolbar .content-type-icon svg"),
+  ).toHaveCount(4);
+  await expect(
+    page.getByRole("button", { name: /Unit Song/i }).first(),
+  ).toBeVisible();
+});
+
+test("video player title composes '<label> · Song' for tagged song slots", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%202/March");
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  await resetContentLabels(page);
+  // Seed URLs — openSlot only opens the player when the slot has a video.
+  await page.evaluate(() => {
+    const { contentCache, pageKey, renderContentToolbar } = window.craContent;
+    contentCache[pageKey("Level 2", "March")] = {
+      videos: {
+        song1: "https://vimeo.com/76979871",
+        opening: "https://vimeo.com/76979871",
+      },
+      covers: {},
+      labels: {},
+    };
+    renderContentToolbar();
+  });
+  await page.locator('.content-type[data-slot="song1"]').click();
+  await expect(page.locator("#vpTitle")).toHaveText("I Sit · Song");
+  await page.keyboard.press("Escape");
+  // Untagged slots keep the bare label (no suffix).
+  await page.locator('.content-type[data-slot="opening"]').click();
+  await expect(page.locator("#vpTitle")).toHaveText("Good Morning Song");
+});
+
+test("wide toolbar keeps fixed button geometry for long labels", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%202/March");
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  await resetContentLabels(page);
+  const song1 = page.locator('.content-type[data-slot="song1"]');
+  const before = await song1.boundingBox();
+  await page.evaluate(() => {
+    const { contentCache, pageKey, renderContentToolbar } = window.craContent;
+    contentCache[pageKey("Level 2", "March")] = {
+      videos: {},
+      covers: {},
+      labels: { song1: "The Extraordinary Show and Tell Day Adventure" },
+    };
+    renderContentToolbar();
+  });
+  // fitText also runs via rAF inside render; call it directly to avoid racing.
+  await page.evaluate(() => window.craContent.fitToolbarText());
+  const after = await song1.boundingBox();
+  // Equal-width flex/grid cells: a long label must not change the button box.
+  expect(Math.abs(after.width - before.width)).toBeLessThan(1.5);
+  // All buttons share one row/cell height (stretch).
+  const opening = await page
+    .locator('.content-type[data-slot="opening"]')
+    .boundingBox();
+  expect(Math.abs(after.height - opening.height)).toBeLessThan(1.5);
+  // The label font may only shrink (never grow) relative to a short label.
+  const sizes = await page.evaluate(() => {
+    const get = (slot) =>
+      parseFloat(
+        getComputedStyle(
+          document.querySelector(
+            `.content-type[data-slot="${slot}"] .content-type-label`,
+          ),
+        ).fontSize,
+      );
+    return { long: get("song1"), short: get("opening") };
+  });
+  expect(sizes.long).toBeLessThanOrEqual(sizes.short);
+});
+
 test("page background clears when leaving a level page", async ({ page }) => {
   await page.goto("/#content/Level%201/March");
   await resetBgCache(page);

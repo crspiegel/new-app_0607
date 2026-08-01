@@ -10,6 +10,9 @@
   --alert-red-shadow: #d83434;
   --purple-accent: #ce82ff;
   --purple-shadow: #9f55d8;
+  /* Toolbar GAME/SONG corner-tag colors (fixed across levels). */
+  --tag-game: #ff9600;
+  --tag-song: var(--macaw-blue);
   --canvas: #ffffff;
   --hairline: #e5e5e5;
   --hairline-strong: #dadada;
@@ -1448,19 +1451,20 @@ body:not(.subpage-active) main {
   font-weight: 900;
 }
 
+/* Bare full-color icon (no circle backdrop) — each SVG carries its own
+   fills/shading (colored body + darker bottom lip + white glint), so nothing
+   inherits the button color anymore. */
 .content-type-icon {
   display: grid;
   width: 26px;
   height: 26px;
   flex: 0 0 auto;
   place-items: center;
-  background: #e8f6ff;
-  border-radius: 50%;
-  color: #0878c8;
-  font-family: var(--font-google-sans);
-  font-size: 15px;
-  font-weight: 900;
-  line-height: 1;
+}
+
+.content-type-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .content-type.active {
@@ -1468,11 +1472,6 @@ body:not(.subpage-active) main {
   box-shadow:
     0 6px 0 #c78f00,
     0 10px 16px rgba(30, 90, 0, 0.16);
-  color: #2f2f2f;
-}
-
-.content-type.active .content-type-icon {
-  background: rgba(255, 255, 255, 0.55);
   color: #2f2f2f;
 }
 
@@ -1619,32 +1618,76 @@ body:not(.subpage-active) main {
 }
 
 /* 6-button levels (Level 1-3): all six buttons on ONE row spanning the full
-   board width (cover image → Friday column edge). Slimmer side padding than
-   Beginner's 4 buttons, and a viewport-scaled font — the fixed costs (icons,
-   padding, gaps) don't shrink with the container, so the font calc is
-   steeper than plain vw. Below 768px one row can't fit: landscape falls
-   back to 3×2, portrait to 2×3. The double-class selector outranks the
-   per-breakpoint .content-toolbar rules below. */
+   board width (cover image → Friday column edge), each an EQUAL fixed width
+   (flex 1 1 0) so admin-entered book titles never change the layout — long
+   labels wrap to 2 lines and fitToolbarText() (app.js) shrinks the font.
+   overflow:visible lets the GAME/SONG corner tags overlap the top edge
+   (the base .content-toolbar is overflow-x:auto). Below 768px one row can't
+   fit: landscape falls back to 3×2, portrait to 2×3. The double-class
+   selector outranks the per-breakpoint .content-toolbar rules below. */
 #contentScreen .content-toolbar.content-toolbar--wide {
   display: flex;
   justify-content: space-between;
   gap: 8px;
   padding-left: 50px;
   padding-right: 50px;
+  overflow: visible;
 }
 
 #contentScreen .content-toolbar--wide .content-type {
-  flex: 0 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
   padding: 0 clamp(8px, 0.85vw, 13px);
   gap: 6px;
   font-size: clamp(11.5px, calc(1.78vw - 9px), 15.5px);
-  white-space: nowrap;
+}
+
+/* Fixed 2-line text box: wrap → (JS) shrink to 11px → clamp ellipsis.
+   overflow-wrap:anywhere covers unbroken long words. */
+#contentScreen .content-toolbar--wide .content-type-label {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: center;
+  line-height: 1.15;
 }
 
 #contentScreen .content-toolbar--wide .content-type-icon {
   width: 22px;
   height: 22px;
-  font-size: 12px;
+}
+
+/* GAME/SONG corner ribbon (tagged slots on the 6-button levels only). Reads
+   as a strap riding over the button's top edge back-to-front: 4px sits above
+   the edge (the button is position:relative, tag top:-4px), the rounded lower
+   part lies on the button face. One flat color across the fold — the earlier
+   darker back-shade read as a separate darker bar, not a fold.
+   ⚠ top offset and the overhang slice of padding-top are one coupled value. */
+#contentScreen .content-type-tag {
+  position: absolute;
+  top: -4px;
+  right: 10px;
+  /* 4px of the top padding = the above-the-edge segment; keeps the text on
+     the front face only. */
+  padding: 7px 9px 4px;
+  border-radius: 3px 3px 8px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  color: #fff;
+  pointer-events: none;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.16);
+}
+
+#contentScreen .content-type-tag--game {
+  background: var(--tag-game);
+}
+
+#contentScreen .content-type-tag--song {
+  background: var(--tag-song);
 }
 
 /* Tablet: the container is narrower — smaller icons and a harder-scaled
@@ -1657,6 +1700,8 @@ body:not(.subpage-active) main {
   }
 
   #contentScreen .content-toolbar--wide .content-type {
+    /* 2-line headroom over the tablet 42px single-line height. */
+    min-height: 46px;
     padding: 0 clamp(8px, 0.9vw, 12px);
     gap: 5px;
     font-size: clamp(10.5px, calc(1.9vw - 7px), 14px);
@@ -1665,31 +1710,33 @@ body:not(.subpage-active) main {
   #contentScreen .content-toolbar--wide .content-type-icon {
     width: 20px;
     height: 20px;
-    font-size: 11px;
-  }
-}
-
-/* Only the narrowest tablet band (portrait iPad) truly has no room for the
-   icon circles — hide them there alone. */
-@media (min-width: 768px) and (max-width: 899px) {
-  #contentScreen .content-toolbar--wide .content-type-icon {
-    display: none;
   }
 }
 
 @media (max-width: 767px) {
   #contentScreen .content-toolbar.content-toolbar--wide {
     display: grid;
-    grid-template-columns: repeat(3, auto);
-    justify-content: center;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 8px;
     row-gap: 10px;
+    /* The base --wide rule's 50px side padding (higher specificity than the
+       mobile .content-toolbar rule) would eat the 1fr cells on phones. */
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  /* Grid cells: fill the equal column (max-width:240 from the mobile base
+     would otherwise cap the cell content). */
+  #contentScreen .content-toolbar--wide .content-type {
+    width: 100%;
+    max-width: none;
+    padding: 0 8px;
   }
 }
 
 @media (max-width: 767px) and (orientation: portrait) {
   #contentScreen .content-toolbar.content-toolbar--wide {
-    grid-template-columns: repeat(2, auto);
-    justify-items: center;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1709,11 +1756,6 @@ body:not(.subpage-active) main {
 #contentScreen .content-type.active {
   background: var(--canvas);
   box-shadow: 0 6px 0 #d8d8d8;
-  color: #0878c8;
-}
-
-#contentScreen .content-type.active .content-type-icon {
-  background: #e8f6ff;
   color: #0878c8;
 }
 
@@ -2928,7 +2970,6 @@ body:not(.subpage-active) main {
   #contentScreen .content-type-icon {
     width: 20px;
     height: 20px;
-    font-size: 12px;
   }
 
   #contentScreen .content-toolbar {
@@ -3362,7 +3403,6 @@ body:not(.subpage-active) main {
   #contentScreen .content-type-icon {
     width: 24px;
     height: 24px;
-    font-size: 14px;
   }
 
   /* Mobile weekday board: a 6-column grid (week label + Mon–Fri) with each
@@ -3739,7 +3779,6 @@ body:not(.subpage-active) main {
   #contentScreen .content-type-icon {
     width: 22px;
     height: 22px;
-    font-size: 13px;
   }
 
   /* Month nav (Back / Next) ~80% of the base size — the default 50px/15px
@@ -3842,7 +3881,6 @@ body:not(.subpage-active) main {
   #contentScreen .content-type-icon {
     width: 26px;
     height: 26px;
-    font-size: 15px;
   }
 
   #contentScreen .lesson-button strong {

@@ -156,6 +156,32 @@ similar work** so the same problems don't recur. Append to this as you learn mor
     Supabase project (a client-renamed button would otherwise flake the default-name assertions).
   - `hydrateContent` re-renders the toolbar when the content screen is active (labels can arrive after
     first paint); side effect: the active toolbar button resets to the first one at that moment.
+- **Toolbar redesign (2026-08-01)** — SVG icons / GAME·SONG tags / fixed-width wide toolbar.
+  - ⚠ **Never scrape the toolbar label from the DOM** (`span:last-child` grabbed the corner-tag span).
+    The video-player title is composed from data: `getSlotLabel(...)` + the `tag` field in
+    `TOOLBAR_BUTTONS` ("<label> · Song"). Tag pills are `span.content-type-tag` appended LAST.
+  - ⚠ **The base `--wide` rule's 50px side padding outranks the mobile `.content-toolbar` rule**
+    (`#contentScreen .content-toolbar.content-toolbar--wide` = 1,2,0 vs 1,1,0) — with 1fr grid cells
+    it silently ate ~90px of phone width ("Good Morning…" ellipsis). The ≤767px --wide block must
+    re-declare `padding-left/right: 6px`. Found by measuring, not by eye.
+  - `fitToolbarText()` (wide toolbar only) shrinks `.content-type-label` to fit the fixed 2-line box
+    (floor 11px; line-clamp ellipsis below that). Hooks: rAF after every `renderContentToolbar()`
+    (render happens BEFORE `showScreen` — hidden metrics are 0 → no-op without the rAF), debounced
+    resize, and `document.fonts.ready`. ESLint: use `window.requestAnimationFrame`/`window.setTimeout`.
+  - Icons keep the `span.content-type-icon` wrapper (per-breakpoint size rules reuse it); the SVG
+    inside stretches 100%. The 768-899px icon-hide block was REMOVED
+    (circles gone → space freed). Same-document hash `page.goto` in Playwright does NOT re-route the
+    SPA — `page.reload()` after changing the hash level in a test.
+  - **Feedback round (2026-08-01) — ribbon tags + full-color icons.** The tag is an over-the-edge
+    ribbon: `top:-4px` and the first 4px of `padding-top` are ONE coupled value (overhang height) —
+    change both together or the text stops sitting on the button face. Flat single color across the
+    fold: a first pass used a darker "back of strap" shade above the edge, but the user read it as a
+    separate darker bar, so `--tag-game-back`/`--tag-song-back` and the `linear-gradient` hard stop
+    were dropped. Icons bake their own colors into the SVG (solid layering: dark bottom lip offset
+    +1.3px + white glint). ⚠ **No `<defs>` gradients in `ICON_SVGS`** — the same icon repeats across
+    toolbar buttons, so `url(#id)` refs would collide document-wide. The old `stroke: currentColor`
+    svg rule and both `.active .content-type-icon` color rules were removed (icons no longer inherit
+    the button color).
 
 ## Video player modal (Vimeo)
 

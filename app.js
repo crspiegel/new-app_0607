@@ -85,26 +85,71 @@ function levelLabel(level) {
    kind "video" plays the slot's YouTube/Vimeo URL in the video player;
    kind "game" opens the slot's URL in the game modal. */
 const TOOLBAR_BUTTONS = {
-  // Beginner (internal key "Level 1")
+  // Beginner (internal key "Level 1") — icons unified, no tags (user decision).
   "Level 1": [
-    { slot: "opening", kind: "video", label: "Good Morning Song", icon: "♪" },
-    { slot: "ending", kind: "video", label: "Good Bye Song", icon: "★" },
-    { slot: "game", kind: "game", label: "Game", icon: "🧩" },
-    { slot: "unit", kind: "video", label: "Unit Song", icon: "🎯" },
+    {
+      slot: "opening",
+      kind: "video",
+      label: "Good Morning Song",
+      icon: "video",
+    },
+    { slot: "ending", kind: "video", label: "Good Bye Song", icon: "video" },
+    { slot: "game", kind: "game", label: "Game", icon: "game" },
+    { slot: "unit", kind: "video", label: "Unit Song", icon: "music" },
   ],
-  // Level 1-3 (internal keys "Level 2".."Level 4")
+  // Level 1-3 (internal keys "Level 2".."Level 4"). `tag` renders the GAME/SONG
+  // corner pill, so default labels drop the redundant suffix — admins fill in
+  // per-month book titles via the label editor.
   default: [
-    { slot: "opening", kind: "video", label: "Good Morning Song", icon: "♪" },
-    { slot: "ending", kind: "video", label: "Good Bye Song", icon: "★" },
-    { slot: "game", kind: "game", label: "I Sit Game", icon: "🧩" },
-    { slot: "game2", kind: "game", label: "I Like School Game", icon: "🎯" },
-    { slot: "song1", kind: "video", label: "I Sit Song", icon: "♫" },
-    { slot: "song2", kind: "video", label: "I Like School Song", icon: "🎶" },
+    {
+      slot: "opening",
+      kind: "video",
+      label: "Good Morning Song",
+      icon: "video",
+    },
+    { slot: "ending", kind: "video", label: "Good Bye Song", icon: "video" },
+    { slot: "game", kind: "game", label: "I Sit", icon: "game", tag: "game" },
+    {
+      slot: "game2",
+      kind: "game",
+      label: "I Like School",
+      icon: "game",
+      tag: "game",
+    },
+    {
+      slot: "song1",
+      kind: "video",
+      label: "I Sit",
+      icon: "music",
+      tag: "song",
+    },
+    {
+      slot: "song2",
+      kind: "video",
+      label: "I Like School",
+      icon: "music",
+      tag: "song",
+    },
   ],
 };
 function toolbarButtons(level) {
   return TOOLBAR_BUTTONS[level] || TOOLBAR_BUTTONS.default;
 }
+
+// Full-color toolbar icons (soft-3D style, no backdrop shape): colored body +
+// a darker copy offset ~1.3px down as a 3D bottom lip (matches the app's
+// beveled buttons) + a small white glint. Colors are baked into each SVG —
+// the .content-type-icon CSS only sizes it — so the icons stay stable across
+// level themes and the active state. Solid fills only (no <defs> gradients:
+// duplicate url(#id) refs across repeated toolbar buttons are fragile).
+const GAMEPAD_BODY =
+  "M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5Z";
+const NOTE_STEMS = "M9 17.3V4.9l12-2v12.4";
+const ICON_SVGS = {
+  video: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8.4 6.5 17.9 12 8.4 17.5Z" fill="#db4b4b" stroke="#db4b4b" stroke-width="2.6" stroke-linejoin="round" transform="translate(0 1.4)"/><path d="M8.4 6.5 17.9 12 8.4 17.5Z" fill="#ff6b6b" stroke="#ff6b6b" stroke-width="2.6" stroke-linejoin="round"/><path d="M9.3 9v2.1" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" opacity="0.65"/></svg>`,
+  game: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="${GAMEPAD_BODY}" fill="#6440cf" transform="translate(0 1.3)"/><path d="${GAMEPAD_BODY}" fill="#845ef7"/><path d="M6.9 7.3h2.4" fill="none" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" opacity="0.5"/><path d="M6.2 11h3.6M8 9.2v3.6" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/><circle cx="15" cy="13" r="1.35" fill="#ffd43b"/><circle cx="18" cy="10" r="1.35" fill="#8ce99a"/></svg>`,
+  music: `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><g transform="translate(0 1.3)"><path d="${NOTE_STEMS}" fill="none" stroke="#0ca678" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.3" cy="17.3" r="2.9" fill="#0ca678"/><circle cx="18.3" cy="15.3" r="2.9" fill="#0ca678"/></g><path d="${NOTE_STEMS}" fill="none" stroke="#20c997" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.3" cy="17.3" r="2.9" fill="#20c997"/><circle cx="18.3" cy="15.3" r="2.9" fill="#20c997"/><circle cx="5.4" cy="16.4" r="0.8" fill="#ffffff" opacity="0.6"/><circle cx="17.4" cy="14.4" r="0.8" fill="#ffffff" opacity="0.6"/></svg>`,
+};
 
 // (Re)build the content-page toolbar for the current level. Called from
 // updateContentMonthNumber so every entry path (click or hash) renders it.
@@ -127,12 +172,57 @@ function renderContentToolbar() {
     const icon = document.createElement("span");
     icon.className = "content-type-icon";
     icon.setAttribute("aria-hidden", "true");
-    icon.textContent = item.icon;
+    icon.innerHTML = ICON_SVGS[item.icon] || "";
     const label = document.createElement("span");
+    label.className = "content-type-label";
     label.textContent = getSlotLabel(state.level, state.month, item.slot);
     button.append(icon, label);
+    // GAME/SONG corner pill (levels with tagged slots only). NOT aria-hidden:
+    // it keeps duplicate book titles distinguishable ("I Sit GAME" vs
+    // "I Sit SONG") for screen readers and role-name queries.
+    if (item.tag) {
+      const tag = document.createElement("span");
+      tag.className = `content-type-tag content-type-tag--${item.tag}`;
+      tag.textContent = item.tag.toUpperCase();
+      button.append(tag);
+    }
     contentToolbar.append(button);
   });
+  // Render happens before showScreen on every entry path — measure after paint.
+  window.requestAnimationFrame(fitToolbarText);
+}
+
+// Shrink toolbar labels that overflow their fixed 2-line box (wide toolbar
+// only — the Beginner toolbar stays content-sized). Inline font-size is reset
+// first so the CSS base applies before measuring; hidden toolbar → all metrics
+// 0 → safe no-op. The line-clamp ellipsis is the fallback below the 11px floor.
+const FIT_TEXT_MIN = 11;
+function fitToolbarText() {
+  if (!contentToolbar) return;
+  if (!contentToolbar.classList.contains("content-toolbar--wide")) return;
+  contentToolbar.querySelectorAll(".content-type-label").forEach((span) => {
+    span.style.fontSize = "";
+    let size = parseFloat(window.getComputedStyle(span).fontSize);
+    while (
+      size > FIT_TEXT_MIN &&
+      (span.scrollHeight > span.clientHeight + 1 ||
+        span.scrollWidth > span.clientWidth + 1)
+    ) {
+      size -= 0.5;
+      span.style.fontSize = `${size}px`;
+    }
+  });
+}
+
+// Refit on resize (fixed widths track the viewport) and after web fonts load
+// (Nunito 900 metrics shift once the real font arrives).
+let fitTextTimer;
+window.addEventListener("resize", () => {
+  window.clearTimeout(fitTextTimer);
+  fitTextTimer = window.setTimeout(fitToolbarText, 200);
+});
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => fitToolbarText());
 }
 
 /* ---- Content data source (Phase 1: local map) --------------------------
@@ -1545,8 +1635,12 @@ if (contentToolbar) {
     if (kind === "game") {
       openGameSlot(slot);
     } else if (slot) {
-      const label = button.querySelector("span:last-child");
-      openSlot(slot, label ? label.textContent.trim() : "");
+      // Title comes from data, never the DOM — the corner tag span would
+      // otherwise be scraped as the label. Tagged song slots compose
+      // "<book title> · Song".
+      const item = toolbarButtons(state.level).find((b) => b.slot === slot);
+      const label = getSlotLabel(state.level, state.month, slot);
+      openSlot(slot, item && item.tag === "song" ? `${label} · Song` : label);
     }
   });
 }
@@ -2543,5 +2637,6 @@ window.craContent = {
   pageKey,
   renderContentToolbar,
   getSlotLabel,
+  fitToolbarText,
   settled: false,
 };
