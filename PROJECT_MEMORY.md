@@ -18,8 +18,25 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-진행 중인 작업 없음. 직전 작업 = **페이지2 PC 하단 여백 축소(세로 스크롤바 제거)** —
-사용자 로컬 검증 완료 후 커밋·push (`2026-08-03`). 상세는 아래 "페이지2 PC 하단 여백" 항목.
+진행 중인 작업 없음 — **세션 종료 정리 완료 (`2026-08-03`)**. 워킹 트리 클린,
+origin/master 동기화(`de301a3`), `npm.cmd run qa` **93/93 green**, 두 도메인
+(www.cambridgereading.com · new-app0607.vercel.app) 코어 파일 5종 전부 HTTP 200 확인.
+
+이번 세션 커밋 4건: `53ffe82` 배경 요소 가로 100% 밴드 → `928e437` 배포 기록 →
+`43888cf` 히어로 배너 캐러셀 + 전환 시간 + 게임 모달 3건 → `de301a3` 페이지2 PC
+하단 여백 축소.
+
+⚠ **다음 세션 첫 확인 사항 — 사용자 배경 재배치 (코드 아님, 관리자 작업):**
+페이지2가 PC에서 234px 짧아지면서 레이어 기준 배경이 콘텐츠 대비 위로 올라왔다.
+① **Beginner/March**: 저장된 노란 밴드가 마지막 요일 버튼 줄과 **7px 겹침**(버튼 뒤로
+깔려 치명적이진 않음) → 배경 편집기에서 밴드를 조금 내리면 해소.
+② **Level 1/April · Level 2/April**(내부 키 `Level 2`/`Level 3`): 프레임 기준 요소
+4개의 세로 위치 이동 → 그 두 페이지만 한 번 재배치 필요.
+
+**다음 사용자 작업 후보:** 1366×768 이하까지 무스크롤이 필요해지면 푸터 여백·요일
+버튼 간격 압축이 추가로 필요하다(이번엔 의도적으로 범위 밖). 히어로 배너는 아직
+`site_settings.hero_banner`가 비어 있어 기본 히어로만 노출 중 — 관리자 화면
+**배너** 탭에서 이미지를 올리면 순환이 시작된다.
 
 ⚠ **사용자 확인 필요**: 페이지가 234px 짧아지면서 L1/March에 저장된 노란 배경 밴드가
 마지막 요일 버튼 줄과 **7px 겹친다**(버튼 뒤로 깔림). 배경 편집기에서 밴드를 조금
