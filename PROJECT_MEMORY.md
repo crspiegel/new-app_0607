@@ -18,9 +18,12 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-- ⏭ **태블릿 배너 상하 여백 균등화 (`2026-08-02`) — 구현 완료, 로컬만 (미커밋).**
-  사용자 확인 → 요청 시 커밋·배포. 미커밋 변경: styles.css, NOTES.md,
-  PROJECT_MEMORY.md. **커밋 전 checkout/reset 금지.**
+진행 중인 작업 없음 (`2026-08-02` 태블릿 배너 여백 균등화까지 배포 완료).
+
+- ✅ **태블릿 배너 상하 여백 균등화 배포 완료 (`2026-08-02`):** 커밋 `e34a82c`
+  push → Vercel 자동 배포. 두 도메인(new-app0607.vercel.app +
+  www.cambridgereading.com) × 4개 뷰포트 라이브 실측 — iPad 가로·Tab 가로
+  40/40, iPad 세로 42/42, PC 40/44, 툴바·그리드·하단 영역·innerH 전부 로컬과 일치.
   사용자 스샷 `008.png`(iPad 1024×768 가로): 레벨+월 라인이 아래 버튼그룹 쪽으로
   치우쳐 보인다는 지적 — 실측 결과 위 여백 66~70px / 아래 14px로 아래쪽 편중.
   PC와 동일한 **−N/+N 상쇄 기법**으로 태블릿에도 적용:
