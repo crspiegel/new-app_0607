@@ -18,8 +18,8 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-진행 중인 작업 없음. 직전 작업 = **배경 요소 "가로 100%"(전체 폭 밴드)** — 사용자 로컬
-검증 완료 후 커밋·push (`2026-08-02`). 상세는 아래 "페이지1·2 배경 요소 가로 100%"
+진행 중인 작업 없음. 직전 작업 = **배경 요소 "가로 100%"(전체 폭 밴드)** — 커밋 `53ffe82`
+push → Vercel 자동 배포 완료 (`2026-08-02`). 상세는 아래 "페이지1·2 배경 요소 가로 100%"
 항목, gotcha는 NOTES.md 배경 편집기 섹션.
 
 ⚠ **일괄 URL 입력 작업은 사용자 요청으로 취소됨 (`2026-08-02`).** 페이지2 game 버튼
@@ -62,6 +62,16 @@ yet verified/committed. Clear the entry once the work is completed and logged be
     qa **66/66 green**(신규 테스트 3종 × 3프로젝트).
   - ⚠ 밴드는 footer 글자 **뒤**에 깔리므로, 무늬가 복잡한 이미지를 쓰면 카피라이트
     가독성이 떨어질 수 있다(색은 레벨 테마색). 필요하면 밝은/저대비 패턴을 쓸 것.
+  - ✅ **배포 완료 (`2026-08-02`):** 커밋 `53ffe82` push → Vercel 자동 배포.
+    new-app0607.vercel.app + www.cambridgereading.com 모두 새 styles.css
+    (`.page-bg-band`, `.has-full::after` `z-index:1000`)·app.js(`styleBgBand`)·
+    background-editor.js(`fillBgBandShell`) 서빙 확인. 라이브 실측(1528px):
+    시드 tile 밴드 폭 1513 == 레이어 폭 1513(delta 0), `off:0` 바닥 gap 0,
+    높이 90px, `repeat-x`/`auto 100%`, 밴드 z1 < footer z2.
+    사용자가 저장해 둔 실제 밴드(L1/March, stretch, `off:-279`)도 정상 렌더 —
+    원본 1080×270 → 1513×378로 **비율 정확히 유지**, 하단 약 99px 노출.
+  - ⚠ `page_backgrounds.updated_at`은 `default now()`뿐이라 **upsert 갱신 시 옛 값이
+    남는다**(트리거 없음). 최신 편집 시각으로 신뢰하지 말 것.
 
 - ✅ **태블릿 배너 상하 여백 균등화 배포 완료 (`2026-08-02`):** 커밋 `e34a82c`
   push → Vercel 자동 배포. 두 도메인(new-app0607.vercel.app +
