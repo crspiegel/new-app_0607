@@ -2827,6 +2827,34 @@ body:not(.subpage-active) main {
   }
 }
 
+/* PC only: shrink the bottom whitespace so the content page fits on screen
+   without a vertical scrollbar. The page's height is essentially fixed
+   (~1086-1099px) regardless of viewport, so the scrollbar was purely a
+   function of window height; trimming 234px here clears it down to ~864px
+   tall windows (1536x864, 1440x900, 1920x1080...). 1366x768 and shorter are
+   deliberately out of scope — reaching them would need the grid, buttons and
+   footer compressed too.
+
+   ⚠ This block MUST stay AFTER the `@media (min-width: 768px)` rule that sets
+   padding-bottom:183px — both selectors are `#contentScreen .section-inner`
+   (1,1,0), so source order decides. The other min-width:1181px blocks earlier
+   in this file are too early to use.
+   ⚠ Scoped to PC on purpose: tablet landscape tunes these separately
+   (`#contentScreen[data-month] .section-inner`, padding-bottom:68px) and
+   tablet portrait still wants the 183px. */
+@media (min-width: 1181px) {
+  #contentScreen .section-inner {
+    padding-bottom: 4px;
+  }
+
+  /* The footer's own 44px padding-top supplies the visual gap under the grid,
+     so 6px here is enough — grid bottom to footer text is still ~54px. */
+  #contentScreen .lesson-board {
+    padding-top: 14px;
+    padding-bottom: 6px;
+  }
+}
+
 @media (min-width: 768px) and (max-width: 1180px) {
   .topbar {
     min-height: 86px;

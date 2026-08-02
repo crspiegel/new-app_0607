@@ -321,6 +321,18 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   as `padding-bottom` 96→**183** (`@media min-width:768px`) and 64→**151** (`@media max-width:767px`).
   Net height change ≈ +0.2px, and the freed space lands **inside** the frame at the bottom as the artwork
   band (146→233px desktop). **Change one side of that pair and you must change the other.**
+  - ⚠ **PC(≥1181px)는 `2026-08-03`부터 예외다.** 페이지2에 세로 스크롤바가 생긴다는 요청으로
+    PC에서만 하단 여백을 **234px 걷어냈다** — 새 `@media (min-width:1181px)` 블록에서
+    `#contentScreen .section-inner{padding-bottom:4px}` +
+    `#contentScreen .lesson-board{padding-top:14px; padding-bottom:6px}`.
+    그래서 PC 아트워크 밴드는 233 → **10px**로 사실상 없다. 태블릿(183/68)·모바일(151)은
+    위 균형 그대로다. 이 블록은 반드시 `@media (min-width:768px)`의 183px 규칙 **뒤에** 둬야
+    한다 — 둘 다 `#contentScreen .section-inner`(1,1,0)라 소스 순서로 결정된다.
+    파일 앞쪽(1324·1665행)의 기존 `min-width:1181px` 블록에 넣으면 조용히 죽는다.
+  - ⚠ **페이지가 234px 짧아지면 레이어 기준 배경(전체 이미지·가로 100% 밴드)이 콘텐츠 대비
+    위로 올라온다.** 실제로 L1/March의 저장된 노란 밴드가 마지막 요일 버튼 줄과 7px 겹치게
+    됐다(버튼 뒤로 깔리므로 치명적이진 않다). 페이지 높이를 바꾸면 저장된 배경을 눈으로
+    확인할 것.
 - ⚠ **`#contentScreen[data-month] .section-inner` (1,2,0) silently beats every `#contentScreen
 .section-inner` (1,1,0) rule — including ones inside media queries.** The landscape-tablet block's
   `padding-top:16px` had therefore never rendered (the real value was 20px). When the base dropped to 12px

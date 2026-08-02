@@ -231,6 +231,69 @@ const HERO_CLEARANCE = () => {
   );
 };
 
+test("content page fits PC screens without a vertical scrollbar", async ({
+  page,
+}) => {
+  // The page's height barely depends on the viewport (~1086-1099px before this
+  // change), so the scrollbar was purely a function of window height. Trimming
+  // the bottom whitespace clears it down to ~864px-tall windows.
+  for (const [width, height] of [
+    [1920, 1080],
+    [1899, 992],
+    [1600, 900],
+    [1536, 864],
+    [1440, 900],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#content/Level%201/March");
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(250);
+    const m = await page.evaluate(() => {
+      const de = document.documentElement;
+      const grid = document.querySelector("#lessonGrid");
+      const btn = document.querySelector("#contentScreen .lesson-button");
+      const footer = document.querySelector(".site-footer");
+      return {
+        overflow: de.scrollHeight - de.clientHeight,
+        gridH: Math.round(grid.getBoundingClientRect().height),
+        btnH: Math.round(btn.getBoundingClientRect().height),
+        footerH: Math.round(footer.getBoundingClientRect().height),
+      };
+    });
+    const label = `${width}x${height}`;
+    expect(m.overflow, label).toBeLessThanOrEqual(0);
+    // The weekday board itself must be untouched — only whitespace was cut.
+    expect(m.gridH, label).toBe(434);
+    expect(m.btnH, label).toBe(86);
+    expect(m.footerH, label).toBe(103);
+  }
+});
+
+test("content page bottom spacing is unchanged on tablet and phone", async ({
+  page,
+}) => {
+  // The trim is scoped to >=1181px on purpose: tablet landscape tunes these
+  // separately (68px) and tablet portrait / mobile still want their own values.
+  for (const [width, height, innerPb] of [
+    [1180, 800, "68px"],
+    [1024, 768, "68px"],
+    [768, 1024, "183px"],
+    [390, 844, "151px"],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#content/Level%201/March");
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(250);
+    const pb = await page.evaluate(
+      () =>
+        getComputedStyle(
+          document.querySelector("#contentScreen .section-inner"),
+        ).paddingBottom,
+    );
+    expect(pb, `${width}x${height}`).toBe(innerPb);
+  }
+});
+
 test("hero stays inert and unlayered without banners", async ({ page }) => {
   await page.goto("/");
   await resetHero(page, null);

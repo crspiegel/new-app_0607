@@ -18,9 +18,17 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-진행 중인 작업 없음. 직전 작업 = **히어로 배너 캐러셀 + 전환 시간 옵션 + 게임 모달
-스크롤/잘림/해상도 수정** 3건을 한 번에 커밋·push (`2026-08-03`). 사용자 로컬 검증 완료.
-상세는 아래 해당 항목들, gotcha는 NOTES.md **히어로 배너 캐러셀** / **게임 모달** 섹션.
+진행 중인 작업 없음. 직전 작업 = **페이지2 PC 하단 여백 축소(세로 스크롤바 제거)** —
+사용자 로컬 검증 완료 후 커밋·push (`2026-08-03`). 상세는 아래 "페이지2 PC 하단 여백" 항목.
+
+⚠ **사용자 확인 필요**: 페이지가 234px 짧아지면서 L1/March에 저장된 노란 배경 밴드가
+마지막 요일 버튼 줄과 **7px 겹친다**(버튼 뒤로 깔림). 배경 편집기에서 밴드를 조금
+내리면 해소된다. 또 **Level 2/April · Level 3/April의 프레임 기준 요소 4개**는 프레임이
+줄어 세로 위치가 이동했으므로 한 번 재배치 필요.
+
+직전 작업 = **히어로 배너 캐러셀 + 전환 시간 옵션 + 게임 모달
+스크롤/잘림/해상도 수정** 3건을 한 번에 커밋·push (`2026-08-03`, 커밋 `43888cf`).
+gotcha는 NOTES.md **히어로 배너 캐러셀** / **게임 모달** 섹션.
 
 그 이전 = **배경 요소 "가로 100%"(전체 폭 밴드)** — 커밋 `53ffe82` (`2026-08-02`).
 
@@ -36,6 +44,25 @@ yet verified/committed. Clear the entry once the work is completed and logged be
 밀리고 Playwright(baseURL 5173)는 사용자 dev 서버에 붙어 워커 경합으로 간헐적
 30s 타임아웃이 난다. dev 서버를 끄고 qa를 돌리거나, `npm.cmd run check` +
 `npx.cmd playwright test`로 나눠 실행할 것 (이번 세션은 후자로 검증).
+
+- ✅ **페이지2 PC 하단 여백 축소 — 세로 스크롤바 제거 (`2026-08-03`):**
+  플랜 승인 후 구현 (플랜: `C:\Users\USER\.claude\plans\stateful-spinning-charm.md`).
+  - **실측**: 페이지2 문서 높이가 뷰포트와 거의 무관하게 **1086~1099px 고정**이라 스크롤
+    여부는 뷰포트 **높이**만으로 결정됐다(1920×1080 6px / 1899×992 94px / 1536×864 222px /
+    1366×768 331px 넘침). 줄일 수 있는 하단 여백 = 그리드 바닥~섹션 바닥 **233px**.
+  - **PC(≥1181px) 전용 새 `@media` 블록**에서 234px 절감 —
+    `.section-inner` padding-bottom 183→4, `.lesson-board` padding-top 25→14 · bottom 50→6.
+    그리드·요일 버튼·푸터는 **손대지 않음**(높이 434 / 86 / 103 불변 실측).
+  - **결과**: 1920×1080 · 1899×992 · 1600×900 · 1536×864 · 1440×900 **전부 스크롤 0**.
+    1366×768(97px)·1280×720(145px)은 **의도적 범위 밖**(사용자 결정) — 거기까지 맞추려면
+    푸터·그리드 간격까지 압축해야 한다.
+  - **태블릿·모바일 완전 불변** 실측: 1180/1024 = 68px, 768 세로 = 183px, 390 = 151px.
+  - ⚠ 새 블록은 `@media (min-width:768px)`의 183px 규칙 **뒤에** 둬야 한다(둘 다
+    `#contentScreen .section-inner` (1,1,0) → 소스 순서). 파일 앞쪽 1181px 블록은 무용.
+  - ⚠ **페이지가 짧아져 레이어 기준 배경이 콘텐츠 대비 위로 올라온다** — L1/March 노란
+    밴드가 마지막 버튼 줄과 7px 겹침(버튼 뒤라 치명적 아님), Level 2·3의 April 프레임 기준
+    요소 4개는 이동. 사용자 재배치 필요.
+  - qa **93/93 green**(신규 테스트 2종).
 
 - ✅ **메인 히어로 배너 캐러셀 (`2026-08-02`):** 브레인스토밍 → 사용자 구조 조정안 검증 →
   플랜 승인 후 구현
