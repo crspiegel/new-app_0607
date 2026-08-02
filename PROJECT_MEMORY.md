@@ -18,7 +18,15 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-진행 중인 작업 없음 (`2026-08-02` 태블릿 배너 여백 균등화까지 배포 완료).
+진행 중인 작업 없음 — **세션 종료 정리 완료 (`2026-08-02`)**. 워킹 트리 클린,
+origin/master 동기화, `npm.cmd run check` + Playwright **57/57 green**, 두 도메인
+라이브 서빙 확인. 다음 세션은 아래 "다음 사용자 작업"부터 시작하면 된다.
+
+⚠ **알려진 도구 이슈:** `scripts/run-playwright.mjs`가 포트 5173을 하드코딩 —
+`npm.cmd run dev`를 켜둔 채 `npm.cmd run qa`를 돌리면 테스트용 Vite가 5174로
+밀리고 Playwright(baseURL 5173)는 사용자 dev 서버에 붙어 워커 경합으로 간헐적
+30s 타임아웃이 난다. dev 서버를 끄고 qa를 돌리거나, `npm.cmd run check` +
+`npx.cmd playwright test`로 나눠 실행할 것 (이번 세션은 후자로 검증).
 
 - ✅ **태블릿 배너 상하 여백 균등화 배포 완료 (`2026-08-02`):** 커밋 `e34a82c`
   push → Vercel 자동 배포. 두 도메인(new-app0607.vercel.app +
@@ -47,7 +55,6 @@ yet verified/committed. Clear the entry once the work is completed and logged be
   PC 1366: 배너 top 120/h46, 원형 46px, 그리드 316, 하단 233, innerH 903;
   태블릿 가로 1138×712: 그리드 282, 하단 78, innerH 578 — **로컬과 완전 일치**.
   (같은 커밋에 툴바 아이콘 원형 배경 + GAME/SONG 태그 20% 축소도 포함.)
-  플랜 승인 후 구현 (플랜: `C:\Users\USER\.claude\plans\flickering-booping-moler.md`).
   플랜 승인 후 구현 (플랜: `C:\Users\USER\.claude\plans\flickering-booping-moler.md`).
   하단에 배경 아트워크를 깔 공간이 146px뿐이고 요일 버튼에 가려 효과가 없다는 요청.
   **CSS만 수정** (index.html·app.js 무변경). (1) 레벨명+월 원형을 **한 줄**로
