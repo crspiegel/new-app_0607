@@ -183,6 +183,379 @@ test("seeded background renders full image and elements, month row wins", async 
   await expect(page.locator("#pageBgLayer")).not.toHaveClass(/has-full/);
 });
 
+// The hero carousel reads site_settings.hero_banner from the real Supabase
+// project, which may hold a real config. Wait for the fetch attempt, then push
+// a known config — the database itself is never touched.
+async function resetHero(page, config) {
+  await page.waitForFunction(() => window.craHero && window.craHero.settled);
+  await page.evaluate(
+    (cfg) => window.craHero.applyHeroBanner(cfg),
+    config ?? null,
+  );
+}
+
+// Clearance between the app-download buttons and the PAINTED white curve. The
+// wave is an SVG whose fill starts at the curve, so its bounding box says
+// nothing useful — sample the path instead.
+const HERO_CLEARANCE = () => {
+  const wave = document.querySelector(".hero-wave");
+  const dl = document.querySelector(".app-downloads");
+  const w = wave.getBoundingClientRect();
+  const d = dl.getBoundingClientRect();
+  const path = wave.querySelector("path");
+  const total = path.getTotalLength();
+  const curveYatX = (svgX) => {
+    let lo = 0;
+    let hi = total;
+    let best = 0;
+    for (let i = 0; i < 40; i += 1) {
+      const mid = (lo + hi) / 2;
+      const p = path.getPointAtLength(mid);
+      if (p.x < svgX) {
+        lo = mid;
+        best = p.y;
+      } else {
+        hi = mid;
+        best = p.y;
+      }
+    }
+    return best;
+  };
+  const toSvgX = (px) => ((px - w.left) / (w.right - w.left)) * 2048;
+  const toCssY = (svgY) => w.top + (svgY / 220) * (w.bottom - w.top);
+  return (
+    Math.min(
+      toCssY(curveYatX(toSvgX(d.left))),
+      toCssY(curveYatX(toSvgX(d.right))),
+    ) - d.bottom
+  );
+};
+
+test("hero stays inert and unlayered without banners", async ({ page }) => {
+  await page.goto("/");
+  await resetHero(page, null);
+  // No banners → no slides, no carousel class, no timer: byte-identical hero.
+  await expect(page.locator(".hero-slide--banner")).toHaveCount(0);
+  await expect(page.locator("#heroSlides")).toHaveClass("hero-slides");
+  const state = await page.evaluate(() => window.craHero.state());
+  expect(state).toMatchObject({ index: 0, count: 1, running: false });
+  // The wave is a FIXED layer above the slide layer — that separation is what
+  // lets a slide animate without ever covering the curve.
+  const z = await page.evaluate(() => ({
+    slides: getComputedStyle(document.querySelector("#heroSlides")).zIndex,
+    wave: getComputedStyle(document.querySelector(".hero-wave")).zIndex,
+  }));
+  expect(Number(z.slides)).toBeLessThan(Number(z.wave));
+});
+
+test("app-download buttons clear the white wave at every width", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await resetHero(page, null);
+  // .hero-copy sits UNDER the wave now, so the buttons must clear it on their
+  // own. Fonts change the copy height, so wait for them before measuring.
+  for (const width of [320, 390, 768, 800, 900, 1024, 1180, 1366, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.evaluate(() => document.fonts.ready);
+    // The character rig reflows the grid a beat after a resize; measure the
+    // settled layout, not the intermediate one.
+    await page.waitForTimeout(250);
+    const clearance = await page.evaluate(HERO_CLEARANCE);
+    expect(clearance, `width ${width}`).toBeGreaterThan(8);
+  }
+});
+
+test("hero banners build a full-width carousel under the wave", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto("/");
+  await resetHero(page, {
+    mode: "fade",
+    interval: 7,
+    banners: [
+      { src: "assets/l1-march-book-1.jpg", focus: "top" },
+      { src: "assets/l1-march-book-2.jpg", focus: "bottom" },
+    ],
+  });
+  // Default hero is slide 1; the two banners follow it.
+  await expect(page.locator(".hero-slide--banner")).toHaveCount(2);
+  await expect(page.locator("#heroSlides")).toHaveClass(/hero-carousel--fade/);
+  expect(await page.evaluate(() => window.craHero.state())).toMatchObject({
+    index: 0,
+    count: 3,
+    mode: "fade",
+    interval: 7,
+    running: true,
+  });
+  const geom = await page.evaluate(() => {
+    const hero = document
+      .querySelector(".hero-section")
+      .getBoundingClientRect();
+    return [...document.querySelectorAll(".hero-banner-img")].map((img) => {
+      const r = img.getBoundingClientRect();
+      return {
+        widthDelta: Math.abs(r.width - hero.width),
+        insideHero: r.bottom <= hero.bottom + 0.5 && r.top >= hero.top - 0.5,
+        fit: getComputedStyle(img).objectFit,
+        pos: getComputedStyle(img).objectPosition,
+      };
+    });
+  });
+  for (const g of geom) {
+    expect(g.widthDelta).toBeLessThan(1); // 가로 100%
+    expect(g.insideHero).toBe(true);
+    expect(g.fit).toBe("cover");
+  }
+  expect(geom.map((g) => g.pos)).toEqual(["50% 0%", "50% 100%"]);
+  // Advancing hands the active class to a banner slide.
+  await page.evaluate(() => window.craHero.goTo(1));
+  await expect(page.locator(".hero-slide.is-active")).toHaveClass(
+    /hero-slide--banner/,
+  );
+  expect((await page.evaluate(() => window.craHero.state())).index).toBe(1);
+  // Clearing the config tears the whole carousel back down.
+  await resetHero(page, null);
+  await expect(page.locator(".hero-slide--banner")).toHaveCount(0);
+  await expect(page.locator("#heroSlides")).toHaveClass("hero-slides");
+});
+
+test("hero banner config falls back on unusable values", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.craHero && window.craHero.settled);
+  const out = await page.evaluate(() => {
+    const n = window.craHero.normalizeHeroConfig;
+    return {
+      badMode: n({ mode: "spin" }).mode,
+      badInterval: n({ interval: 4 }).interval,
+      okInterval: n({ interval: 10 }).interval,
+      badFocus: n({ banners: [{ src: "x", focus: "left" }] }).banners[0].focus,
+      nullCfg: n(null),
+      dropsEmptySrc: n({ banners: [{ src: "" }, { src: "ok" }] }).banners
+        .length,
+      noDuration: n({}).duration,
+      zeroDuration: n({ duration: 0 }).duration,
+      bigDuration: n({ duration: 6 }).duration,
+      okDuration: n({ duration: 4 }).duration,
+    };
+  });
+  expect(out.badMode).toBe("slide");
+  expect(out.badInterval).toBe(5);
+  expect(out.okInterval).toBe(10);
+  expect(out.badFocus).toBe("center");
+  expect(out.nullCfg).toEqual({
+    mode: "slide",
+    interval: 5,
+    duration: 2,
+    banners: [],
+  });
+  expect(out.dropsEmptySrc).toBe(1);
+  expect(out.noDuration).toBe(2);
+  expect(out.zeroDuration).toBe(2);
+  expect(out.bigDuration).toBe(2);
+  expect(out.okDuration).toBe(4);
+});
+
+test("hero 전환 시간 drives the real transition and the cycle length", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await resetHero(page, null);
+  for (const duration of [1, 3, 5]) {
+    const applied = await page.evaluate((d) => {
+      window.craHero.applyHeroBanner({
+        mode: "fade",
+        interval: 3,
+        duration: d,
+        banners: [{ src: "assets/l1-march-book-1.jpg", focus: "top" }],
+      });
+      return {
+        cssVar: document
+          .querySelector("#heroSlides")
+          .style.getPropertyValue("--hero-transition"),
+        computed: getComputedStyle(document.querySelector(".hero-slide"))
+          .transitionDuration,
+        duration: window.craHero.state().duration,
+      };
+    }, duration);
+    expect(applied.cssVar).toBe(`${duration * 1000}ms`);
+    expect(applied.computed).toContain(`${duration}s`);
+    expect(applied.duration).toBe(duration);
+  }
+  // Cycle = duration + interval, so "유지 시간" is the fully-visible time
+  // rather than something a long cross-fade eats into.
+  const elapsed = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        window.craHero.applyHeroBanner({
+          mode: "fade",
+          interval: 3,
+          duration: 1,
+          banners: [{ src: "assets/l1-march-book-1.jpg", focus: "top" }],
+        });
+        const t0 = performance.now();
+        const from = window.craHero.state().index;
+        const iv = setInterval(() => {
+          if (window.craHero.state().index !== from) {
+            clearInterval(iv);
+            resolve(performance.now() - t0);
+          }
+        }, 40);
+        setTimeout(() => {
+          clearInterval(iv);
+          resolve(-1);
+        }, 9000);
+      }),
+  );
+  expect(elapsed).toBeGreaterThan(3800); // 1 + 3 = 4s
+  expect(elapsed).toBeLessThan(5200);
+  await resetHero(page, null);
+});
+
+test("game modal scales a fixed 1280x720 frame into a 16:9 card", async ({
+  page,
+}) => {
+  // about:blank keeps this deterministic — the geometry is what's under test,
+  // not the external game. The frame's layout viewport is always 1280x720,
+  // which is what makes the game's inner scroll container impossible to
+  // overflow (it needs at least 1024x630).
+  // Viewports WIDER than 16:9 are the important ones: the first version used
+  // aspect-ratio + width + max-height, which flattens the card past 16:9 (the
+  // width never shrinks back) and clipped the game's title and speaker icon.
+  // Every viewport originally tested happened to be at or below 16:9.
+  const measure = () =>
+    page.evaluate(() => {
+      const card = document.querySelector("#gameModalCard");
+      const frame = document.querySelector("#gameFrame");
+      const c = card.getBoundingClientRect();
+      const cs = getComputedStyle(frame);
+      const native = card.classList.contains("game-frame-native");
+      // Effective magnification of the game's own pixels, read from the
+      // COMPUTED transform rather than our own bookkeeping. Anything above 1
+      // means a cross-origin frame's bitmap is being stretched → blurry.
+      const m = cs.transform;
+      const scale =
+        m === "none" ? 1 : Number(m.slice(m.indexOf("(") + 1).split(",")[0]);
+      return {
+        ratio: c.width / c.height,
+        native,
+        frameW: parseFloat(cs.width),
+        frameH: parseFloat(cs.height),
+        transform: m,
+        scale,
+        // Positive = the frame sticks out of the card and gets clipped.
+        clipY: parseFloat(cs.height) * scale - c.height,
+        clipX: parseFloat(cs.width) * scale - c.width,
+        cardW: c.width,
+        cardH: c.height,
+        fitsViewport:
+          c.width <= window.innerWidth + 1 &&
+          c.height <= window.innerHeight + 1,
+      };
+    });
+  const assertFits = (g, label) => {
+    expect(Math.abs(g.ratio - 16 / 9), label).toBeLessThan(0.02);
+    // The whole point of this round: the game is never magnified.
+    expect(g.scale, label).toBeLessThanOrEqual(1.001);
+    if (g.native) {
+      // Big enough card → frame laid out at the card's size, magnification 1.
+      expect(Math.abs(g.scale - 1), label).toBeLessThan(0.005);
+      expect(Math.abs(g.frameW - g.cardW), label).toBeLessThan(1);
+      expect(Math.abs(g.frameH - g.cardH), label).toBeLessThan(1);
+      // Never below the game's minimum box, or its inner list would scroll.
+      expect(g.frameW, label).toBeGreaterThanOrEqual(1024);
+      expect(g.frameH, label).toBeGreaterThanOrEqual(630);
+    } else {
+      // Small card → fixed fallback box, scaled DOWN (downsampling stays sharp).
+      expect(g.frameW, label).toBe(1280);
+      expect(g.frameH, label).toBe(720);
+      expect(g.scale, label).toBeLessThan(1);
+    }
+    expect(g.clipY, label).toBeLessThan(1);
+    expect(g.clipX, label).toBeLessThan(1);
+    expect(g.fitsViewport, label).toBe(true);
+  };
+
+  for (const [width, height] of [
+    [1920, 1080], // exactly 16:9
+    [1899, 992], // wider than 16:9 — the clipping case
+    [1920, 900], // wider still
+    [2560, 1080], // ultrawide
+    [1440, 900], // taller than 16:9
+    [1366, 768],
+    [1280, 720],
+    [1200, 640], // small enough to take the 1280x720 downscale fallback
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#content/Level%201/March");
+    await page.evaluate(() => {
+      /* global openGameModal */
+      openGameModal("about:blank");
+    });
+    assertFits(await measure(), `${width}x${height}`);
+    // Maximize must hold the same guarantees. The card and the frame animate
+    // together over 0.2s, so measure the settled state — mid-flight the card
+    // rect and the already-final --game-scale don't correspond.
+    await page.evaluate(() => {
+      /* global setGameMaximized */
+      setGameMaximized(true);
+    });
+    // Wait for the transitions to actually settle rather than guessing a
+    // duration — under parallel workers a fixed 300ms is not always enough,
+    // and the frame's transform interpolates to a matrix while in flight.
+    await page.waitForFunction(() => {
+      const card = document.querySelector("#gameModalCard");
+      const frame = document.querySelector("#gameFrame");
+      const r = card.getBoundingClientRect();
+      const sample = `${r.width}|${r.height}|${getComputedStyle(frame).transform}`;
+      const stable = window.__gameSample === sample;
+      window.__gameSample = sample;
+      return (
+        stable &&
+        Math.abs(r.width - parseFloat(card.style.width)) < 0.5 &&
+        Math.abs(r.height - parseFloat(card.style.height)) < 0.5
+      );
+    });
+    assertFits(await measure(), `${width}x${height} maximized`);
+  }
+});
+
+test("game modal keeps a native responsive frame on tablet and phone", async ({
+  page,
+}) => {
+  // Forcing the 1280px logical width onto a phone would scale it to ~0.3 and
+  // make the game unreadable, so <=1180px opts out of scale-to-fit.
+  for (const [width, height] of [
+    [1180, 800],
+    [1024, 768],
+    [390, 844],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#content/Level%201/March");
+    await page.evaluate(() => openGameModal("about:blank"));
+    const m = await page.evaluate(() => {
+      const frame = document.querySelector("#gameFrame");
+      const card = document.querySelector("#gameModalCard");
+      const f = frame.getBoundingClientRect();
+      const c = card.getBoundingClientRect();
+      return {
+        transform: getComputedStyle(frame).transform,
+        dW: Math.abs(f.width - c.width),
+        dH: Math.abs(f.height - c.height),
+        // Inline sizes beat media queries, so fitGameFrame() must clear them.
+        inlineWidth: card.style.width,
+        inlineHeight: card.style.height,
+      };
+    });
+    expect(m.transform, `${width}x${height}`).toBe("none");
+    expect(m.dW).toBeLessThan(1);
+    expect(m.dH).toBeLessThan(1);
+    expect(m.inlineWidth, `${width}x${height}`).toBe("");
+    expect(m.inlineHeight, `${width}x${height}`).toBe("");
+  }
+});
+
 test("full-width band elements span the page on every viewport", async ({
   page,
 }) => {

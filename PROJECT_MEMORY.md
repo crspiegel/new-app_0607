@@ -18,9 +18,11 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-진행 중인 작업 없음. 직전 작업 = **배경 요소 "가로 100%"(전체 폭 밴드)** — 커밋 `53ffe82`
-push → Vercel 자동 배포 완료 (`2026-08-02`). 상세는 아래 "페이지1·2 배경 요소 가로 100%"
-항목, gotcha는 NOTES.md 배경 편집기 섹션.
+진행 중인 작업 없음. 직전 작업 = **히어로 배너 캐러셀 + 전환 시간 옵션 + 게임 모달
+스크롤/잘림/해상도 수정** 3건을 한 번에 커밋·push (`2026-08-03`). 사용자 로컬 검증 완료.
+상세는 아래 해당 항목들, gotcha는 NOTES.md **히어로 배너 캐러셀** / **게임 모달** 섹션.
+
+그 이전 = **배경 요소 "가로 100%"(전체 폭 밴드)** — 커밋 `53ffe82` (`2026-08-02`).
 
 ⚠ **일괄 URL 입력 작업은 사용자 요청으로 취소됨 (`2026-08-02`).** 페이지2 game 버튼
 70개(Beginner `game`×10월 + Level 1~3 `game`/`game2`×10월)에
@@ -34,6 +36,67 @@ push → Vercel 자동 배포 완료 (`2026-08-02`). 상세는 아래 "페이지
 밀리고 Playwright(baseURL 5173)는 사용자 dev 서버에 붙어 워커 경합으로 간헐적
 30s 타임아웃이 난다. dev 서버를 끄고 qa를 돌리거나, `npm.cmd run check` +
 `npx.cmd playwright test`로 나눠 실행할 것 (이번 세션은 후자로 검증).
+
+- ✅ **메인 히어로 배너 캐러셀 (`2026-08-02`):** 브레인스토밍 → 사용자 구조 조정안 검증 →
+  플랜 승인 후 구현
+  (스펙: `docs/superpowers/specs/2026-08-02-hero-banner-carousel-design.md`).
+  관리자가 메인 히어로에 배너 이미지를 등록하면 **기본 히어로를 1번 슬라이드로** 두고
+  슬라이드/페이드로 자동 순환. 유지 시간 3·5·7·10초, 배너별 초점(위/가운데/아래),
+  배너는 항상 페이지 가로 100%, 하단 흰 곡선 아래.
+  - **레이어 구조(사용자 확정안)**: `.hero-section` 안에서 `.hero-slides`(z1) /
+    `svg.hero-wave`(z2) **분리**. 곡선을 슬라이드에 넣지 않으므로 복제·이음매 문제가
+    없고, 슬라이드가 쌓임 맥락을 만들어도 곡선이 항상 위. 기본 슬라이드는 normal flow에
+    남아 히어로 높이를 정의, 배너는 `absolute; inset:0`.
+  - **배너 0장이면 아무것도 만들지 않는다** — 애니메이션 CSS가 전부
+    `.hero-carousel--*` 스코프라 transition·transform·쌓임 맥락이 생기지 않음.
+  - 저장 = `site_settings.hero_banner` jsonb(**스키마 변경 없음**), 업로드 = 기존
+    `backgrounds` 버킷 `banners/` 프리픽스(**새 버킷·정책 없음**). 관리자 3번째 탭 **배너**.
+  - 코드는 `app.js`(93KB)에 얹지 않고 **신규 `hero-banner.js`** — `background-editor.js`와
+    같은 클래식 스크립트 방식. `eslint.config.mjs`/`package.json` 글롭도 함께 등록.
+  - ⚠ **필수 부작용 처리**: `.hero-copy`가 곡선 아래로 내려가 앱버튼이 가려짐
+    (실측 1180 17% / 1024 62% / 768 97%). 여백 2곳 조정 — 베이스 `padding-bottom 130→172`
+    (≥1181px), 768~1180 블록은 `height:auto; min-height:434` + `padding-bottom 92→200`.
+    **768~900에서 앱버튼이 2줄(130px)로 감싸지는 게 여유를 잡아먹는 진짜 원인.**
+    ⚠ 여백 규칙을 상한 없는 `@media (min-width:768px)`에 넣으면 데스크톱까지 번진다
+    (1920 히어로 434→464px로 늘어난 적 있음).
+  - **검증**: 320~1920 9개 폭에서 곡선 path 샘플링으로 앱버튼 여유 실측 — 최소 **26.4px**.
+    데스크톱 히어로 높이 434px 불변, 768~1024는 의도적 증가(768: 434→609.6px).
+    배너 `<img>` 박스가 히어로와 완전 일치(delta 0), `object-fit:cover`, 곡선 z2 > 슬라이드 z1.
+  - ✅ **부수 효과**: 768px에서 **기존에 잘려 사라져 있던 Google Play 버튼 복구**
+    (히어로가 자라며 `overflow:hidden` 클리핑 해소). 대신 캐릭터 아래 파란 여백이 생김.
+
+- ✅ **히어로 전환 시간 옵션 + 게임 모달 3연속 수정 (`2026-08-02`~`08-03`):**
+  플랜: `C:\Users\USER\.claude\plans\stateful-spinning-charm.md`.
+  - **전환 시간 1~5초 옵션**(기본 2초, 페이드·슬라이드 공통). 하드코딩 600ms를
+    `--hero-transition` 변수로 빼고 `hero-banner.js`가 주입. 저장 필드 `duration` 추가.
+    **순환 주기 = `duration + interval`** 로 바꿔 "유지 시간"이 배너가 완전히 보이는
+    시간을 뜻하게 됨 — 실측 5001ms(2+3).
+  - 🐛 **함께 발견·수정**: `heroOnHome()`이 `body[data-screen]`만 봤는데 `/`로 처음
+    들어오면 `#homeScreen`이 정적으로 `.screen-active`라 `showScreen()`이 호출되지 않아
+    **속성 자체가 없다** → 새로고침으로 홈에 들어오면 캐러셀이 아예 안 돌고 있었다.
+  - **게임 모달 ① 세로 스크롤** — 원인은 문서가 아니라 게임 페이지 내부의
+    `div.flex-1.min-h-0.overflow-y-auto`(`document.scrollHeight === clientHeight`가 항상
+    참이라 처음엔 재현 불가). 임계값 실측: iframe **가로 ≥1024 · 세로 ≥630**.
+    해법 = 16:9 카드 + 최소 박스 보장. 1920/1536/1440/1366/1280/1200 전부 넘침 0px
+    (이전 21~336px).
+  - **게임 모달 ② 상단 잘림** — `aspect-ratio:16/9 + width:90% + max-height:90%`는
+    명세상 폭이 확정이면 `max-height`가 높이만 자르고 폭은 안 줄어, 16:9보다 넓은 창에서
+    카드가 납작해지는데 배율은 폭 기준이라 iframe이 세로로 넘쳐 잘렸다(1899×992 61px /
+    2560×1080 316px). → `fitGameFrame()`이 **`min()`으로 카드 px를 직접 계산**.
+    가용 공간은 `#gameModal` rect로 잰다 — `documentElement.clientWidth`는
+    `scrollbar-gutter: stable` 때문에 15px 크다(1920 vs 1905).
+    ⚠ **원인은 테스트 뷰포트 선정 실패** — 처음 고른 4개가 전부 16:9 이하였다.
+  - **게임 모달 ③ 해상도 저하** — 크로스오리진 iframe을 `transform: scale()`로 **확대**하면
+    브라우저가 자기 레이아웃 크기로 래스터화한 비트맵을 늘려 해상도가 날아간다
+    (1.24~1.49배 → 9개 게임 전부 번짐, A/B 크롭 비교로 확정).
+    → 카드 세로 ≥660px이면 iframe을 **카드 크기 그대로** 레이아웃 + `transform:none`,
+    작을 때만 1280×720 + **축소**(축소는 무해). 실측 배율 1.0 · 내부 스크롤 0.
+    부수효과: 확대가 없어져 글자가 약간 작아짐(사용자 승인 — 선명도 우선).
+  - ⚠ scale-to-fit은 **PC(≥1181px)에만** — 모바일에서 1280px 강제 시 배율 0.3.
+    ⚠ 미디어 오버라이드를 베이스 `#gameFrame`보다 **앞**에 두면 동일 specificity에서
+    소스 순서로 밀려 조용히 죽는다(한 번 겪음).
+  - qa **87/87 green**(신규 테스트 6종). 상세 → NOTES.md **히어로 배너 캐러셀** /
+    **게임 모달** 섹션.
 
 - ✅ **페이지1·2 배경 요소 "가로 100%"(전체 폭 밴드) 구현 (`2026-08-02`):**
   브레인스토밍 → 설계 승인 후 구현

@@ -651,6 +651,80 @@ body.login-active main {
   overflow: hidden;
 }
 
+/* Hero slide layer (z-index:1) — see index.html. The white wave is a separate
+   FIXED layer at z-index:2 that is deliberately NOT part of any slide, so a
+   slide can animate (transform/opacity, each of which makes its own stacking
+   context) without ever painting over the curve. The default slide stays in
+   normal flow so it keeps defining the hero height at every breakpoint;
+   banner slides overlay it. */
+.hero-slides {
+  position: relative;
+  z-index: 1;
+}
+.hero-slide--default {
+  position: relative;
+}
+.hero-slide--banner {
+  position: absolute;
+  inset: 0;
+}
+/* Every animated rule is scoped to a .hero-carousel--* class, which
+   hero-banner.js only adds when at least one banner exists. With no banners
+   the hero renders byte-identically to before this feature — no transition,
+   no transform, no extra stacking context. */
+/* --hero-transition is injected by hero-banner.js from the admin's 전환 시간
+   (1-5s). The 600ms fallback only applies if the property is missing; at that
+   length a cross-fade reads as a hard cut, which is why it became an option. */
+.hero-carousel--slide .hero-slide,
+.hero-carousel--fade .hero-slide {
+  transition:
+    opacity var(--hero-transition, 600ms) ease,
+    transform var(--hero-transition, 600ms) ease;
+}
+.hero-carousel--slide .hero-slide:not(.is-active),
+.hero-carousel--fade .hero-slide:not(.is-active) {
+  pointer-events: none;
+}
+.hero-carousel--fade .hero-slide:not(.is-active) {
+  opacity: 0;
+}
+/* Waiting slides sit off to the right; the outgoing one exits to the left. */
+.hero-carousel--slide .hero-slide:not(.is-active) {
+  transform: translateX(100%);
+}
+.hero-carousel--slide .hero-slide.is-leaving {
+  transform: translateX(-100%);
+}
+.hero-carousel--slide .hero-slide.is-active,
+.hero-carousel--fade .hero-slide.is-active {
+  opacity: 1;
+  transform: translateX(0);
+}
+/* Auto-rotation still runs (the banners are content), but the movement goes. */
+@media (prefers-reduced-motion: reduce) {
+  .hero-carousel--slide .hero-slide,
+  .hero-carousel--fade .hero-slide {
+    transition-duration: 0ms;
+  }
+  .hero-carousel--slide .hero-slide:not(.is-active),
+  .hero-carousel--slide .hero-slide.is-leaving {
+    transform: none;
+    opacity: 0;
+  }
+}
+/* Only the visible slide should burn CPU on the character rig animation. */
+.hero-slide:not(.is-active) .hero-rig,
+.hero-slide:not(.is-active) .hero-rig-part {
+  animation-play-state: paused;
+}
+.hero-banner-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+}
+
 .hero-wave {
   position: absolute;
   right: 0;
@@ -699,7 +773,12 @@ body.login-active main {
   position: relative;
   z-index: 3;
   padding-top: 24px;
-  padding-bottom: 130px;
+  /* Effective only at >=1181px — the 768-1180 block and the <=767 block both
+     override it. A justify-content:center flex column lifts by half the
+     padding delta, so 130 -> 172 buys ~21px. That is what keeps the
+     app-download buttons clear of the white wave now that .hero-copy sits
+     under it: at 1920 they were grazing the curve by 6.6px otherwise. */
+  padding-bottom: 172px;
 }
 
 .hero-copy h1,
@@ -2802,8 +2881,30 @@ body:not(.subpage-active) main {
     gap: clamp(28px, 4vw, 60px);
   }
 
+  /* .hero-copy now sits UNDER the white wave (the wave is a fixed layer above
+     the slide layer), so the app-download buttons have to clear the curve on
+     their own. Two levers, both scoped to THIS 768–1180 range — desktop and
+     mobile already have 11–186px of clearance and must not move:
+
+     1. min-height instead of height. Around 768px the copy is simply taller
+        than 434px, so the hero has to grow to make room. At 1024/1180 the
+        content fits and the hero stays exactly 434px. This also fixes a
+        pre-existing bug where the Google Play button was clipped away by
+        .hero-section's overflow:hidden at 768.
+     2. padding-bottom. Where the box grew it adds clearance 1:1; where it
+        still fits 434px (1180) a justify-content:center column lifts by Δ/2.
+        92 → 200 is sized for the WORST case in this range: at 768–900 the two
+        app-download buttons wrap onto two rows (130px tall instead of 58px),
+        which is what eats the space. Measured, not estimated — see the
+        "app-download buttons clear the white wave" test. */
+  .hero-section.section-blue,
+  .hero-section .section-inner {
+    height: auto;
+    min-height: var(--hero-height);
+  }
+
   .hero-copy {
-    padding-bottom: 92px;
+    padding-bottom: 200px;
   }
 
   .hero-stage {
@@ -4825,11 +4926,17 @@ body.game-open {
   animation: vp-fade 0.18s ease both;
 }
 
+/* On PC the card's px size is written by fitGameFrame() (app.js) so it is
+   exactly 16:9 at any window ratio — the 1280x720 iframe then scales in with
+   no letterbox and nothing clipped. Deliberately NOT `aspect-ratio` + width +
+   max-height: with a definite width the spec clamps the height and leaves the
+   width alone, which silently flattened the card on windows wider than 16:9.
+   The 90%/100% here is only the pre-JS fallback and the <=1180px path. */
 .game-modal-card {
   position: relative;
   display: flex;
-  width: 70vw;
-  height: 70vh;
+  width: 90%;
+  height: 90%;
   flex-direction: column;
   background: #1c1c1c;
   border-radius: var(--radius-card);
@@ -4842,11 +4949,26 @@ body.game-open {
 }
 
 /* 100% of the .game-modal container (inset: 0), not 100vw — the reserved
-   scrollbar gutter makes 100vw 15px wider than the visible area. */
+   scrollbar gutter makes 100vw 15px wider than the visible area. On PC
+   fitGameFrame() overrides these with the exact 16:9 px box. */
 .game-modal-card.game-maximized {
   width: 100%;
   height: 100%;
   border-radius: 0;
+}
+
+/* Applied for the single frame in which openGameModal() sizes the card, so the
+   modal appears at its final size instead of animating into it. */
+.game-modal-card.game-no-anim,
+.game-modal-card.game-no-anim #gameFrame {
+  transition: none;
+}
+
+/* Set by fitGameFrame() when the card is big enough to host the game at its
+   own size. transform:none (not scale(1)) so the frame isn't promoted to a
+   scaled composited layer at all — that promotion is what blurred the text. */
+.game-modal-card.game-frame-native #gameFrame {
+  transform: none;
 }
 
 /* Transparent overlay (no title strip) — the buttons float over the game
@@ -4923,13 +5045,44 @@ body.game-open {
   /* The control bar floats above, so the iframe fills the whole card. */
   position: absolute;
   inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
 }
 
+/* The game page has an INNER scroll container
+   (div.flex-1.min-h-0.overflow-y-auto) that overflows unless its viewport is
+   at least 1024x630 — the document itself never scrolls, which is why this
+   looked unreproducible at first. So the frame always gets at least that box.
+   These 1280x720 values are the SMALL-CARD fallback: fitGameFrame() (app.js)
+   overrides them with the card's own size whenever the card is big enough,
+   because scaling a cross-origin frame UP stretches its rasterised bitmap and
+   blurs the game. Don't drop below 1024x630 if this size is ever retuned. */
 #gameFrame {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 1280px;
+  height: 720px;
   border: 0;
+  transform: scale(var(--game-scale, 1));
+  transform-origin: center center;
+  /* Matches the card's width/height transition so Maximize/Restore animates
+     the box and the frame together — otherwise the frame snaps to its final
+     scale and gets clipped for those 200ms. */
+  transition: transform 0.2s ease;
+}
+
+/* No scale-to-fit on tablet/mobile: the game page is responsive, and forcing
+   the 1280px logical width onto a phone would scale it to ~0.3 and make it
+   unreadable. A small screen should get the game's own mobile layout.
+   ⚠ This block MUST stay AFTER the base #gameFrame rule — same specificity
+   (1,0,0), so source order decides. It originally sat in the earlier
+   max-width:1180px block and was silently dead. */
+@media (max-width: 1180px) {
+  #gameFrame {
+    width: 100%;
+    height: 100%;
+    transform: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6141,6 +6294,155 @@ body.bg-editing.bg-ghost .site-footer {
   color: #fff;
   font-size: 12px;
   pointer-events: none;
+}
+
+/* ==== Admin: 메인 히어로 배너 ============================================ */
+.admin-banner {
+  display: grid;
+  gap: 12px;
+  max-width: 720px;
+  font-family: var(--font-admin);
+}
+.admin-hint {
+  margin: 0;
+  color: var(--muted-ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.admin-banner-opts {
+  display: grid;
+  gap: 8px;
+}
+.admin-banner-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 13px;
+}
+.admin-banner-row > span {
+  min-width: 70px;
+  color: var(--muted-ink);
+}
+.admin-banner-row label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+.admin-banner-row input,
+.admin-banner-item input {
+  accent-color: var(--owl-green, #2e7d32);
+}
+.admin-banner-list {
+  display: grid;
+  gap: 8px;
+}
+.admin-banner-empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--hairline-strong);
+  border-radius: 10px;
+  color: var(--muted-ink);
+  font-size: 13px;
+  text-align: center;
+}
+.admin-banner-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: #fafafa;
+}
+.admin-banner-num {
+  min-width: 18px;
+  color: var(--muted-ink);
+  font-size: 13px;
+  text-align: center;
+}
+/* Checkerboard shows through transparent PNGs (same trick as the bg library). */
+.admin-banner-thumb {
+  width: 108px;
+  height: 46px;
+  flex: none;
+  border-radius: 6px;
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #eee 25%, transparent 25%),
+    linear-gradient(-45deg, #eee 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #eee 75%),
+    linear-gradient(-45deg, transparent 75%, #eee 75%);
+  background-size: 12px 12px;
+  background-position:
+    0 0,
+    0 6px,
+    6px -6px,
+    -6px 0;
+}
+.admin-banner-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  object-fit: cover;
+}
+.admin-banner-focus {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 auto;
+  font-size: 12px;
+}
+.admin-banner-focus > span {
+  color: var(--muted-ink);
+}
+.admin-banner-focus label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.admin-banner-acts {
+  display: flex;
+  gap: 4px;
+}
+.admin-banner-acts button {
+  min-width: 30px;
+  padding: 5px 7px;
+  border: 1px solid #ccc;
+  border-radius: 7px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.admin-banner-acts button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+#heroBannerUpload {
+  padding: 9px 12px;
+  border: 1px solid #ccc;
+  border-radius: 9px;
+  background: #fafafa;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.admin-banner-save {
+  justify-self: start;
+  padding: 9px 22px;
+  border: 1px solid var(--owl-green, #2e7d32);
+  border-radius: 9px;
+  background: var(--owl-green, #2e7d32);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .admin-bg-btn {

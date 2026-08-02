@@ -142,88 +142,101 @@
           aria-labelledby="homeTitle"
         >
           <div class="hero-section section-box section-blue">
-            <div class="section-inner hero-grid">
-              <div class="hero-copy">
-                <h1 id="homeTitle">
-                  <span class="hero-word">Brighter</span>
-                  <span class="hero-word">Thinking</span>
-                  <span class="hero-word">Better</span>
-                  <span class="hero-word">Learning</span>
-                </h1>
-                <div class="app-downloads" aria-label="App downloads">
-                  <a class="app-download-button" href="#levelSection">
-                    <svg
-                      class="app-download-icon"
-                      aria-hidden="true"
-                      viewBox="0 0 24 24"
-                      focusable="false"
-                    >
-                      <path
-                        d="M17.2 12.7c0-2 1.6-3 1.7-3.1-0.9-1.4-2.4-1.6-2.9-1.6-1.2-0.1-2.4 0.7-3 0.7s-1.6-0.7-2.6-0.7c-1.3 0-2.6 0.8-3.2 2-1.4 2.4-0.4 6 1 8 0.7 1 1.5 2.1 2.6 2.1 1 0 1.4-0.7 2.7-0.7 1.2 0 1.6 0.7 2.7 0.7 1.1 0 1.8-1 2.5-2 0.8-1.1 1.1-2.2 1.1-2.3-0.1 0-2.6-1-2.6-3.1Z"
-                      ></path>
-                      <path
-                        d="M15.2 6.7c0.6-0.7 1-1.7 0.9-2.7-0.9 0-1.9 0.6-2.5 1.3-0.6 0.7-1 1.7-0.9 2.6 0.9 0.1 1.9-0.5 2.5-1.2Z"
-                      ></path>
-                    </svg>
-                    <span>
-                      <small>Download on the</small>
-                      <strong>App Store</strong>
-                    </span>
-                  </a>
-                  <a class="app-download-button" href="#levelSection">
-                    <svg
-                      class="app-download-icon"
-                      aria-hidden="true"
-                      viewBox="0 0 24 24"
-                      focusable="false"
-                    >
-                      <path d="M4.5 3.8v16.4l8.6-8.2Z"></path>
-                      <path d="m14.2 10.9 2.4-2.3L6.8 3.3Z"></path>
-                      <path d="m14.2 13.1-7.4 7.6 9.8-5.3Z"></path>
-                      <path d="m15.7 12 2.9 2.8c0.9-0.5 0.9-1.1 0-1.6Z"></path>
-                    </svg>
-                    <span>
-                      <small>Get it on</small>
-                      <strong>Google Play</strong>
-                    </span>
-                  </a>
-                </div>
-              </div>
+            <!-- Slide layer (z-index:1). The default hero is slide 1 and stays
+                 in NORMAL FLOW, so it defines the hero height at every
+                 breakpoint; banner slides (added by hero-banner.js) overlay it
+                 with position:absolute; inset:0. The white wave below is a
+                 SEPARATE fixed layer (z-index:2) deliberately kept out of the
+                 slides, so a slide can animate freely without ever covering
+                 it. -->
+            <div class="hero-slides" id="heroSlides">
+              <div class="hero-slide hero-slide--default is-active">
+                <div class="section-inner hero-grid">
+                  <div class="hero-copy">
+                    <h1 id="homeTitle">
+                      <span class="hero-word">Brighter</span>
+                      <span class="hero-word">Thinking</span>
+                      <span class="hero-word">Better</span>
+                      <span class="hero-word">Learning</span>
+                    </h1>
+                    <div class="app-downloads" aria-label="App downloads">
+                      <a class="app-download-button" href="#levelSection">
+                        <svg
+                          class="app-download-icon"
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          focusable="false"
+                        >
+                          <path
+                            d="M17.2 12.7c0-2 1.6-3 1.7-3.1-0.9-1.4-2.4-1.6-2.9-1.6-1.2-0.1-2.4 0.7-3 0.7s-1.6-0.7-2.6-0.7c-1.3 0-2.6 0.8-3.2 2-1.4 2.4-0.4 6 1 8 0.7 1 1.5 2.1 2.6 2.1 1 0 1.4-0.7 2.7-0.7 1.2 0 1.6 0.7 2.7 0.7 1.1 0 1.8-1 2.5-2 0.8-1.1 1.1-2.2 1.1-2.3-0.1 0-2.6-1-2.6-3.1Z"
+                          ></path>
+                          <path
+                            d="M15.2 6.7c0.6-0.7 1-1.7 0.9-2.7-0.9 0-1.9 0.6-2.5 1.3-0.6 0.7-1 1.7-0.9 2.6 0.9 0.1 1.9-0.5 2.5-1.2Z"
+                          ></path>
+                        </svg>
+                        <span>
+                          <small>Download on the</small>
+                          <strong>App Store</strong>
+                        </span>
+                      </a>
+                      <a class="app-download-button" href="#levelSection">
+                        <svg
+                          class="app-download-icon"
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          focusable="false"
+                        >
+                          <path d="M4.5 3.8v16.4l8.6-8.2Z"></path>
+                          <path d="m14.2 10.9 2.4-2.3L6.8 3.3Z"></path>
+                          <path d="m14.2 13.1-7.4 7.6 9.8-5.3Z"></path>
+                          <path
+                            d="m15.7 12 2.9 2.8c0.9-0.5 0.9-1.1 0-1.6Z"
+                          ></path>
+                        </svg>
+                        <span>
+                          <small>Get it on</small>
+                          <strong>Google Play</strong>
+                        </span>
+                      </a>
+                    </div>
+                  </div>
 
-              <div
-                class="hero-stage"
-                aria-label="Cambridge Reading Adventures characters"
-              >
-                <div class="hero-rig">
-                  <img
-                    class="hero-image"
-                    src="assets/hero-rig-base.png"
-                    alt="Builder dad and child from Cambridge Reading Adventures"
-                  />
-                  <img
-                    class="hero-rig-part hero-rig-f-arm"
-                    src="assets/hero-rig-f-arm.png"
-                    alt=""
-                    aria-hidden="true"
-                  />
-                  <img
-                    class="hero-rig-part hero-rig-d-arm"
-                    src="assets/hero-rig-d-arm.png"
-                    alt=""
-                    aria-hidden="true"
-                  />
-                  <img
-                    class="hero-rig-part hero-rig-f-head"
-                    src="assets/hero-rig-f-head.png"
-                    alt=""
-                    aria-hidden="true"
-                  />
-                  <img
-                    class="hero-rig-part hero-rig-d-head"
-                    src="assets/hero-rig-d-head.png"
-                    alt=""
-                    aria-hidden="true"
-                  />
+                  <div
+                    class="hero-stage"
+                    aria-label="Cambridge Reading Adventures characters"
+                  >
+                    <div class="hero-rig">
+                      <img
+                        class="hero-image"
+                        src="assets/hero-rig-base.png"
+                        alt="Builder dad and child from Cambridge Reading Adventures"
+                      />
+                      <img
+                        class="hero-rig-part hero-rig-f-arm"
+                        src="assets/hero-rig-f-arm.png"
+                        alt=""
+                        aria-hidden="true"
+                      />
+                      <img
+                        class="hero-rig-part hero-rig-d-arm"
+                        src="assets/hero-rig-d-arm.png"
+                        alt=""
+                        aria-hidden="true"
+                      />
+                      <img
+                        class="hero-rig-part hero-rig-f-head"
+                        src="assets/hero-rig-f-head.png"
+                        alt=""
+                        aria-hidden="true"
+                      />
+                      <img
+                        class="hero-rig-part hero-rig-d-head"
+                        src="assets/hero-rig-d-head.png"
+                        alt=""
+                        aria-hidden="true"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -676,6 +689,13 @@
                 >
                   회원
                 </button>
+                <button
+                  type="button"
+                  class="admin-menu-btn"
+                  data-admin-view="banner"
+                >
+                  배너
+                </button>
               </nav>
               <div class="admin-bar">
                 <h1 class="admin-title" id="adminTitle">콘텐츠 관리</h1>
@@ -767,6 +787,143 @@
                     <input type="checkbox" id="signupToggle" />
                     <span>로그인 페이지에 공개 회원가입 폼 표시</span>
                   </label>
+                </div>
+              </div>
+
+              <!-- Banner view: hero banner carousel settings + image list.
+                   Rendered and wired by hero-banner.js; the list rows are
+                   built there from site_settings.hero_banner. -->
+              <div class="admin-view" id="adminViewBanner" hidden>
+                <div class="admin-banner">
+                  <h2 class="admin-subtitle">메인 히어로 배너</h2>
+                  <p class="admin-hint">
+                    1번 슬라이드는 항상 기본 히어로(문구 · 앱 버튼 ·
+                    캐릭터)입니다. 배너를 추가하면 아래 설정대로 자동
+                    전환됩니다. 유지 시간은 배너가
+                    <strong>완전히 보이는</strong>
+                    시간이고, 전환 시간은 그와 별개로 이전 배너와 겹쳐 넘어가는
+                    시간입니다.
+                  </p>
+
+                  <div class="admin-banner-opts">
+                    <div class="admin-banner-row">
+                      <span>전환 방식</span>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerMode"
+                          value="slide"
+                          checked
+                        />
+                        슬라이드
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerMode"
+                          value="fade"
+                        />
+                        페이드
+                      </label>
+                    </div>
+                    <div class="admin-banner-row">
+                      <span>전환 시간</span>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerDuration"
+                          value="1"
+                        />
+                        1초
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerDuration"
+                          value="2"
+                          checked
+                        />
+                        2초
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerDuration"
+                          value="3"
+                        />
+                        3초
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerDuration"
+                          value="4"
+                        />
+                        4초
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerDuration"
+                          value="5"
+                        />
+                        5초
+                      </label>
+                    </div>
+                    <div class="admin-banner-row">
+                      <span>유지 시간</span>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerInterval"
+                          value="3"
+                        />
+                        3초
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerInterval"
+                          value="5"
+                          checked
+                        />
+                        5초
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerInterval"
+                          value="7"
+                        />
+                        7초
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          name="heroBannerInterval"
+                          value="10"
+                        />
+                        10초
+                      </label>
+                    </div>
+                  </div>
+
+                  <button type="button" id="heroBannerUpload">
+                    배너 이미지 업로드 (PNG/JPG/WebP, 5MB)
+                  </button>
+                  <div class="admin-banner-list" id="heroBannerList"></div>
+                  <p
+                    class="admin-status"
+                    id="heroBannerStatus"
+                    aria-live="polite"
+                  ></p>
+                  <button
+                    type="button"
+                    class="admin-banner-save"
+                    id="heroBannerSave"
+                  >
+                    저장
+                  </button>
                 </div>
               </div>
             </div>
@@ -1480,5 +1637,6 @@
     <script src="supabase-config.js"></script>
     <script src="app.js"></script>
     <script src="background-editor.js"></script>
+    <script src="hero-banner.js"></script>
   </body>
 </html>

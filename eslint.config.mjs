@@ -1,8 +1,9 @@
 export default [
-  // background-editor.js is a classic script loaded after app.js, sharing its
-  // top-level lexical scope — those cross-file identifiers are globals here.
+  // background-editor.js and hero-banner.js are classic scripts loaded after
+  // app.js, sharing its top-level lexical scope — those cross-file identifiers
+  // are globals here.
   {
-    files: ["background-editor.js"],
+    files: ["background-editor.js", "hero-banner.js"],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "script",

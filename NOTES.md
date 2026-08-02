@@ -428,6 +428,105 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   `@` 오염이 없고 한국어·특수문자도 안전. PowerShell 5.1에서 멀티라인 커밋이 꼭 필요하면
   `git commit -F <tempfile>` (Bash `echo … > tmp && git commit -F tmp`)을 쓸 것.
 
+## 히어로 배너 캐러셀 (`hero-banner.js`)
+
+- **흰 곡선은 슬라이드 밖 고정 레이어다 (`2026-08-02`).** `.hero-section` 안에서
+  `.hero-slides`(z1) / `svg.hero-wave`(z2)로 분리했다. 슬라이드가 `transform`·`opacity`로
+  애니메이션하면 **자기 쌓임 맥락**을 만들어 내부 z-index가 밖으로 못 나가므로, 곡선을
+  슬라이드 안에 넣으면 복제·이음매 문제가 생긴다. 밖에 두는 것이 정답. **곡선을 슬라이드
+  안으로 옮기지 말 것.**
+- **기본 히어로 슬라이드는 normal flow에 남아야 한다.** `.hero-slide--default`가 히어로
+  높이를 정의하고 배너는 `absolute; inset:0`으로 그 박스를 채운다. 기본 슬라이드를
+  absolute로 바꾸면 히어로 높이가 0이 되고 모바일(`height:auto`)이 붕괴한다.
+- **애니메이션 CSS는 전부 `.hero-carousel--slide` / `--fade` 스코프 안에 둔다.** 배너가
+  0장이면 hero-banner.js가 이 클래스를 붙이지 않아 **transition·transform·쌓임 맥락이 전혀
+  생기지 않는다** → 배너 없는 상태는 기능 도입 전과 완전히 동일. 스코프 밖에 규칙을 쓰면
+  이 보장이 깨진다.
+- ⚠ **`.hero-copy`가 곡선 아래로 내려가면서 앱버튼 여백이 필수 조정 사항이 됐다.**
+  이전엔 `.hero-copy`가 z3으로 곡선 위에 그려져 겹쳐도 보였지만, 이제 슬라이드 레이어
+  안이라 **기하학적으로** 곡선을 피해야 한다. 조정 위치 2곳:
+  - 베이스 `.hero-copy { padding-bottom: 172px }` — **≥1181px에만 유효**(768~1180 블록과
+    ≤767 블록이 각각 덮어씀).
+  - `@media (min-width:768px) and (max-width:1180px)` 블록의
+    `.hero-section{height:auto; min-height:var(--hero-height)}` + `.hero-copy{padding-bottom:200px}`.
+    ⚠ **768~900에서는 앱버튼이 2줄로 감싸져 130px**(다른 폭은 58px)이 되는 것이 여유를
+    잡아먹는 진짜 원인이다. 이 구간 수치를 줄이려면 반드시 재실측할 것.
+    ⚠ 여백을 건드리는 규칙은 상한 없는 `@media (min-width:768px)` 블록이 아니라
+    **768~1180 블록**에 넣어야 한다 — 한 번 잘못 넣어 1920 히어로 높이가 434→464px로
+    늘어난 적 있다.
+- **여유 측정은 SVG 바운딩 박스가 아니라 path 샘플링으로.** 곡선의 흰 칠은 path 아래쪽만
+  차지하므로 `.hero-wave`의 rect로 재면 과대평가된다. `path.getPointAtLength` 이분탐색으로
+  버튼 x범위의 곡선 y를 구할 것(테스트에 `HERO_CLEARANCE` 헬퍼로 구현됨).
+  ⚠ **측정 전 `document.fonts.ready` + 리사이즈 후 안정화 대기 필수** — 폰트 로딩과 캐릭터
+  리그 리플로우 때문에 값이 최대 20px까지 흔들린다(이 때문에 초기 측정이 잘못 나왔었다).
+- **타이머 정지는 app.js를 안 건드리고 `body[data-screen]` MutationObserver로.**
+  `showScreen()`이 이미 이 속성을 쓴다. `visibilitychange`도 같은 핸들러를 재사용한다.
+- `site_settings.hero_banner` jsonb — `mode`/`interval`/`focus`는 전부 화이트리스트 폴백
+  (`normalizeHeroConfig`). 공개 데이터라 잘못된 값이 메인을 깨면 안 된다.
+- 배너 업로드는 **`backgrounds` 버킷의 `banners/` 프리픽스** (배경 편집기는 `library/`).
+  새 버킷·정책이 필요 없다.
+- ⚠ **`/`로 처음 들어오면 `body[data-screen]`이 없다.** `index.html`의 `#homeScreen`이
+  정적으로 `.screen-active`라 초기 로드에서는 `showScreen()`이 호출되지 않는다. 그래서
+  `heroOnHome()`은 **속성이 없는 경우도 홈으로 취급**해야 한다 — 이걸 빠뜨려 "새로고침으로
+  홈에 들어오면 캐러셀이 아예 안 도는" 버그가 있었다(`2026-08-02` 수정). `data-screen`으로
+  화면을 판별하는 새 코드는 전부 같은 함정을 조심할 것.
+- **전환 시간은 `--hero-transition` CSS 변수**(`hero-banner.js`가 주입, 1~5초). CSS의
+  600ms는 폴백일 뿐이다. 순환 주기는 **`duration + interval`** — "유지 시간"이 배너가
+  완전히 보이는 시간이라는 뜻이 되도록 한 것이고, 덕분에 긴 페이드가 짧은 유지 시간을
+  잡아먹는 조합을 따로 검증할 필요가 없다.
+
+## 게임 모달 (`#gameModal`)
+
+- **세로 스크롤의 원인은 문서가 아니라 게임 페이지 내부의 스크롤 컨테이너다
+  (`2026-08-02`).** `document.scrollHeight === clientHeight`가 모든 크기에서 참이라
+  문서 레벨 측정만으로는 **재현이 안 된다**. 진짜 범인은
+  `div.flex-1.min-h-0.overflow-y-auto` (Tailwind flex). 외부 페이지 스크롤을 조사할 때는
+  반드시 `overflow-y:auto|scroll` 인 **모든 요소**의 `scrollHeight - clientHeight`를 볼 것.
+- **임계값: iframe 뷰포트가 가로 ≥1024 AND 세로 ≥630이면 넘침이 사라진다.** 가로 1024는
+  Tailwind `lg:` 브레이크포인트로, 1023 이하로 떨어지면 레이아웃이 세로로 쌓여 **880px**
+  높이를 요구한다. 그래서 "모달을 조금 키우는" 식의 대응은 창 크기에 따라 다시 깨진다.
+- **해법 = 16:9 카드 + iframe에 항상 최소 1024×630 이상의 박스 보장.** `fitGameFrame()`
+  (app.js)이 카드 px를 계산하고 **`ResizeObserver`가 `#gameModal`을 관찰**한다.
+  ⚠ 폴백 크기 1280×720을 바꿀 거면 **1024×630 아래로 내리지 말 것.**
+- ⚠ **크로스오리진 iframe을 `transform: scale()`로 확대하지 말 것 (`2026-08-03` 버그).**
+  브라우저는 그런 iframe을 **자기 레이아웃 크기로 래스터화한 뒤 비트맵을 늘리므로**
+  배율 >1이면 그만큼 해상도가 날아간다. 1.24배에서 게임 글자가 눈에 띄게 번졌다
+  (같은 카드에서 A/B 크롭 비교로 확인). **축소(<1)는 무해하다** — 다운샘플링이다.
+  → `fitGameFrame()`은 카드 세로가 **660px(=630+여유) 이상이면 iframe을 카드 크기 그대로**
+  레이아웃하고 `.game-frame-native`로 **`transform:none`**, 그보다 작을 때만 1280×720 +
+  축소로 폴백한다. 16:9 카드에서는 세로만 보면 된다(세로 630이면 가로 1120 > 1024).
+  ⚠ 확대를 다시 도입하지 말 것 — "조금만 키우면 되지 않나"가 이 버그의 출발점이었다.
+- 테스트는 문자열 `transform:none`이 아니라 **계산된 매트릭스에서 배율을 파싱해** 단언한다.
+  최대화 전환 중에는 `transform`이 보간되어 `matrix(1,0,0,1,0,0)`으로 나오기 때문이다.
+  전환 대기는 **카드 rect + 프레임 transform이 두 샘플 연속 동일**할 때까지.
+- ⚠ **scale-to-fit은 PC(≥1181px)에만.** 게임 페이지는 반응형이라 모바일에서 1280px를
+  강제하면 배율이 0.3까지 떨어져 못 읽는다. `@media (max-width:1180px)`에서 iframe을
+  `100%/none`으로 되돌린다.
+- ⚠ **그 미디어 블록은 베이스 `#gameFrame` 규칙보다 뒤에 와야 한다.** 둘 다 `#id`
+  (1,0,0)이라 소스 순서로 결정된다 — 처음에 기존 `@media (max-width:1180px)` 블록(베이스
+  규칙보다 앞)에 넣었다가 **조용히 무시**되어 모바일에서도 1280×720이 적용됐다.
+- ⚠ **카드 크기를 `aspect-ratio`로 잡지 말 것 (`2026-08-02` 버그).**
+  `aspect-ratio:16/9; width:90%; max-height:90%`는 **창이 16:9보다 넓으면 깨진다** —
+  명세상 `width`가 확정값이면 비율로 높이를 구한 뒤 `max-height`가 높이만 자르고 **폭은
+  되줄어들지 않는다**. 카드가 납작해지는데 배율은 `cardWidth/1280`(폭 기준)이라 iframe이
+  카드보다 세로로 커지고 `overflow:hidden`이 게임 타이틀·스피커 아이콘을 잘라냈다
+  (1899×992에서 61px, 2560×1080에서 316px).
+  → **`fitGameFrame()`이 `min(box.w*fill/1280, box.h*fill/720)`으로 카드 px를 직접 계산**한다.
+  어떤 창 비율에서도 정확히 16:9다.
+- ⚠ **가용 공간은 `#gameModal`의 rect로 재라. `document.documentElement.clientWidth`는 아니다.**
+  `scrollbar-gutter: stable` 때문에 둘이 **15px 다르다**(1920 vs 1905). documentElement 값을
+  쓰면 최대화 카드가 컨테이너보다 넓어져 다시 비율이 깨진다. `100vw`도 같은 이유로 금지.
+- **첫 사이징은 `.game-no-anim`으로 트랜지션을 죽인 뒤 한다.** 컨테이너는 보여야 잴 수
+  있는데, 그냥 재면 CSS 폴백 크기(90%)에서 계산값으로 0.2초 애니메이션이 보인다.
+  `hidden=false` → `.game-no-anim` 추가 → `fitGameFrame()` → 강제 리플로우 → 클래스 제거.
+- `#gameFrame`에도 `transition: transform .2s`가 필요하다 — 최대화 애니메이션 동안 카드만
+  움직이고 배율이 즉시 튀면 그 0.2초간 다시 잘린다.
+- ⚠ **테스트 뷰포트는 반드시 16:9보다 넓은 것을 포함할 것.** 최초 테스트가
+  1920×1080(정확히 16:9) / 1440×900 / 1366×768 / 1280×720만 써서 **경계 위쪽을 한 번도
+  안 밟아** 이 버그를 통과시켰다. 지금은 1899×992 · 1920×900 · 2560×1080이 들어있다.
+  최대화 후 단언은 **고정 대기 대신 조건 대기**(카드 rect == 인라인 크기)로 — 워커 3개
+  병렬에서 300ms가 부족해 flake가 났다.
+
 ## 배경 편집기 (`background-editor.js`)
 
 - **요소 좌표계 = 콘텐츠 열 프레임 (`2026-07-26` 변경).** 요소의 `x`/`y`/`w` %는

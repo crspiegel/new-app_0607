@@ -1597,17 +1597,104 @@ const gameFrame = document.querySelector("#gameFrame");
 const gameMaxBtn = document.querySelector("#gameMax");
 const gameRestoreBtn = document.querySelector("#gameRestore");
 
+// Fallback layout size for the game iframe, used only when the card is too
+// small to give the game its own minimum box — see the #gameFrame comment in
+// styles.css.
+const GAME_FRAME_WIDTH = 1280;
+const GAME_FRAME_HEIGHT = 720;
+const GAME_SCALE_MIN_VIEWPORT = 1181; // below this the CSS uses a native iframe
+// The game's inner scroll container stops overflowing at >=1024x630. A 16:9
+// card 630 tall is already 1120 wide, so height alone decides; 660 adds ~5%
+// margin. Above this the iframe is laid out at the card's own size.
+const GAME_MIN_NATIVE_HEIGHT = 660;
+
+// The card is sized here rather than by CSS aspect-ratio. With a definite
+// `width` the spec computes the height from the ratio and then lets max-height
+// CLAMP it — the width never shrinks back — so on a window wider than 16:9 the
+// card came out flatter than 16:9 while --game-scale (width-based) kept scaling
+// the frame to the full width. The frame ended up taller than the card and
+// overflow:hidden clipped the game's title and speaker icon. Taking min() of
+// both axes is exact for any window ratio.
+function fitGameFrame() {
+  if (!gameModal || !gameModalCard) return;
+  if (window.innerWidth < GAME_SCALE_MIN_VIEWPORT) {
+    // Inline styles beat media queries, so these MUST be cleared or the
+    // <=1180px "fill the screen" rules never apply.
+    gameModalCard.style.removeProperty("width");
+    gameModalCard.style.removeProperty("height");
+    gameModalCard.style.removeProperty("--game-scale");
+    gameModalCard.classList.remove("game-frame-native");
+    if (gameFrame) {
+      gameFrame.style.removeProperty("width");
+      gameFrame.style.removeProperty("height");
+    }
+    return;
+  }
+  // Measure the container, NOT documentElement: with scrollbar-gutter:stable
+  // the fixed inset:0 box is ~15px narrower than documentElement.clientWidth,
+  // and using the wider number made the maximized card overflow its container
+  // (it clamped back to 1905px, breaking the 16:9 ratio).
+  const box = gameModal.getBoundingClientRect();
+  if (!box.width || !box.height) return; // still display:none
+  const fill = gameModalCard.classList.contains("game-maximized") ? 1 : 0.9;
+  const scale = Math.min(
+    (box.width * fill) / GAME_FRAME_WIDTH,
+    (box.height * fill) / GAME_FRAME_HEIGHT,
+  );
+  const cardWidth = GAME_FRAME_WIDTH * scale;
+  const cardHeight = GAME_FRAME_HEIGHT * scale;
+  gameModalCard.style.width = `${cardWidth}px`;
+  gameModalCard.style.height = `${cardHeight}px`;
+
+  // NEVER scale the iframe up. A cross-origin frame is rasterised at its own
+  // layout size and the parent just stretches that bitmap, so any scale > 1
+  // loses resolution — at 1.24x the game's text visibly blurred. When the card
+  // can host the game's minimum box, lay the frame out at the card's size and
+  // drop the transform entirely; only a card that's too small falls back to
+  // 1280x720 scaled DOWN, which stays sharp because it's downsampling.
+  if (cardHeight >= GAME_MIN_NATIVE_HEIGHT) {
+    if (gameFrame) {
+      gameFrame.style.width = `${cardWidth}px`;
+      gameFrame.style.height = `${cardHeight}px`;
+    }
+    gameModalCard.classList.add("game-frame-native");
+    gameModalCard.style.removeProperty("--game-scale");
+    return;
+  }
+  if (gameFrame) {
+    gameFrame.style.removeProperty("width");
+    gameFrame.style.removeProperty("height");
+  }
+  gameModalCard.classList.remove("game-frame-native");
+  gameModalCard.style.setProperty("--game-scale", String(scale));
+}
+
+// Observe the CONTAINER, not the card: the card's size is now written by
+// fitGameFrame(), so observing it would feed back into itself. #gameModal is
+// position:fixed inset:0, so it tracks the window exactly.
+if (gameModal && window.ResizeObserver) {
+  new window.ResizeObserver(fitGameFrame).observe(gameModal);
+}
+
 function setGameMaximized(maximized) {
   if (gameModalCard)
     gameModalCard.classList.toggle("game-maximized", maximized);
+  fitGameFrame();
 }
 
 function openGameModal(url) {
   if (!gameModal || !gameFrame) return;
   setGameMaximized(false);
   gameFrame.src = url;
-  gameModal.hidden = false;
   document.body.classList.add("game-open");
+  // The container has to be visible before it can be measured, so the first
+  // fit happens with transitions suppressed — otherwise the card would be seen
+  // animating from the CSS fallback size to the computed one on every open.
+  gameModal.hidden = false;
+  gameModalCard.classList.add("game-no-anim");
+  fitGameFrame();
+  void gameModalCard.offsetWidth; // flush the layout before re-enabling
+  gameModalCard.classList.remove("game-no-anim");
 }
 
 function closeGameModal() {
@@ -2062,8 +2149,14 @@ const adminMenuButtons = document.querySelectorAll(".admin-menu-btn");
 const adminViews = {
   content: document.querySelector("#adminViewContent"),
   members: document.querySelector("#adminViewMembers"),
+  // The banner panel's contents are rendered/wired by hero-banner.js.
+  banner: document.querySelector("#adminViewBanner"),
 };
-const adminViewTitles = { content: "콘텐츠 관리", members: "회원 관리" };
+const adminViewTitles = {
+  content: "콘텐츠 관리",
+  members: "회원 관리",
+  banner: "배너 관리",
+};
 
 function setAdminView(view) {
   Object.entries(adminViews).forEach(([name, el]) => {
