@@ -327,13 +327,24 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   that block had to be **promoted to `[data-month]`** to stay frozen. The same trap hit
   `#contentScreen .content-main-header{margin-bottom:6px}` in that block — also dead until promoted.
   Check specificity before assuming a breakpoint override on this element applies at all.
-- **PC lifts the banner onto the Back/Next row with negative margin (`@media min-width:1181px`:
-  `margin-top:-30px; margin-bottom:44px`).** 1181 is the boundary above the landscape-tablet block, so
-  tablets and phones are untouched. The −30/+30 pair is deliberate: the toolbar and board must not move
-  and `.section-inner`'s height (= the bg-element frame) must not change. ⚠ The banner BOX is full-width
-  (a stretched flex item), so a rect-overlap test against the nav buttons is meaningless — measure
-  `#contentLevelName` / `.content-banner-month strong` instead. Real clearance is ~360px per side at
-  1181px, the narrowest PC width.
+- **The banner is lifted onto the Back/Next row with a negative margin, per breakpoint.** Left alone it
+  is bottom-heavy — it is its own flex row under the Back/Next row, so the air above it (from the body's
+  top edge) is 60–70px while the gap down to the toolbar is 14px. Each shift is a **−N/+N pair**
+  (`margin-top:-N` + the same N added to `margin-bottom`) so the toolbar, the board and
+  `.section-inner`'s height (= the bg-element frame) never move:
+  | breakpoint | margin-top | margin-bottom | result (above/below) |
+  | --- | --- | --- | --- |
+  | PC `≥1181px` | −30 | 44 (14+30) | 40 / 44 |
+  | tablet `768–1180` | −28 | 42 (14+28) | 42 / 42 |
+  | tablet `768–1180` landscape | −26 | 32 (6+26) | 40 / 40 |
+  ⚠ The values differ because each breakpoint has its own `padding-top` / header + banner
+  `margin-bottom`; **recompute the pair rather than copying a number** when any of those change.
+  ⚠ The banner BOX is full-width (a stretched flex item), so a rect-overlap test against the nav buttons
+  is meaningless — measure `#contentLevelName` / `.content-banner-month strong` instead. Clearance is
+  175–366px per side on tablets and PC.
+- **Mobile (`<768px`) is deliberately NOT lifted** (60/14, still bottom-heavy). The nav buttons leave only
+  ~17px of horizontal clearance beside the banner there, so raising it onto their row would crowd them.
+  Fix that first if mobile centring is ever requested.
 - **Landscape tablet (Galaxy Tab S4 1138×712) reclaimed 50px for the artwork band.** The slack was above
   the board: `.content-toolbar` `margin-top:36→8` / `margin-bottom:16→10` (the biggest pocket by far),
   `.section-inner` `padding-top:20→10`, header + banner `margin-bottom` `8→6` each, `.lesson-board`

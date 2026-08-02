@@ -18,7 +18,20 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-진행 중인 작업 없음 (`2026-08-01` 아이콘 원형 배경 + 배너 한 줄 배치 배포 완료).
+- ⏭ **태블릿 배너 상하 여백 균등화 (`2026-08-02`) — 구현 완료, 로컬만 (미커밋).**
+  사용자 확인 → 요청 시 커밋·배포. 미커밋 변경: styles.css, NOTES.md,
+  PROJECT_MEMORY.md. **커밋 전 checkout/reset 금지.**
+  사용자 스샷 `008.png`(iPad 1024×768 가로): 레벨+월 라인이 아래 버튼그룹 쪽으로
+  치우쳐 보인다는 지적 — 실측 결과 위 여백 66~70px / 아래 14px로 아래쪽 편중.
+  PC와 동일한 **−N/+N 상쇄 기법**으로 태블릿에도 적용:
+  `768~1180` 블록 `margin-top:-28px; margin-bottom:42px`,
+  `768~1180 landscape` 블록 `margin-top:-26px; margin-bottom:32px`(자체 mb 6 + 26).
+  결과 — iPad 가로·Galaxy Tab 가로·1180px **40/40**, iPad 세로 **42/42** 균등.
+  툴바(212)·그리드(282)·하단 영역(78)·`.section-inner` 높이(578) **전부 불변** →
+  저장된 배경 요소 제자리. Back/Next와 겹침 없음(좌우 여유 175~366px).
+  PC는 40/44로 사실상 균등(요청대로 30px 적용한 결과) — 그대로 둠.
+  모바일은 **의도적으로 제외**(좌우 여유가 17px뿐이라 올리면 Back/Next와 붙음).
+  qa **57/57 green**.
 
 - **다음 사용자 작업(진행 예정):** 페이지2 하단 확보 공간에 배경 이미지 요소 배치
   테스트. PC 233px / 태블릿 가로 78px / 태블릿 세로 213px / 모바일 161px.

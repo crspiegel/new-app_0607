@@ -1736,6 +1736,18 @@ body:not(.subpage-active) main {
    font so one row still fits. Side padding 30px matches the tablet board's
    inner edges. */
 @media (min-width: 768px) and (max-width: 1180px) {
+  /* Tablets: centre the level+month line in the band between the body's top
+     edge and the toolbar. Unshifted it sits bottom-heavy (70px of air above,
+     14px below) because it is its own flex row under the Back/Next row. The
+     −28/+28 pair lifts it to 42/42 while leaving the toolbar, the board and
+     .section-inner's height (= the bg-element frame) exactly where they are.
+     Landscape re-does the sum with its own tighter margins — see the
+     orientation:landscape block. */
+  #contentScreen .content-level-banner {
+    margin-top: -28px;
+    margin-bottom: 42px;
+  }
+
   #contentScreen .content-toolbar.content-toolbar--wide {
     padding-left: 30px;
     padding-right: 30px;
@@ -2905,9 +2917,13 @@ body:not(.subpage-active) main {
   /* The one-row banner + 46px circle are now the base for every breakpoint;
      only the tighter gap/margin remain as genuine overrides here, so this short
      viewport keeps the exact geometry it shipped with. */
+  /* Landscape's own centring sum: 66px of air above the banner and 14px below
+     → −26px lifts it to 40/40. margin-bottom = this block's 6px + that 26px so
+     nothing below moves. */
   #contentScreen .content-level-banner {
     column-gap: 12px;
-    margin-bottom: 6px;
+    margin-top: -26px;
+    margin-bottom: 32px;
   }
 
   /* [data-month] again — the plain selector (1,1,0) loses to the base
