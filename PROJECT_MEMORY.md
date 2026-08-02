@@ -18,15 +18,50 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-진행 중인 작업 없음 — **세션 종료 정리 완료 (`2026-08-02`)**. 워킹 트리 클린,
-origin/master 동기화, `npm.cmd run check` + Playwright **57/57 green**, 두 도메인
-라이브 서빙 확인. 다음 세션은 아래 "다음 사용자 작업"부터 시작하면 된다.
+진행 중인 작업 없음. 직전 작업 = **배경 요소 "가로 100%"(전체 폭 밴드)** — 사용자 로컬
+검증 완료 후 커밋·push (`2026-08-02`). 상세는 아래 "페이지1·2 배경 요소 가로 100%"
+항목, gotcha는 NOTES.md 배경 편집기 섹션.
+
+⚠ **일괄 URL 입력 작업은 사용자 요청으로 취소됨 (`2026-08-02`).** 페이지2 game 버튼
+70개(Beginner `game`×10월 + Level 1~3 `game`/`game2`×10월)에
+`https://book-english-games.vercel.app/play/the-tractor`를 넣는 건이었으나 사용자가
+직접 처리하기로 함 — **DB 변경 없음**. 참고: `content_pages` 쓰기는 RLS
+`is_admin()`이라 관리자 로그인 세션 없이는 불가하고, 조회 시점(2026-08-02) 기준
+`Beginner/March`만 이미 해당 URL이 들어가 있었다.
 
 ⚠ **알려진 도구 이슈:** `scripts/run-playwright.mjs`가 포트 5173을 하드코딩 —
 `npm.cmd run dev`를 켜둔 채 `npm.cmd run qa`를 돌리면 테스트용 Vite가 5174로
 밀리고 Playwright(baseURL 5173)는 사용자 dev 서버에 붙어 워커 경합으로 간헐적
 30s 타임아웃이 난다. dev 서버를 끄고 qa를 돌리거나, `npm.cmd run check` +
 `npx.cmd playwright test`로 나눠 실행할 것 (이번 세션은 후자로 검증).
+
+- ✅ **페이지1·2 배경 요소 "가로 100%"(전체 폭 밴드) 구현 (`2026-08-02`):**
+  브레인스토밍 → 설계 승인 후 구현
+  (스펙: `docs/superpowers/specs/2026-08-02-background-full-width-band-design.md`).
+  하단 footer 영역에 화면 끝에서 끝까지 깔리는 배경 패턴을 만들 수 없다는 요청 —
+  요소 좌표계가 `.page-bg-el-frame`(콘텐츠 열)이라 `w:100`이 "콘텐츠 폭 100%"였다.
+  **요소별 플래그로 좌표계만 전환**: `fw:true`면 프레임이 아니라 `#pageBgLayer`
+  (= `.app-shell`, 뷰포트 가로 전체 · footer 바닥까지) 직속으로 렌더 → `width:100%`가
+  곧 페이지 가로 100%.
+  - **저장 필드 5개 추가**(jsonb, **마이그레이션 불필요**): `fw` / `fmode`(`stretch`
+    = 1장 확대 · `tile` = 가로 반복) / `anchor`(`bottom`·`top`) / `off`(px) / `th`(px).
+    세로를 %가 아니라 **앵커+px**로 잡은 게 핵심 — 페이지 높이가 기기마다 달라 %면
+    바닥 밀착이 깨진다. `anchor:"bottom", off:0` = 모든 기기에서 footer 바닥 밀착.
+  - `x/y/w/r`은 밴드에서 **무시하되 보존** → 체크 해제 시 원래 자리·크기로 정확히 복귀.
+    `r`(회전)은 밴드에 미적용(회전한 띠는 좌우 끝에 빈틈).
+  - **기존 동작 유지**: `fw` 없는 기존 저장 요소는 현행 경로 그대로. 유일하게 기존 렌더에
+    닿는 부분은 요소 `z-index` 명시(밴드가 프레임 밖이라 `[앞으로]/[뒤로]` 유지에 필요) —
+    이것만 넣으면 요소가 상단 스크림 위로 튀어나오므로 **`.has-full::after`에
+    `z-index:1000`을 함께** 부여해 원래 순서를 지켰다. 상세 → NOTES.md.
+  - **편집기**: `[선택한 요소]`에 `☑ 가로 100%` + 채우기(늘리기/가로 반복) + 세로 기준
+    (아래/위) 라디오. 체크 시 가까운 가장자리로 자동 앵커, 드래그는 세로만, tile은
+    자유 가장자리에 높이 핸들 1개, ↑/↓ 1px(Shift 10px). 앵커 전환 시 픽셀 위치 유지.
+  - **검증**: 실측 — 320/768/1024/1366/1920 전부 밴드 폭 == 레이어 폭, `off:0` 바닥 밀착
+    (gap<1px), tile 높이 90px 불변, stretch 원본 비율 유지. 3배율 스크린샷으로
+    **footer 카피라이트가 밴드 위에 렌더됨** 확인(레이어 z1 < main/footer z2).
+    qa **66/66 green**(신규 테스트 3종 × 3프로젝트).
+  - ⚠ 밴드는 footer 글자 **뒤**에 깔리므로, 무늬가 복잡한 이미지를 쓰면 카피라이트
+    가독성이 떨어질 수 있다(색은 레벨 테마색). 필요하면 밝은/저대비 패턴을 쓸 것.
 
 - ✅ **태블릿 배너 상하 여백 균등화 배포 완료 (`2026-08-02`):** 커밋 `e34a82c`
   push → Vercel 자동 배포. 두 도메인(new-app0607.vercel.app +

@@ -920,6 +920,57 @@
               요소 삭제
             </button>
           </div>
+          <!-- 가로 100%: renders this element across the whole page width
+               instead of the content column. The options only show once it
+               is on. -->
+          <div class="bg-el-band">
+            <label class="bg-el-check">
+              <input type="checkbox" id="bgBandToggle" />
+              <span>가로 100% (페이지 전체 폭)</span>
+              <button
+                type="button"
+                class="bg-help"
+                aria-label="도움말"
+                data-tip="요소를 페이지 가로 전체에 깝니다 (하단 footer 배경 패턴 등). 폭이 잠기므로 디바이스가 바뀌어도 항상 화면 끝에서 끝까지 채워집니다. 세로만 드래그해 위치를 잡으세요 — [세로 기준]으로 정한 가장자리에서의 거리(px)로 저장되어 어느 기기에서도 끝단이 고정됩니다. 체크를 해제하면 원래 크기·위치로 돌아갑니다."
+              >
+                ?
+              </button>
+            </label>
+            <div class="bg-el-band-opts" id="bgBandOpts" hidden>
+              <div class="bg-el-radio-row">
+                <span>채우기</span>
+                <label>
+                  <input
+                    type="radio"
+                    name="bgBandMode"
+                    value="stretch"
+                    checked
+                  />
+                  늘리기
+                </label>
+                <label>
+                  <input type="radio" name="bgBandMode" value="tile" />
+                  가로 반복
+                </label>
+              </div>
+              <div class="bg-el-radio-row">
+                <span>세로 기준</span>
+                <label>
+                  <input
+                    type="radio"
+                    name="bgBandAnchor"
+                    value="bottom"
+                    checked
+                  />
+                  아래
+                </label>
+                <label>
+                  <input type="radio" name="bgBandAnchor" value="top" />
+                  위
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="bg-editor-save">
           <div class="bg-editor-sec-head">

@@ -288,6 +288,7 @@ function getSlotLabel(level, month, slot) {
    month) where month '' = the level-wide default; a month row REPLACES the
    default entirely (no merging). data: { full, elements: [{ src, x, y, w, r,
    fx, z }] } — x/y = center %, w = width % of the layer, r = deg, fx = flip.
+   An element may instead be a FULL-WIDTH BAND (fw:true) — see styleBgBand.
    The layer paints the level tint itself while active so the main/footer
    tints can go transparent without a visible change (seamless body+footer). */
 const bgCache = {};
@@ -419,6 +420,41 @@ function sizeBgVideoCover() {
   iframe.style.height = `${Math.ceil(h)}px`;
 }
 
+/* ---- Full-width band elements (item.fw) --------------------------------
+   A band spans the whole PAGE width, so it renders in the layer box (which
+   is .app-shell: viewport width, down to the footer bottom) instead of the
+   content-column frame — that is what makes "가로 100%" mean the same thing
+   on every device. Its vertical placement is an anchored px offset
+   (anchor:"bottom"|"top" + off), NOT a % of the layer: page height changes a
+   lot per device, so a % would drift, while `bottom:0` keeps a footer
+   pattern flush with the page bottom everywhere.
+   fmode "stretch" = one image scaled to 100% width (height follows the
+   aspect ratio); "tile" = the image repeated on X at a fixed band height
+   (th), so the pattern keeps the same thickness on every device.
+   item.r is deliberately ignored — a rotated full-width strip leaves
+   triangular gaps at the edges, which breaks "always 100% wide". */
+const BG_BAND_TILE_HEIGHT = 120;
+
+function styleBgBand(node, item) {
+  node.style.left = "0";
+  node.style.width = "100%";
+  const off = Number(item.off) || 0;
+  if (item.anchor === "top") {
+    node.style.top = `${off}px`;
+    node.style.bottom = "auto";
+  } else {
+    node.style.bottom = `${off}px`;
+    node.style.top = "auto";
+  }
+  node.style.transform = `scaleX(${item.fx ? -1 : 1})`;
+  if (item.fmode === "tile") {
+    node.style.height = `${Number(item.th) || BG_BAND_TILE_HEIGHT}px`;
+    node.style.backgroundImage = `url("${item.src}")`;
+  } else {
+    node.style.height = "auto";
+  }
+}
+
 function applyPageBackground(screenName) {
   const layer = ensureBgLayer();
   const page = SCREEN_BG_PAGE[screenName];
@@ -452,21 +488,40 @@ function applyPageBackground(screenName) {
     sizeBgVideoCover();
   }
   const frame = positionBgElFrame(screenName);
+  // Bands live in the layer and normal elements in the frame, so DOM order
+  // alone can no longer express the stacking the admin arranged. An explicit
+  // z-index per element restores it across both parents: .page-bg-el-frame
+  // has z-index:auto (no stacking context), so its children compete in the
+  // layer's context alongside the bands. Starting at 1 keeps every element
+  // above .page-bg-full / .page-bg-video exactly as the old DOM order did;
+  // the has-full scrim carries a much higher z-index so it still paints on
+  // top of elements the way it always has.
   [...(entry.elements || [])]
     .sort((a, b) => (a.z || 0) - (b.z || 0))
-    .forEach((item) => {
-      const img = document.createElement("img");
-      img.className = "page-bg-el";
-      img.alt = "";
-      img.draggable = false;
-      img.src = item.src;
-      img.style.left = `${item.x}%`;
-      img.style.top = `${item.y}%`;
-      img.style.width = `${item.w}%`;
-      img.style.transform = `translate(-50%, -50%) rotate(${item.r || 0}deg) scaleX(${item.fx ? -1 : 1})`;
-      // A deleted library file must never break the page — drop just the img.
-      img.addEventListener("error", () => img.remove());
-      frame.append(img);
+    .forEach((item, index) => {
+      const tile = Boolean(item.fw) && item.fmode === "tile";
+      // A CSS-painted tile can't report a load failure; a plain <img> can, and
+      // a deleted library file must never break the page — drop just the node.
+      const node = document.createElement(tile ? "div" : "img");
+      node.className = item.fw ? "page-bg-el page-bg-band" : "page-bg-el";
+      if (tile) node.classList.add("page-bg-band--tile");
+      if (!tile) {
+        node.alt = "";
+        node.draggable = false;
+        node.src = item.src;
+        node.addEventListener("error", () => node.remove());
+      }
+      node.style.zIndex = String(index + 1);
+      if (item.fw) {
+        styleBgBand(node, item);
+        layer.append(node);
+        return;
+      }
+      node.style.left = `${item.x}%`;
+      node.style.top = `${item.y}%`;
+      node.style.width = `${item.w}%`;
+      node.style.transform = `translate(-50%, -50%) rotate(${item.r || 0}deg) scaleX(${item.fx ? -1 : 1})`;
+      frame.append(node);
     });
 }
 
@@ -2628,6 +2683,8 @@ window.craBg = {
   getBackgroundEntry,
   applyPageBackground,
   positionBgElFrame,
+  styleBgBand,
+  BG_BAND_TILE_HEIGHT,
   parseBgVideoUrl,
   buildBgVideoLayer,
   sizeBgVideoCover,

@@ -26,6 +26,14 @@ const bgVideoInput = document.querySelector("#bgVideoUrl");
 const bgVideoApply = document.querySelector("#bgVideoApply");
 const bgVideoClear = document.querySelector("#bgVideoClear");
 const bgElTools = document.querySelector("#bgElTools");
+const bgBandToggle = document.querySelector("#bgBandToggle");
+const bgBandOpts = document.querySelector("#bgBandOpts");
+const bgBandModeInputs = [
+  ...document.querySelectorAll('input[name="bgBandMode"]'),
+];
+const bgBandAnchorInputs = [
+  ...document.querySelectorAll('input[name="bgBandAnchor"]'),
+];
 const bgSaveMonth = document.querySelector("#bgSaveMonth");
 const bgSaveDefault = document.querySelector("#bgSaveDefault");
 const bgDeleteOverride = document.querySelector("#bgDeleteOverride");
@@ -253,9 +261,18 @@ function renderBgEditCanvas() {
   bgVideoClear.hidden = !bgEdit.data.videoUrl;
   const frame = bgElFrame();
   bgEdit.data.elements.forEach((item, index) => {
-    frame.append(bgEditShell(item, index));
+    // Full-width bands are page-wide, so they hang off the layer just like
+    // in the viewer; only free elements belong to the content frame.
+    (item.fw ? layer : frame).append(bgEditShell(item, index));
   });
   bgElTools.hidden = bgEdit.selected < 0;
+  syncBandControls();
+}
+
+// Shells live in two different parents now, so a NodeList index no longer
+// matches the element index — look them up by the index they carry.
+function bgShellAt(index) {
+  return bgLayer().querySelector(`.bg-edit-el[data-bg-index="${index}"]`);
 }
 
 // Keep at most one video preview node alive across canvas rebuilds; rebuild
@@ -283,6 +300,22 @@ function bgEditShell(item, index) {
   const shell = document.createElement("div");
   shell.className = "bg-edit-el";
   if (index === bgEdit.selected) shell.classList.add("selected");
+  shell.dataset.bgIndex = String(index);
+  // Same explicit stacking as the viewer: bands sit in the layer and free
+  // elements in the frame, so DOM order alone can't express the arrangement.
+  shell.style.zIndex = String(index + 1);
+  if (item.fw) fillBgBandShell(shell, item, index);
+  else fillBgFreeShell(shell, item, index);
+  shell.addEventListener("pointerdown", (event) => {
+    if (event.target.classList.contains("bg-edit-handle")) return;
+    selectBgElement(index);
+    startBgDrag(event, index, "move");
+  });
+  return shell;
+}
+
+// Free element: center-% geometry inside the content frame, all three handles.
+function fillBgFreeShell(shell, item, index) {
   shell.style.left = `${item.x}%`;
   shell.style.top = `${item.y}%`;
   shell.style.width = `${item.w}%`;
@@ -293,23 +326,41 @@ function bgEditShell(item, index) {
   img.draggable = false;
   img.style.transform = `scaleX(${item.fx ? -1 : 1})`;
   shell.append(img);
-  if (index === bgEdit.selected) {
-    const resize = document.createElement("span");
-    resize.className = "bg-edit-handle bg-edit-resize";
-    resize.title = "크기";
-    const rotate = document.createElement("span");
-    rotate.className = "bg-edit-handle bg-edit-rotate";
-    rotate.title = "회전";
-    shell.append(resize, rotate);
-    wireBgHandle(resize, index, "resize");
-    wireBgHandle(rotate, index, "rotate");
+  if (index !== bgEdit.selected) return;
+  const resize = document.createElement("span");
+  resize.className = "bg-edit-handle bg-edit-resize";
+  resize.title = "크기";
+  const rotate = document.createElement("span");
+  rotate.className = "bg-edit-handle bg-edit-rotate";
+  rotate.title = "회전";
+  shell.append(resize, rotate);
+  wireBgHandle(resize, index, "resize");
+  wireBgHandle(rotate, index, "rotate");
+}
+
+// Full-width band: exactly the viewer geometry (styleBgBand), so the canvas
+// stays WYSIWYG. The width is locked to the page, so there is no resize or
+// rotate handle; a tile band gets ONE height handle, on the edge opposite its
+// anchor, so the edge being dragged is the one that follows the pointer.
+function fillBgBandShell(shell, item, index) {
+  if (item.fmode === "tile") {
+    shell.classList.add("bg-edit-band--tile");
+  } else {
+    const img = document.createElement("img");
+    img.src = item.src;
+    img.alt = "";
+    img.draggable = false;
+    shell.append(img);
   }
-  shell.addEventListener("pointerdown", (event) => {
-    if (event.target.classList.contains("bg-edit-handle")) return;
-    selectBgElement(index);
-    startBgDrag(event, index, "move");
-  });
-  return shell;
+  window.craBg.styleBgBand(shell, item);
+  if (index !== bgEdit.selected || item.fmode !== "tile") return;
+  const size = document.createElement("span");
+  size.className = `bg-edit-handle bg-edit-band-size ${
+    item.anchor === "top" ? "at-bottom" : "at-top"
+  }`;
+  size.title = "밴드 높이";
+  shell.append(size);
+  wireBgHandle(size, index, "band-size");
 }
 
 function selectBgElement(index) {
@@ -384,12 +435,33 @@ function enterBgEdit() {
 // on pointerdown is safe: the live shell is re-queried AFTER it. During the
 // drag only that shell's inline styles (and a value badge) are updated —
 // rebuilding the whole layer per pointermove caused visible churn.
+// Live value badge, shared by the free-element and band drags.
+let bgBadge = null;
+function showBgBadge(move, text) {
+  if (!bgBadge) {
+    bgBadge = document.createElement("div");
+    bgBadge.className = "bg-edit-badge";
+    document.body.append(bgBadge);
+  }
+  bgBadge.style.left = `${move.clientX + 14}px`;
+  bgBadge.style.top = `${move.clientY + 14}px`;
+  bgBadge.textContent = text;
+}
+function hideBgBadge() {
+  if (bgBadge) bgBadge.remove();
+  bgBadge = null;
+}
+
 function startBgDrag(event, index, mode) {
   event.preventDefault();
   const item = bgEdit.data.elements[index];
+  if (item.fw) {
+    startBgBandDrag(event, index, mode);
+    return;
+  }
   // % geometry is relative to the content-anchored frame, not the layer.
   const rect = bgElFrame().getBoundingClientRect();
-  const shell = bgLayer().querySelectorAll(".bg-edit-el")[index];
+  const shell = bgShellAt(index);
   const startX = event.clientX;
   const startY = event.clientY;
   const start = { x: item.x, y: item.y, w: item.w, r: item.r || 0 };
@@ -402,19 +474,7 @@ function startBgDrag(event, index, mode) {
     Math.hypot(startX - centerPx.x, startY - centerPx.y),
   );
   const startAngle = Math.atan2(startY - centerPx.y, startX - centerPx.x);
-  let badge = null;
   let moved = false;
-
-  function showBadge(move, text) {
-    if (!badge) {
-      badge = document.createElement("div");
-      badge.className = "bg-edit-badge";
-      document.body.append(badge);
-    }
-    badge.style.left = `${move.clientX + 14}px`;
-    badge.style.top = `${move.clientY + 14}px`;
-    badge.textContent = text;
-  }
 
   function onMove(move) {
     if (!moved) {
@@ -433,7 +493,7 @@ function startBgDrag(event, index, mode) {
         move.clientY - centerPx.y,
       );
       item.w = Math.min(200, Math.max(2, start.w * (dist / startDist)));
-      showBadge(move, `${Math.round(item.w)}%`);
+      showBgBadge(move, `${Math.round(item.w)}%`);
     } else {
       const angle = Math.atan2(
         move.clientY - centerPx.y,
@@ -443,7 +503,7 @@ function startBgDrag(event, index, mode) {
       // Web-builder convention: Shift snaps rotation to 15° steps.
       if (move.shiftKey) deg = Math.round(deg / 15) * 15;
       item.r = Math.round(deg);
-      showBadge(move, `${((item.r % 360) + 360) % 360}°`);
+      showBgBadge(move, `${((item.r % 360) + 360) % 360}°`);
     }
     if (shell) {
       shell.style.left = `${item.x}%`;
@@ -456,8 +516,52 @@ function startBgDrag(event, index, mode) {
     document.removeEventListener("pointermove", onMove);
     document.removeEventListener("pointerup", onUp);
     document.removeEventListener("pointercancel", onUp);
-    if (badge) badge.remove();
+    hideBgBadge();
     // One clean re-render so handles/outline resync with the final geometry.
+    if (moved) renderBgEditCanvas();
+  }
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerup", onUp);
+  document.addEventListener("pointercancel", onUp);
+}
+
+// Bands only move on Y — the width is locked to the page — and only resize by
+// band height. Both values are px measured from the anchored edge, which is
+// exactly how they're stored, so the drag needs no unit conversion. The sign
+// flips with the anchor so the grabbed edge always follows the pointer:
+// on a bottom-anchored band, dragging UP increases the distance from the
+// bottom (and, on the top handle, the height).
+function startBgBandDrag(event, index, mode) {
+  const item = bgEdit.data.elements[index];
+  const shell = bgShellAt(index);
+  const startY = event.clientY;
+  const start = {
+    off: Number(item.off) || 0,
+    th: Number(item.th) || window.craBg.BG_BAND_TILE_HEIGHT,
+  };
+  const dir = item.anchor === "top" ? 1 : -1;
+  let moved = false;
+
+  function onMove(move) {
+    if (!moved) {
+      moved = true;
+      bgMarkDirty();
+    }
+    const delta = (move.clientY - startY) * dir;
+    if (mode === "band-size") {
+      item.th = Math.min(2000, Math.max(8, Math.round(start.th + delta)));
+      showBgBadge(move, `${item.th}px`);
+    } else {
+      item.off = Math.min(4000, Math.max(-4000, Math.round(start.off + delta)));
+      showBgBadge(move, `${item.off}px`);
+    }
+    if (shell) window.craBg.styleBgBand(shell, item);
+  }
+  function onUp() {
+    document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
+    document.removeEventListener("pointercancel", onUp);
+    hideBgBadge();
     if (moved) renderBgEditCanvas();
   }
   document.addEventListener("pointermove", onMove);
@@ -480,7 +584,10 @@ bgElTools.addEventListener("click", (event) => {
   if (act === "flip") els[index].fx = !els[index].fx;
   if (act === "dup") {
     // Slight offset so the copy is visibly a new element, then select it.
-    const copy = { ...els[index], x: els[index].x + 3, y: els[index].y + 3 };
+    // A band ignores x/y, so nudge the one axis it does use instead.
+    const copy = els[index].fw
+      ? { ...els[index], off: (Number(els[index].off) || 0) + 12 }
+      : { ...els[index], x: els[index].x + 3, y: els[index].y + 3 };
     els.splice(index + 1, 0, copy);
     bgEdit.selected = index + 1;
   }
@@ -499,6 +606,86 @@ bgElTools.addEventListener("click", (event) => {
   }
   bgMarkDirty();
   renderBgEditCanvas();
+});
+
+/* ---- 가로 100% (full-width band) controls ------------------------------- */
+
+// Mirror the selected element's band settings into the panel.
+function syncBandControls() {
+  const item = bgEdit.data.elements[bgEdit.selected];
+  if (!item) return;
+  bgBandToggle.checked = Boolean(item.fw);
+  bgBandOpts.hidden = !item.fw;
+  const mode = item.fmode === "tile" ? "tile" : "stretch";
+  bgBandModeInputs.forEach((input) => {
+    input.checked = input.value === mode;
+  });
+  const anchor = item.anchor === "top" ? "top" : "bottom";
+  bgBandAnchorInputs.forEach((input) => {
+    input.checked = input.value === anchor;
+  });
+}
+
+// Turning 가로 100% ON keeps the element roughly where it already is: anchor
+// to whichever page edge is nearer and store that distance in px. x/y/w/r are
+// left untouched, so unchecking restores the original placement exactly.
+bgBandToggle.addEventListener("change", () => {
+  const item = bgEdit.data.elements[bgEdit.selected];
+  if (!item) return;
+  if (!bgBandToggle.checked) {
+    item.fw = false;
+  } else {
+    const shell = bgShellAt(bgEdit.selected);
+    const layerRect = bgLayer().getBoundingClientRect();
+    const rect = shell ? shell.getBoundingClientRect() : layerRect;
+    const fromBottom = layerRect.bottom - rect.bottom;
+    const fromTop = rect.top - layerRect.top;
+    item.fw = true;
+    item.fmode = item.fmode === "tile" ? "tile" : "stretch";
+    item.anchor = fromBottom <= fromTop ? "bottom" : "top";
+    item.off = Math.max(
+      0,
+      Math.round(item.anchor === "bottom" ? fromBottom : fromTop),
+    );
+    item.th =
+      Math.max(8, Math.round(rect.height)) || window.craBg.BG_BAND_TILE_HEIGHT;
+  }
+  bgMarkDirty();
+  renderBgEditCanvas();
+});
+
+bgBandModeInputs.forEach((input) => {
+  input.addEventListener("change", () => {
+    const item = bgEdit.data.elements[bgEdit.selected];
+    if (!item || !input.checked) return;
+    item.fmode = input.value;
+    if (item.fmode === "tile" && !item.th)
+      item.th = window.craBg.BG_BAND_TILE_HEIGHT;
+    bgMarkDirty();
+    renderBgEditCanvas();
+  });
+});
+
+bgBandAnchorInputs.forEach((input) => {
+  input.addEventListener("change", () => {
+    const item = bgEdit.data.elements[bgEdit.selected];
+    if (!item || !input.checked) return;
+    // Re-measure first so switching the anchor doesn't teleport the band:
+    // the pixels stay put, they're just expressed from the other edge.
+    const shell = bgShellAt(bgEdit.selected);
+    if (shell) {
+      const rect = shell.getBoundingClientRect();
+      const layerRect = bgLayer().getBoundingClientRect();
+      item.off = Math.round(
+        input.value === "top"
+          ? rect.top - layerRect.top
+          : layerRect.bottom - rect.bottom,
+      );
+    }
+    item.anchor = input.value;
+    bgMarkDirty();
+    renderBgEditCanvas();
+  });
 });
 
 bgFullClear.addEventListener("click", () => {
@@ -677,7 +864,15 @@ document.addEventListener("keydown", (event) => {
   const nudge = event.shiftKey ? 2 : 0.5;
   const item = els[index];
   let handled = true;
-  if (event.key === "ArrowLeft") item.x = Math.max(-50, item.x - nudge);
+  if (item.fw) {
+    // Bands move on Y only, in px. `off` grows AWAY from its anchored edge,
+    // so "up on screen" adds for a bottom anchor and subtracts for a top one.
+    const step = (event.shiftKey ? 10 : 1) * (item.anchor === "top" ? -1 : 1);
+    const off = Number(item.off) || 0;
+    if (event.key === "ArrowUp") item.off = off + step;
+    else if (event.key === "ArrowDown") item.off = off - step;
+    else handled = false;
+  } else if (event.key === "ArrowLeft") item.x = Math.max(-50, item.x - nudge);
   else if (event.key === "ArrowRight") item.x = Math.min(150, item.x + nudge);
   else if (event.key === "ArrowUp") item.y = Math.max(-50, item.y - nudge);
   else if (event.key === "ArrowDown") item.y = Math.min(150, item.y + nudge);

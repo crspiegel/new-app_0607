@@ -5639,6 +5639,14 @@ body.page-bg-active .page-bg-layer {
   left: 0;
   right: 0;
   height: 382px;
+  /* ::after is the layer's LAST child, so with everything on z-index:auto the
+     scrim already painted above the elements purely by tree order. Elements
+     now carry an explicit z-index (applyPageBackground — needed because
+     full-width bands live outside .page-bg-el-frame), which would have
+     lifted them over the scrim and changed how existing pages look. This
+     keeps the old order: far above any element index, still below the page
+     content (main/.site-footer are z-index:2 OUTSIDE this layer's context). */
+  z-index: 1000;
   pointer-events: none;
   background: linear-gradient(
     to bottom,
@@ -5669,6 +5677,21 @@ body.page-bg-active #monthLevelTag {
   position: absolute;
   height: auto;
   user-select: none;
+}
+/* Full-width band (element.fw): a page-wide strip — e.g. a footer pattern.
+   It is a child of the LAYER, not .page-bg-el-frame, so 100% here is the
+   page width on every device; app.js styleBgBand() sets the anchored px
+   offset (bottom/top) that keeps it flush with the page edge. The tile
+   variant repeats on X at a fixed band height, so the pattern keeps the same
+   thickness whatever the viewport width. */
+.page-bg-band {
+  left: 0;
+  width: 100%;
+}
+.page-bg-band--tile {
+  background-repeat: repeat-x;
+  background-size: auto 100%;
+  background-position: left top;
 }
 body.page-bg-active main,
 body.page-bg-active .site-footer {
@@ -5885,6 +5908,47 @@ body.bg-editing .bg-edit-fab {
 .bg-editor-el-tools .bg-el-delete {
   grid-column: 1 / -1;
 }
+/* 가로 100% (full-width band) controls — the two radio rows only appear once
+   the checkbox is on, so a normal element's panel looks exactly as before. */
+.bg-el-band {
+  margin-top: 10px;
+  display: grid;
+  gap: 6px;
+}
+.bg-el-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.bg-el-check input {
+  accent-color: var(--owl-green, #2e7d32);
+}
+.bg-el-band-opts {
+  display: grid;
+  gap: 4px;
+  padding-left: 20px;
+}
+.bg-el-radio-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.bg-el-radio-row > span {
+  min-width: 54px;
+  color: #666;
+}
+.bg-el-radio-row label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.bg-el-radio-row input {
+  accent-color: var(--owl-green, #2e7d32);
+}
 .bg-editor-save {
   margin-top: 16px;
   display: grid;
@@ -6044,6 +6108,28 @@ body.bg-editing.bg-ghost .site-footer {
   width: 2px;
   height: 10px;
   background: #1f5fa8;
+}
+/* Full-width band shells mirror the viewer geometry (see .page-bg-band). The
+   width is locked, so stretch bands get no handle at all; tile bands get one
+   height handle on their FREE edge — the edge opposite the anchor, so the
+   grabbed edge always follows the pointer. Centering it on X makes it immune
+   to the scaleX(-1) flip the shell may carry. */
+.bg-edit-band--tile {
+  background-repeat: repeat-x;
+  background-size: auto 100%;
+  background-position: left top;
+}
+.bg-edit-band-size {
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 3px;
+  cursor: ns-resize;
+}
+.bg-edit-band-size.at-top {
+  top: -10px;
+}
+.bg-edit-band-size.at-bottom {
+  bottom: -10px;
 }
 /* Live value badge (width % while resizing / angle while rotating). */
 .bg-edit-badge {

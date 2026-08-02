@@ -183,6 +183,272 @@ test("seeded background renders full image and elements, month row wins", async 
   await expect(page.locator("#pageBgLayer")).not.toHaveClass(/has-full/);
 });
 
+test("full-width band elements span the page on every viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto("/#content/Level%201/March");
+  await resetBgCache(page);
+  await page.evaluate(() => {
+    const { bgCache, bgKey, applyPageBackground } = window.craBg;
+    bgCache[bgKey("Level 1", "page2", "")] = {
+      full: null,
+      elements: [
+        // A footer pattern: repeated on X, flush with the page bottom.
+        {
+          src: "assets/l1-march-book-1.jpg",
+          x: 50,
+          y: 40,
+          w: 20,
+          r: 0,
+          fx: false,
+          z: 0,
+          fw: true,
+          fmode: "tile",
+          anchor: "bottom",
+          off: 0,
+          th: 90,
+        },
+        // A stretched strip pinned 24px below the top of the page.
+        {
+          src: "assets/l1-march-book-2.jpg",
+          x: 50,
+          y: 40,
+          w: 20,
+          r: 0,
+          fx: false,
+          z: 1,
+          fw: true,
+          fmode: "stretch",
+          anchor: "top",
+          off: 24,
+        },
+      ],
+    };
+    applyPageBackground("content");
+  });
+  await expect(page.locator("#pageBgLayer .page-bg-band")).toHaveCount(2);
+  // The stretch band is a real <img>; wait for it so the aspect check is real.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const img = document.querySelector("#pageBgLayer img.page-bg-band");
+        return img ? img.naturalWidth : 0;
+      }),
+    )
+    .toBeGreaterThan(0);
+
+  // The whole point of the feature: the band tracks the PAGE width, so a
+  // device change never leaves a gap or forces a re-size by hand.
+  for (const width of [320, 768, 1024, 1366, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    const geom = await page.evaluate(() => {
+      const layer = document.querySelector("#pageBgLayer");
+      const tile = document.querySelector("#pageBgLayer .page-bg-band--tile");
+      const img = document.querySelector("#pageBgLayer img.page-bg-band");
+      const l = layer.getBoundingClientRect();
+      const t = tile.getBoundingClientRect();
+      const s = img.getBoundingClientRect();
+      return {
+        widthDeltaTile: Math.abs(t.width - l.width),
+        widthDeltaStretch: Math.abs(s.width - l.width),
+        // anchor "bottom" + off 0 → the band's bottom IS the page bottom.
+        gapToBottom: Math.abs(l.bottom - t.bottom),
+        gapToTop: s.top - l.top,
+        tileHeight: t.height,
+        repeat: getComputedStyle(tile).backgroundRepeat,
+        ratio: s.width / s.height,
+        naturalRatio: img.naturalWidth / img.naturalHeight,
+        // A band must never rise above the page content it decorates.
+        bandZ: Number(getComputedStyle(tile).zIndex),
+        layerZ: Number(getComputedStyle(layer).zIndex),
+        mainZ: Number(getComputedStyle(document.querySelector("main")).zIndex),
+      };
+    });
+    expect(geom.widthDeltaTile).toBeLessThan(1);
+    expect(geom.widthDeltaStretch).toBeLessThan(1);
+    expect(geom.gapToBottom).toBeLessThan(1);
+    expect(Math.abs(geom.gapToTop - 24)).toBeLessThan(1);
+    // A tile band is a fixed px strip — same thickness on phone and desktop.
+    expect(Math.abs(geom.tileHeight - 90)).toBeLessThan(1);
+    expect(geom.repeat).toBe("repeat-x");
+    // A stretch band keeps the source aspect ratio at every width.
+    expect(Math.abs(geom.ratio - geom.naturalRatio)).toBeLessThan(0.02);
+    // Bands are sealed inside the layer's stacking context (z-index 1), which
+    // main/.site-footer (z-index 2) always outrank.
+    expect(geom.bandZ).toBeGreaterThan(0);
+    expect(geom.layerZ).toBeLessThan(geom.mainZ);
+  }
+});
+
+test("explicit element z-index keeps the saved order and the scrim on top", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%201/March");
+  await resetBgCache(page);
+  const order = await page.evaluate(() => {
+    const { bgCache, bgKey, applyPageBackground } = window.craBg;
+    bgCache[bgKey("Level 1", "page2", "")] = {
+      full: "assets/l1-march-book-1.jpg",
+      elements: [
+        {
+          src: "assets/l1-march-book-1.jpg",
+          x: 30,
+          y: 30,
+          w: 10,
+          r: 0,
+          fx: false,
+          z: 0,
+        },
+        {
+          src: "assets/l1-march-book-2.jpg",
+          x: 60,
+          y: 30,
+          w: 10,
+          r: 0,
+          fx: false,
+          z: 1,
+        },
+      ],
+    };
+    applyPageBackground("content");
+    const els = [...document.querySelectorAll("#pageBgLayer .page-bg-el")];
+    return {
+      zIndexes: els.map((el) => getComputedStyle(el).zIndex),
+      srcOrder: els.map((el) => el.getAttribute("src").split("/").pop()),
+      inFrame: els.map((el) => Boolean(el.closest(".page-bg-el-frame"))),
+      scrimZ: Number(
+        getComputedStyle(document.querySelector("#pageBgLayer"), "::after")
+          .zIndex,
+      ),
+    };
+  });
+  // Ascending z mirrors the saved order, so [앞으로]/[뒤로] still works even
+  // though bands and free elements now live in different parents.
+  expect(order.zIndexes).toEqual(["1", "2"]);
+  expect(order.srcOrder).toEqual([
+    "l1-march-book-1.jpg",
+    "l1-march-book-2.jpg",
+  ]);
+  // Free elements stay in the content-anchored frame — unchanged behaviour.
+  expect(order.inFrame).toEqual([true, true]);
+  // Regression guard: before elements carried a z-index the readability scrim
+  // painted above them purely by tree order. It must still win.
+  expect(order.scrimZ).toBeGreaterThan(2);
+});
+
+test("editor: 가로 100% toggles a band and unchecking restores the placement", async ({
+  page,
+}) => {
+  await page.goto("/#content/Level%201/March");
+  await resetBgCache(page);
+  await page.evaluate(() => {
+    /* global isAdmin, updateAdminUI */
+    isAdmin = true;
+    updateAdminUI();
+    window.craBg.ready = true;
+  });
+  await page.locator("#bgEditFab").click();
+  await expect(page.locator("#bgEditorPanel")).toBeVisible();
+  await page.evaluate(() => {
+    /* global bgEdit, renderBgEditCanvas */
+    bgEdit.data.elements.push({
+      src: "assets/l1-march-book-1.jpg",
+      x: 40,
+      y: 80,
+      w: 20,
+      r: 12,
+      fx: false,
+      z: 0,
+    });
+    bgEdit.selected = 0;
+    renderBgEditCanvas();
+  });
+  await expect(page.locator("#bgElTools")).toBeVisible();
+  // The options stay hidden until 가로 100% is on, so a normal element's panel
+  // looks exactly as it did before this feature.
+  await expect(page.locator("#bgBandOpts")).toBeHidden();
+
+  await page.locator("#bgBandToggle").check();
+  await expect(page.locator("#bgBandOpts")).toBeVisible();
+  const band = await page.evaluate(() => {
+    const item = bgEdit.data.elements[0];
+    const shell = document.querySelector("#pageBgLayer .bg-edit-el");
+    const layer = document.querySelector("#pageBgLayer");
+    return {
+      fw: item.fw,
+      fmode: item.fmode,
+      anchor: item.anchor,
+      keptX: item.x,
+      keptW: item.w,
+      keptR: item.r,
+      inLayer: shell.parentElement.id === "pageBgLayer",
+      widthDelta: Math.abs(
+        shell.getBoundingClientRect().width -
+          layer.getBoundingClientRect().width,
+      ),
+    };
+  });
+  expect(band.fw).toBe(true);
+  expect(band.fmode).toBe("stretch");
+  // y:80 sits in the lower half of the page → anchors to the bottom edge.
+  expect(band.anchor).toBe("bottom");
+  expect(band.inLayer).toBe(true);
+  expect(band.widthDelta).toBeLessThan(1);
+  // The free-placement values survive untouched — that is what makes the
+  // toggle reversible.
+  expect(band.keptX).toBe(40);
+  expect(band.keptW).toBe(20);
+  expect(band.keptR).toBe(12);
+
+  // Arrow keys nudge a band on Y only, in px away from its anchored edge.
+  // (Blur first: the keydown handler ignores keys typed inside a control.)
+  await page.evaluate(() => document.activeElement.blur());
+  const offBefore = await page.evaluate(() => bgEdit.data.elements[0].off);
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowLeft");
+  expect(await page.evaluate(() => bgEdit.data.elements[0].off)).toBe(
+    offBefore + 1,
+  );
+
+  // Switching the anchor re-expresses the same pixels from the other edge, so
+  // the band must not jump.
+  const topBefore = await page.evaluate(
+    () =>
+      document.querySelector("#pageBgLayer .bg-edit-el").getBoundingClientRect()
+        .top,
+  );
+  await page.locator('input[name="bgBandAnchor"][value="top"]').check();
+  const afterAnchor = await page.evaluate(() => ({
+    anchor: bgEdit.data.elements[0].anchor,
+    top: document
+      .querySelector("#pageBgLayer .bg-edit-el")
+      .getBoundingClientRect().top,
+  }));
+  expect(afterAnchor.anchor).toBe("top");
+  expect(Math.abs(afterAnchor.top - topBefore)).toBeLessThan(1);
+
+  // Tile mode swaps to a repeating strip that gets the height handle.
+  await page.locator('input[name="bgBandMode"][value="tile"]').check();
+  await expect(page.locator("#pageBgLayer .bg-edit-band--tile")).toHaveCount(1);
+  await expect(page.locator("#pageBgLayer .bg-edit-band-size")).toHaveCount(1);
+
+  await page.locator("#bgBandToggle").uncheck();
+  const restored = await page.evaluate(() => {
+    const shell = document.querySelector("#pageBgLayer .bg-edit-el");
+    return {
+      fw: bgEdit.data.elements[0].fw,
+      inFrame: Boolean(shell.closest(".page-bg-el-frame")),
+      left: shell.style.left,
+      width: shell.style.width,
+    };
+  });
+  expect(restored.fw).toBe(false);
+  expect(restored.inFrame).toBe(true);
+  expect(restored.left).toBe("40%");
+  expect(restored.width).toBe("20%");
+});
+
 test("background edit button hidden for non-admin visitors", async ({
   page,
 }) => {
