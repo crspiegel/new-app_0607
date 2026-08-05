@@ -18,8 +18,8 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-**미배포 변경 있음 (`2026-08-04`)** — 히어로 배너 페이드 수정 4건 (아래 첫 항목).
-로컬 검증 완료(qa 105/105), **커밋·배포는 사용자 요청 대기 중**.
+진행 중인 작업 없음 — **히어로 배너 전환 수정 배포 완료 (`2026-08-05`, 커밋 `d94af22`)**.
+아래 첫 항목 참조. qa 114/114 green, 두 도메인 라이브 검증 완료.
 
 이전 상태 — **세션 종료 정리 완료 (`2026-08-03`)**. 워킹 트리 클린,
 origin/master 동기화(`de301a3`), `npm.cmd run qa` **93/93 green**, 두 도메인
@@ -123,6 +123,20 @@ gotcha는 NOTES.md **히어로 배너 캐러셀** / **게임 모달** 섹션.
     - ⚠ 교훈: 레지스트리 `UserPreferencesMask`와 Playwright가 띄운 임시 프로필 Chrome은
       **사용자의 실제 브라우저와 다를 수 있다.** 1차 때 이 둘을 근거로 reduce 가설을
       배제한 것이 우회로를 2회 만들었다.
+  - ✅ **배포 완료 (`2026-08-05`):** 사용자 로컬 확인(슬라이드 정상) 후 커밋 `d94af22`
+    push → Vercel 자동 배포. new-app0607.vercel.app + www.cambridgereading.com 모두
+    새 `styles.css`·`hero-banner.js` md5 **로컬과 일치** 확인. 라이브 실측(두 도메인 ×
+    reduce on/off 4조합): 슬라이드 가로 이동 **1260~1270px**(reduce에서도 동일),
+    페이드는 나가는 슬라이드 **opacity 1 고정** + 들어오는 것 `0.07→0.94`,
+    저장 버튼 초기 **비활성**.
+  - ⚠ **남은 미세 이슈(미수정, 운영 영향 거의 없음):** `applyHeroBanner`가 진행 중인
+    **슬라이드별 리셋 타임아웃**(`heroResetSlide`, `duration+20ms`)을 취소하지 않는다.
+    전환이 끝나기 전에 설정을 다시 적용하고 곧바로 새 전환을 시작하면, 옛 타이머가
+    뒤늦게 터져 나가는 슬라이드의 `is-leaving`을 떼어 **즉시 사라지게** 만든다.
+    라이브 검증 스크립트가 700ms 만에 모드를 바꾸다 실제로 이걸 밟았다.
+    운영에서는 (a) `heroResetSlide`의 `is-active` 가드, (b) 관리자 화면에서는 회전이
+    멈춰 있고 홈 복귀 후 첫 전환까지 최소 4초라 사실상 도달하지 않는다.
+    고치려면 타이머 id를 슬라이드에 보관하고 `applyHeroBanner`에서 clear할 것.
 
 - ✅ **페이지2 PC 하단 여백 축소 — 세로 스크롤바 제거 (`2026-08-03`):**
   플랜 승인 후 구현 (플랜: `C:\Users\USER\.claude\plans\stateful-spinning-charm.md`).
