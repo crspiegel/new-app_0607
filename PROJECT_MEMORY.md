@@ -18,7 +18,10 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-진행 중인 작업 없음 — **세션 종료 정리 완료 (`2026-08-03`)**. 워킹 트리 클린,
+**미배포 변경 있음 (`2026-08-04`)** — 히어로 배너 페이드 수정 4건 (아래 첫 항목).
+로컬 검증 완료(qa 105/105), **커밋·배포는 사용자 요청 대기 중**.
+
+이전 상태 — **세션 종료 정리 완료 (`2026-08-03`)**. 워킹 트리 클린,
 origin/master 동기화(`de301a3`), `npm.cmd run qa` **93/93 green**, 두 도메인
 (www.cambridgereading.com · new-app0607.vercel.app) 코어 파일 5종 전부 HTTP 200 확인.
 
@@ -61,6 +64,65 @@ gotcha는 NOTES.md **히어로 배너 캐러셀** / **게임 모달** 섹션.
 밀리고 Playwright(baseURL 5173)는 사용자 dev 서버에 붙어 워커 경합으로 간헐적
 30s 타임아웃이 난다. dev 서버를 끄고 qa를 돌리거나, `npm.cmd run check` +
 `npx.cmd playwright test`로 나눠 실행할 것 (이번 세션은 후자로 검증).
+
+- ✅ **히어로 배너 페이드 미작동 조사 + 수정 4건 (`2026-08-04`, 미배포):**
+  사용자 리포트 = "배너가 페이드 없이 즉시 바뀐다". **먼저 재현·계측부터** 했고, 라이브
+  (실 Chrome·콜드 로드·자연 타이머)에서는 3초 크로스페이드가 정상 동작함을 확인
+  (양 도메인 에셋 md5 = 로컬, 캐시 문제 아님). 즉 "전환이 안 일어난다"는 결함은
+  재현되지 않았고, 대신 원인 2가지를 찾아 4건을 고쳤다.
+  - **원인 1 — `prefers-reduced-motion`이 페이드를 죽임.** 옛 CSS가
+    `transition-duration: 0ms`라 reduce 환경에서 **정확히 "즉시 전환"** 이 된다
+    (에뮬 대조 실측: no-preference 3s / reduce 0s). → `transition-property: opacity`로
+    **이동만** 제거하고 페이드는 유지. 슬라이드 모드도 reduce에선 페이드로 격하.
+    ⚠ 이 PC는 reduce가 꺼져 있다(레지스트리 + 실 Chrome `matches:false`) — 사용자가 다른
+    기기/휴대폰으로 봤다면 이게 직접 원인.
+  - **원인 2 — 크로스페이드가 배경으로 가라앉음.** 두 슬라이드를 동시에 반대로 굴리면
+    독립 합성되어 50/50에서 `0.5·새 + 0.25·옛 + 0.25·딥블루`. 고정 50/50 프레임
+    픽셀 측정 **평균 오차 30.03/255(최대 53.5)**. 게다가 새 배너 가중치가 2배라
+    체감상 1초짜리 탁한 깜빡임이 된다. → **나가는 슬라이드를 불투명하게 붙잡고 들어오는
+    것만 0→1**. 수정 후 오차 **0.33/255(최대 1.5)** — 사실상 완전 일치.
+  - **부수 2건**: (a) `heroGoTo`가 들어오는 슬라이드에 인라인 `z-index`(단조 증가) 부여 —
+    **wrap(마지막 배너→기본 슬라이드)에서 DOM 순서가 역전**되기 때문. + 기본 슬라이드에
+    `background: var(--deep-blue)`(캐러셀 스코프). (b) `is-leaving` 해제 시
+    `.is-resetting`(`transition:none`)으로 **역방향 재생 제거**(슬라이드 모드에서
+    `tx: -1349 → -939` 실측).
+  - **테스트 구멍도 메움**: 기존 테스트는 `transition-duration` **계산값만** 봐서
+    하드컷을 통과시켰다(끝값은 둘 다 opacity 1). 전환 **도중**을 rAF 샘플링하는
+    `heroFadeTrace` 헬퍼 + 테스트 4종 추가 → **qa 105/105 green**(93 → +12 = 4×3프로젝트).
+  - 변경 파일: `styles.css`, `hero-banner.js`, `tests/smoke.spec.js`. 상세 gotcha →
+    NOTES.md **히어로 배너 캐러셀** 섹션.
+  - ✅ **사용자 로컬 확인: 페이드 정상.** 이어서 리포트된 2건도 같은 세션에서 처리:
+    - 🐛 **"슬라이드로 바꿔도 적용 안 됨" = 관리자 패널 경쟁 조건.** 캐러셀·CSS는 정상
+      (슬라이드 모드 transform `0 → -1346` / `1351 → 5` 실측). 진짜 원인은 **배너 탭의
+      비동기 로드가 사용자의 선택을 덮어쓰는 것** — 탭을 열자마자 옵션을 바꾸면 뒤늦게
+      도착한 fetch가 라디오를 저장값으로 되돌리고 그대로 저장된다. 실측 재현:
+      `직후 fade → 2.5s 후 slide`로 복귀. → `heroPanelLoad` 토큰(탭 열기 + 모든 편집이
+      증가, 늦게 온 로드는 결과 폐기). 수정 후 `직후 fade → 로드 후에도 fade`.
+      ⚠ 처음 쓴 재현 테스트는 **저장값과 같은 값을 골라** 덮어쓰기가 안 보였다 —
+      잘못 "정상"으로 판정했다가 반대값으로 다시 짜서 잡았다.
+    - ✨ **저장 버튼 dirty 상태**: `heroSavedJson` vs `normalizeHeroConfig(heroDraft)`
+      JSON 비교. 초기·저장 후 비활성, 변경 시 활성, **손으로 되돌리면 다시 비활성**
+      (단순 touched 플래그가 아님). 저장 중 이중 제출 차단, 실패 시 복구.
+      `.admin-banner-save:disabled` 회색 스타일 추가.
+    - qa **111/111 green**(신규 테스트 2종 추가 = 105 → +6).
+  - 🐛 **3차 리포트: "슬라이드 효과가 안 보인다" = 내가 넣은 reduce 블록이 원인.**
+    페이드 수정 때 `transition-duration:0` 대신 넣은 **`transform: none`** 이
+    슬라이드 모드를 **조용히 페이드로 격하**시키고 있었다(이동량 실측 **1346 → 0px**).
+    즉 같은 CSS 블록이 리포트 2건을 연달아 만든 셈.
+    - ⚠ **진단이 어려웠던 이유**: 모드 클래스·`--hero-transition`·`state().mode`·
+      transform 규칙이 **전부 정상**이고, 이 PC는 reduce가 꺼져 있어 자동화(로컬·라이브·
+      콜드로드·자연타이머·스크린샷)에서 **한 번도 재현되지 않았다.**
+    - **결정적 단서는 "어떻게 보이는가"였다** — 슬라이드를 골랐는데 **페이드로 보인다**는
+      사용자 답변이 곧 reduce의 지문(이동만 제거되고 opacity는 남음). 사용자 콘솔 접근이
+      막혀 있어도(Chrome 붙여넣기 보호) 이 질문 하나로 확정할 수 있었다.
+    - → **배너 캐러셀을 reduce 예외로** (히어로 리그·워드 리빌과 동일 취급). 관리자가
+      전환 방식을 명시적으로 고르므로 슬라이드는 실제로 슬라이드해야 한다. 검증:
+      reduce 에뮬레이션에서 이동량이 no-preference와 **동일**(2702px).
+    - 회귀 테스트 `heroSlideTravel()` 추가 — **가로 이동량을 직접 단언**한다.
+      기존 테스트는 전부 통과하면서 이 격하를 놓쳤다. qa **114/114 green**.
+    - ⚠ 교훈: 레지스트리 `UserPreferencesMask`와 Playwright가 띄운 임시 프로필 Chrome은
+      **사용자의 실제 브라우저와 다를 수 있다.** 1차 때 이 둘을 근거로 reduce 가설을
+      배제한 것이 우회로를 2회 만들었다.
 
 - ✅ **페이지2 PC 하단 여백 축소 — 세로 스크롤바 제거 (`2026-08-03`):**
   플랜 승인 후 구현 (플랜: `C:\Users\USER\.claude\plans\stateful-spinning-charm.md`).

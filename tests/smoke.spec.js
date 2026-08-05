@@ -476,6 +476,240 @@ test("hero 전환 시간 drives the real transition and the cycle length", async
   await resetHero(page, null);
 });
 
+// ⚠ A hard cut and a real cross-fade both END at opacity 1, so asserting the
+// declared transition-duration (as the test above does) cannot tell them
+// apart — a `transition-duration: 0ms` override sails straight through it.
+// Only sampling DURING the transition catches it, which is why these exist.
+async function heroFadeTrace(page, opts) {
+  return page.evaluate(
+    (o) =>
+      new Promise((resolve) => {
+        window.craHero.applyHeroBanner({
+          mode: o.mode,
+          interval: 10,
+          duration: 1,
+          banners: [
+            { src: "assets/l1-march-book-1.jpg", focus: "center" },
+            { src: "assets/l1-march-book-2.jpg", focus: "center" },
+          ],
+        });
+        // Freshly inserted slides need one resolved style pass before a class
+        // change has a previous value to transition FROM.
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const slides = [...document.querySelectorAll(".hero-slide")];
+            const samples = [];
+            const t0 = performance.now();
+            window.craHero.goTo(o.to);
+            const tick = () => {
+              const t = performance.now() - t0;
+              samples.push({
+                t,
+                op: slides.map((s) => Number(getComputedStyle(s).opacity)),
+              });
+              if (t < o.until) requestAnimationFrame(tick);
+              else resolve(samples);
+            };
+            requestAnimationFrame(tick);
+          }),
+        );
+      }),
+    opts,
+  );
+}
+
+test("hero fade cross-dissolves and holds the outgoing slide opaque", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await resetHero(page, null);
+  const trace = await heroFadeTrace(page, { mode: "fade", to: 1, until: 700 });
+  const mid = trace.filter((s) => s.t > 120 && s.t < 650);
+  expect(mid.length).toBeGreaterThan(2);
+  // The incoming slide is genuinely part-way through — a hard cut fails here.
+  expect(mid.some((s) => s.op[1] > 0.05 && s.op[1] < 0.95)).toBe(true);
+  // ...while the outgoing slide is HELD fully opaque underneath it, so the
+  // deep-blue backdrop can never show through the middle of the dissolve.
+  for (const s of mid) expect(s.op[0]).toBe(1);
+  await resetHero(page, null);
+});
+
+test("a leaving hero slide snaps back instead of animating in reverse", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await resetHero(page, null);
+  // duration 1s → hero-banner.js resets the slide at 1020ms; sample past it.
+  const trace = await heroFadeTrace(page, { mode: "fade", to: 1, until: 1400 });
+  const after = trace.filter((s) => s.t > 1150);
+  expect(after.length).toBeGreaterThan(2);
+  // Held at 1 for the whole fade, then 0 at once — never a slow ride down.
+  for (const s of after) expect(s.op[0]).toBe(0);
+  await resetHero(page, null);
+});
+
+test("both hero transitions survive prefers-reduced-motion", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await resetHero(page, null);
+  const declared = await page.evaluate(() => {
+    window.craHero.applyHeroBanner({
+      mode: "fade",
+      interval: 10,
+      duration: 1,
+      banners: [{ src: "assets/l1-march-book-1.jpg", focus: "center" }],
+    });
+    const cs = getComputedStyle(document.querySelector(".hero-slide"));
+    return {
+      reduce: matchMedia("(prefers-reduced-motion: reduce)").matches,
+      dur: cs.transitionDuration,
+      prop: cs.transitionProperty,
+    };
+  });
+  expect(declared.reduce).toBe(true);
+  // ⚠ NOT 0s, and transform must NOT be dropped. The carousel is exempt on
+  // purpose (see styles.css): 0ms once made every change an instant cut, and
+  // dropping transform once made 슬라이드 render as a plain fade.
+  expect(declared.dur).toContain("1s");
+  expect(declared.prop).toBe("opacity, transform");
+  const trace = await heroFadeTrace(page, { mode: "fade", to: 1, until: 700 });
+  const mid = trace.filter((s) => s.t > 120 && s.t < 650);
+  expect(mid.some((s) => s.op[1] > 0.05 && s.op[1] < 0.95)).toBe(true);
+  // ...and 슬라이드 still actually travels sideways.
+  expect(await heroSlideTravel(page)).toBeGreaterThan(200);
+  await resetHero(page, null);
+  await page.emulateMedia({ reducedMotion: null });
+});
+
+// How far the outgoing slide moves horizontally during one slide transition.
+// A fade-only degradation reports 0 here while every other value still looks
+// right, which is exactly how the 슬라이드 regression hid.
+async function heroSlideTravel(page) {
+  return page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        window.craHero.applyHeroBanner({
+          mode: "slide",
+          interval: 10,
+          duration: 1,
+          banners: [
+            { src: "assets/l1-march-book-1.jpg", focus: "center" },
+            { src: "assets/l1-march-book-2.jpg", focus: "center" },
+          ],
+        });
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            const first = document.querySelector(".hero-slide");
+            const xs = [];
+            const t0 = performance.now();
+            window.craHero.goTo(1);
+            const tick = () => {
+              xs.push(
+                new DOMMatrixReadOnly(getComputedStyle(first).transform).m41,
+              );
+              if (performance.now() - t0 < 700) requestAnimationFrame(tick);
+              else resolve(Math.max(...xs) - Math.min(...xs));
+            };
+            requestAnimationFrame(tick);
+          }),
+        );
+      }),
+  );
+}
+
+test("슬라이드 mode actually travels sideways", async ({ page }) => {
+  await page.goto("/");
+  await resetHero(page, null);
+  expect(await heroSlideTravel(page)).toBeGreaterThan(200);
+  await resetHero(page, null);
+});
+
+test("the incoming hero slide always paints above the outgoing one", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await resetHero(page, null);
+  const z = await page.evaluate(() => {
+    window.craHero.applyHeroBanner({
+      mode: "fade",
+      interval: 10,
+      duration: 1,
+      banners: [
+        { src: "assets/l1-march-book-1.jpg", focus: "center" },
+        { src: "assets/l1-march-book-2.jpg", focus: "center" },
+      ],
+    });
+    const slides = [...document.querySelectorAll(".hero-slide")];
+    const zOf = (el) => Number(getComputedStyle(el).zIndex) || 0;
+    window.craHero.goTo(2); // out to the last banner
+    const onLast = { last: zOf(slides[2]), def: zOf(slides[0]) };
+    window.craHero.goTo(0); // ...and wrap back to the default slide
+    return { onLast, wrapped: { last: zOf(slides[2]), def: zOf(slides[0]) } };
+  });
+  // DOM order alone puts the default slide UNDER every banner, so the wrap is
+  // the case it gets backwards — the incoming slide must still come out on top.
+  expect(z.onLast.last).toBeGreaterThan(z.onLast.def);
+  expect(z.wrapped.def).toBeGreaterThan(z.wrapped.last);
+  await resetHero(page, null);
+});
+
+// Picks the 전환 방식 radio the same way a click does.
+const HERO_PICK_MODE = (v) => {
+  const el = document.querySelector(
+    `input[name="heroBannerMode"][value="${v}"]`,
+  );
+  el.checked = true;
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+};
+
+test("a late banner-tab load never overwrites an edited option", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.craHero && window.craHero.settled);
+  const out = await page.evaluate(async (pick) => {
+    const run = new Function("v", `(${pick})(v)`);
+    window.craHero.markSaved({ mode: "fade", interval: 5, duration: 2 });
+    // Open the 배너 tab and change the mode while its fetch is still in the
+    // air. ⚠ Without the load token the resolving fetch re-syncs the panel and
+    // silently reverts the pick, so 저장 then writes the OLD mode back.
+    document.querySelector('.admin-menu-btn[data-admin-view="banner"]').click();
+    run("slide");
+    const justPicked = window.craHero.panel().mode;
+    await new Promise((r) => setTimeout(r, 2500)); // let the load land
+    return { justPicked, afterLoad: window.craHero.panel().mode };
+  }, HERO_PICK_MODE.toString());
+  expect(out.justPicked).toBe("slide");
+  expect(out.afterLoad).toBe("slide");
+});
+
+test("저장 is enabled only while the draft differs from what is saved", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.waitForFunction(() => window.craHero && window.craHero.settled);
+  const out = await page.evaluate((pick) => {
+    const run = new Function("v", `(${pick})(v)`);
+    const snap = () => window.craHero.panel();
+    window.craHero.markSaved({ mode: "fade", interval: 5, duration: 2 });
+    const atRest = snap();
+    run("slide");
+    const edited = snap();
+    run("fade"); // undo by hand — back to the saved value
+    const undone = snap();
+    run("slide");
+    window.craHero.markSaved({ mode: "slide", interval: 5, duration: 2 });
+    return { atRest, edited, undone, afterSave: snap() };
+  }, HERO_PICK_MODE.toString());
+  expect(out.atRest).toMatchObject({ changed: false, saveDisabled: true });
+  expect(out.edited).toMatchObject({ changed: true, saveDisabled: false });
+  // Reverting an edit must disable it again — not just "was touched once".
+  expect(out.undone).toMatchObject({ changed: false, saveDisabled: true });
+  expect(out.afterSave).toMatchObject({ changed: false, saveDisabled: true });
+});
+
 test("game modal scales a fixed 1280x720 frame into a 16:9 card", async ({
   page,
 }) => {

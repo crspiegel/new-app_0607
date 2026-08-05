@@ -80,6 +80,7 @@ const heroState = {
   index: 0,
   timer: 0,
   running: false,
+  zTop: 1, // monotonic — the incoming slide always outranks the outgoing one
 };
 
 /* ---- viewer carousel --------------------------------------------------- */
@@ -112,6 +113,20 @@ function heroScheduleNext() {
   );
 }
 
+// Return a leaving slide to its waiting state WITHOUT animating the trip.
+// Removing .is-leaving flips opacity 1→0 (fade) or translateX -100%→100%
+// (slide); with the normal transition still armed that plays the whole
+// transition backwards behind the new slide. Flushing the change while
+// .is-resetting has transition:none makes it a jump instead.
+function heroResetSlide(slide) {
+  // It may have been rotated back to the front before this fired.
+  if (!slide || slide.classList.contains("is-active")) return;
+  slide.classList.add("is-resetting");
+  slide.classList.remove("is-leaving");
+  slide.getBoundingClientRect(); // force the style flush
+  slide.classList.remove("is-resetting");
+}
+
 function heroGoTo(next) {
   const total = heroState.slides.length;
   if (total < 2) return;
@@ -119,19 +134,26 @@ function heroGoTo(next) {
   if (target === heroState.index) return;
   const current = heroState.slides[heroState.index];
   const incoming = heroState.slides[target];
-  if (current) {
-    current.classList.remove("is-active");
-    // is-leaving sends it out to the LEFT; without it a deactivated slide
-    // would jump to the right-hand waiting position instead of exiting.
-    current.classList.add("is-leaving");
-    window.setTimeout(
-      () => current.classList.remove("is-leaving"),
-      heroState.config.duration * 1000 + 20,
-    );
-  }
   if (incoming) {
+    // The incoming slide MUST paint above the outgoing one, because the fade
+    // holds the outgoing slide opaque underneath it (see the cross-dissolve
+    // note in styles.css). DOM order gives that for banner N → N+1 but gets it
+    // backwards on the wrap to slide 1, so drive the order explicitly.
+    heroState.zTop += 1;
+    incoming.style.zIndex = String(heroState.zTop);
     incoming.classList.remove("is-leaving");
     incoming.classList.add("is-active");
+  }
+  if (current) {
+    current.classList.remove("is-active");
+    // is-leaving holds it opaque under the incoming slide (fade) / sends it
+    // out to the LEFT (slide); without it a deactivated slide would jump to
+    // the right-hand waiting position instead of exiting.
+    current.classList.add("is-leaving");
+    window.setTimeout(
+      () => heroResetSlide(current),
+      heroState.config.duration * 1000 + 20,
+    );
   }
   heroState.index = target;
   heroScheduleNext();
@@ -179,9 +201,13 @@ function applyHeroBanner(rawConfig) {
   heroSlides.classList.remove("hero-carousel--slide", "hero-carousel--fade");
   heroSlides.style.removeProperty("--hero-transition");
   heroDefaultSlide.classList.add("is-active");
-  heroDefaultSlide.classList.remove("is-leaving");
+  heroDefaultSlide.classList.remove("is-leaving", "is-resetting");
+  // The default slide is reused across rebuilds, so its inline stacking order
+  // from a previous rotation has to go with it.
+  heroDefaultSlide.style.removeProperty("z-index");
   heroState.slides = [heroDefaultSlide];
   heroState.index = 0;
+  heroState.zTop = 1;
   if (!heroState.config.banners.length) return;
   heroState.config.banners.forEach((item) => {
     const slide = heroBuildBannerSlide(item);
@@ -233,6 +259,32 @@ function setHeroStatus(text) {
 
 // The panel edits this draft; nothing reaches site_settings until 저장.
 let heroDraft = heroDefaultConfig();
+// The config as last known SAVED, as JSON. 저장 is enabled only while the
+// draft differs from it, so undoing an edit by hand disables the button again.
+// normalizeHeroConfig always emits the same key order, so comparing the
+// serialised form is safe here.
+let heroSavedJson = JSON.stringify(heroDefaultConfig());
+// Bumped by every panel load AND every edit, so an in-flight load can tell it
+// has been superseded. See the 배너 tab handler for why that matters.
+let heroPanelLoad = 0;
+
+function heroDraftChanged() {
+  return JSON.stringify(normalizeHeroConfig(heroDraft)) !== heroSavedJson;
+}
+
+function refreshHeroSaveState() {
+  if (heroBannerSave) heroBannerSave.disabled = !heroDraftChanged();
+}
+
+// Every edit funnels through here: it invalidates any load still in flight and
+// keeps 저장 in sync with whether there is actually anything pending.
+// `quiet` is for callers that write their own status line (upload).
+function heroEdited(quiet) {
+  heroPanelLoad += 1;
+  refreshHeroSaveState();
+  if (!quiet)
+    setHeroStatus(heroDraftChanged() ? "변경됨 — 저장이 필요합니다." : "");
+}
 
 function heroPublicUrl(path) {
   return sb.storage.from(HERO_BUCKET).getPublicUrl(path).data.publicUrl;
@@ -281,7 +333,7 @@ function renderHeroBannerList() {
       radio.addEventListener("change", () => {
         if (!radio.checked) return;
         item.focus = value;
-        setHeroStatus("변경됨 — 저장이 필요합니다.");
+        heroEdited();
       });
       label.append(radio, document.createTextNode(` ${text}`));
       focus.append(label);
@@ -306,7 +358,7 @@ function renderHeroBannerList() {
     del.textContent = "삭제";
     del.addEventListener("click", () => {
       heroDraft.banners.splice(index, 1);
-      setHeroStatus("변경됨 — 저장이 필요합니다.");
+      heroEdited();
       renderHeroBannerList();
     });
     acts.append(up, down, del);
@@ -321,7 +373,7 @@ function heroMove(index, delta) {
   const list = heroDraft.banners;
   if (to < 0 || to >= list.length) return;
   [list[index], list[to]] = [list[to], list[index]];
-  setHeroStatus("변경됨 — 저장이 필요합니다.");
+  heroEdited();
   renderHeroBannerList();
 }
 
@@ -336,13 +388,14 @@ function syncHeroPanel() {
     input.checked = Number(input.value) === heroDraft.duration;
   });
   renderHeroBannerList();
+  refreshHeroSaveState();
 }
 
 heroModeInputs.forEach((input) => {
   input.addEventListener("change", () => {
     if (!input.checked) return;
     heroDraft.mode = input.value;
-    setHeroStatus("변경됨 — 저장이 필요합니다.");
+    heroEdited();
   });
 });
 
@@ -350,7 +403,7 @@ heroIntervalInputs.forEach((input) => {
   input.addEventListener("change", () => {
     if (!input.checked) return;
     heroDraft.interval = Number(input.value);
-    setHeroStatus("변경됨 — 저장이 필요합니다.");
+    heroEdited();
   });
 });
 
@@ -358,7 +411,7 @@ heroDurationInputs.forEach((input) => {
   input.addEventListener("change", () => {
     if (!input.checked) return;
     heroDraft.duration = Number(input.value);
-    setHeroStatus("변경됨 — 저장이 필요합니다.");
+    heroEdited();
   });
 });
 
@@ -386,6 +439,7 @@ async function heroUploadFile(file, quiet) {
     focus: "center",
     alt: "",
   });
+  heroEdited(true); // the caller writes its own upload status
   renderHeroBannerList();
   return true;
 }
@@ -417,7 +471,8 @@ if (heroBannerUpload) {
 
 if (heroBannerSave) {
   heroBannerSave.addEventListener("click", async () => {
-    if (!sb || !isAdmin) return;
+    if (!sb || !isAdmin || heroBannerSave.disabled) return;
+    heroBannerSave.disabled = true; // no double submit while in flight
     setHeroStatus("저장 중…");
     const value = normalizeHeroConfig(heroDraft);
     const { error } = await sb
@@ -425,12 +480,14 @@ if (heroBannerSave) {
       .upsert({ key: HERO_SETTINGS_KEY, value });
     if (error) {
       setHeroStatus("저장 실패.");
+      refreshHeroSaveState(); // still unsaved — let them retry
       return;
     }
     // Reflect it on the live hero right away — admin mirrors the user screen.
     applyHeroBanner(value);
     heroDraft = normalizeHeroConfig(value);
-    syncHeroPanel();
+    heroSavedJson = JSON.stringify(heroDraft);
+    syncHeroPanel(); // → refreshHeroSaveState() → 저장 back to disabled
     setHeroStatus("저장 완료.");
   });
 }
@@ -441,8 +498,10 @@ document
   .querySelectorAll('.admin-menu-btn[data-admin-view="banner"]')
   .forEach((btn) => {
     btn.addEventListener("click", async () => {
+      const token = (heroPanelLoad += 1);
       setHeroStatus("");
       heroDraft = normalizeHeroConfig(heroState.config);
+      heroSavedJson = JSON.stringify(heroDraft);
       syncHeroPanel();
       if (!sb) return;
       const { data, error } = await sb
@@ -450,8 +509,14 @@ document
         .select("value")
         .eq("key", HERO_SETTINGS_KEY)
         .maybeSingle();
-      if (error || !data) return;
+      // ⚠ The admin may have changed an option while this was in flight.
+      // Writing the fetched config now would silently revert their pick and
+      // 저장 would then persist the OLD value — that is exactly the bug where
+      // switching 전환 방식 to 슬라이드 "did not apply". heroEdited() bumps
+      // heroPanelLoad, so a superseded load simply drops its result.
+      if (token !== heroPanelLoad || error || !data) return;
       heroDraft = normalizeHeroConfig(data.value);
+      heroSavedJson = JSON.stringify(heroDraft);
       syncHeroPanel();
     });
   });
@@ -463,6 +528,20 @@ window.craHero = {
   applyHeroBanner,
   normalizeHeroConfig,
   goTo: heroGoTo,
+  // Panel internals the smoke tests assert on (draft vs saved, 저장 state).
+  panel: () => ({
+    mode: heroDraft.mode,
+    interval: heroDraft.interval,
+    duration: heroDraft.duration,
+    banners: heroDraft.banners.length,
+    changed: heroDraftChanged(),
+    saveDisabled: heroBannerSave ? heroBannerSave.disabled : null,
+  }),
+  markSaved: (cfg) => {
+    heroDraft = normalizeHeroConfig(cfg);
+    heroSavedJson = JSON.stringify(heroDraft);
+    syncHeroPanel();
+  },
   state: () => ({
     index: heroState.index,
     count: heroState.slides.length,
@@ -473,4 +552,5 @@ window.craHero = {
   }),
 };
 
+refreshHeroSaveState(); // nothing pending on first paint → 저장 starts disabled
 hydrateHeroBanner();

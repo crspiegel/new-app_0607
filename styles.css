@@ -681,12 +681,40 @@ body.login-active main {
     opacity var(--hero-transition, 600ms) ease,
     transform var(--hero-transition, 600ms) ease;
 }
+/* Dropping .is-leaving flips a slide back to its waiting state (opacity 1→0,
+   or translateX -100%→100%). That trip must NOT animate — it would replay the
+   whole transition backwards behind the new slide. hero-banner.js adds this
+   class for one flushed frame while it removes .is-leaving. */
+.hero-carousel--slide .hero-slide.is-resetting,
+.hero-carousel--fade .hero-slide.is-resetting {
+  transition: none;
+}
 .hero-carousel--slide .hero-slide:not(.is-active),
 .hero-carousel--fade .hero-slide:not(.is-active) {
   pointer-events: none;
 }
+/* The default slide paints no background of its own (the section does), so on
+   the wrap back to slide 1 the outgoing banner would show through it for the
+   whole transition and then snap away. Giving it the hero backdrop makes every
+   slide opaque, which is what the hold-underneath cross-dissolve below needs.
+   Scoped to the carousel classes, so a hero with zero banners is untouched. */
+.hero-carousel--slide .hero-slide--default,
+.hero-carousel--fade .hero-slide--default {
+  background: var(--deep-blue);
+}
 .hero-carousel--fade .hero-slide:not(.is-active) {
   opacity: 0;
+}
+/* TRUE cross-dissolve. The outgoing slide is HELD fully opaque underneath
+   while the incoming one fades in above it (hero-banner.js raises the incoming
+   slide's z-index), so the composite is exactly a·new + (1-a)·old.
+   ⚠ Fading both at once instead — the obvious way — composites each slide
+   independently against the backdrop, giving 0.5·new + 0.25·old + 0.25·bg at
+   the midpoint: measured ~30/255 mean channel error (max 53.5) against a real
+   cross-dissolve, which reads as a muddy dip through the deep blue rather than
+   a fade, and lets the incoming image dominate 2:1 far too early. */
+.hero-carousel--fade .hero-slide.is-leaving {
+  opacity: 1;
 }
 /* Waiting slides sit off to the right; the outgoing one exits to the left. */
 .hero-carousel--slide .hero-slide:not(.is-active) {
@@ -700,18 +728,15 @@ body.login-active main {
   opacity: 1;
   transform: translateX(0);
 }
-/* Auto-rotation still runs (the banners are content), but the movement goes. */
-@media (prefers-reduced-motion: reduce) {
-  .hero-carousel--slide .hero-slide,
-  .hero-carousel--fade .hero-slide {
-    transition-duration: 0ms;
-  }
-  .hero-carousel--slide .hero-slide:not(.is-active),
-  .hero-carousel--slide .hero-slide.is-leaving {
-    transform: none;
-    opacity: 0;
-  }
-}
+/* ⚠ The banner carousel is deliberately EXEMPT from prefers-reduced-motion,
+   the same way the hero character rig and the title word-reveal already are:
+   the admin picks 전환 방식 explicitly, so 슬라이드 has to actually slide.
+   Both earlier versions of this block produced a "효과가 안 보인다" report —
+   `transition-duration: 0ms` turned every change into an instant hard cut, and
+   `transform: none` silently degraded 슬라이드 into a plain fade (measured:
+   1346px of travel → 0px) while the mode class and every other value still
+   looked correct, which made it very hard to spot. If reduced motion has to be
+   honoured again, hang it off an admin option rather than an override here. */
 /* Only the visible slide should burn CPU on the character rig animation. */
 .hero-slide:not(.is-active) .hero-rig,
 .hero-slide:not(.is-active) .hero-rig-part {
@@ -6471,6 +6496,14 @@ body.bg-editing.bg-ghost .site-footer {
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
+}
+/* Enabled only while the draft differs from what is saved, so the button
+   itself tells the admin whether there is anything pending. */
+.admin-banner-save:disabled {
+  border-color: #c8c8c8;
+  background: #c8c8c8;
+  color: #f2f2f2;
+  cursor: default;
 }
 
 .admin-bg-btn {
