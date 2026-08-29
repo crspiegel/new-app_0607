@@ -285,6 +285,40 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   own consumption instead of Supabase's counter — which is the better signal anyway: the
   incident was never "we failed to notice the meter", it was "we did not know QA hit prod".
 
+### Recompressing what was already in Storage (2026-08-29)
+
+- **Storage size and egress are different problems.** The bucket held 38.70 MB, but only
+  **24.55 MB of it was ever served**: 11 backgrounds a page actually selects, 3 hero banners,
+  71 covers. The other **18 library images (14.15 MB) are referenced by nothing**, so
+  compressing them would have saved exactly zero egress. Cross-reference `page_backgrounds`
+  and `site_settings.hero_banner` against the bucket listing before deciding anything here.
+- **Six files carried 68% of the served weight** — the 3 banners plus the 3 backgrounds over
+  1 MB. Recompressing only those took **16.72 MB → 1.07 MB (15.6×)**, and the served total
+  from **24.55 MB → 8.90 MB**. Against the 5 GB quota that is 208 → **575** full cold passes
+  a month.
+- **No pixels were lost.** Every original was already under the 1920 px long edge (1672×941,
+  1336×752), so `shrinkImage` never resized — the entire 15.6× came from re-encoding PNG to
+  WebP. PNG was simply the wrong container for flat illustration art.
+- **Overwrite in place; never re-upload to a new path.** Same key + `upsert` keeps the public
+  URL identical, so **not one row of `page_backgrounds` or `site_settings` had to change** —
+  and the `elements` laid out on each background were never at risk. Uploading to a fresh
+  timestamped path would have meant re-pointing every row by hand.
+- **The objects still end in `.png` but hold WebP bytes.** Browsers dispatch on `Content-Type`,
+  not the extension, and the upload sets `image/webp`. Verified by loading all six in a real
+  browser: every one decodes at its original dimensions, and the production home page paints
+  its banner with zero failed Storage requests.
+- **Covers were deliberately left alone.** 71 files averaging 76 KB, already JPEG at the
+  800 px cover size — perhaps 2-3 MB to gain for 71 overwrites of live data. Bad trade.
+- **⚠ The auth gotcha that cost two runs.** A supabase-js client built _before_ the operator
+  logs in holds no token, and `is_admin()` reads `auth.uid()` — so every check returns
+  `false` and it reads exactly like a permissions problem when it is an ordering problem.
+  Wait for `sb-*-auth-token` to appear in `localStorage`, **then** create the client with
+  `global.headers.Authorization` pinned to that token.
+- **Originals are backed up** at `D:\_BigWave\reading adventure\_storage-backup-20260829\`
+  (compressed previews under `compressed\`). Restoring is the same operation in reverse.
+- **New uploads need none of this** — `shrinkImage` has compressed them since the Phase 1
+  deploy. This was strictly a one-time cleanup of what predated it.
+
 ## Video player modal (Vimeo)
 
 - The custom video modal (Level 1 / March) drives a Vimeo iframe via the **Vimeo Player SDK**
