@@ -132,6 +132,9 @@ function heroGoTo(next) {
   if (total < 2) return;
   const target = ((next % total) + total) % total;
   if (target === heroState.index) return;
+  // Prime one ahead so the NEXT transition also has a decoded image ready.
+  heroPrimeSlide(target);
+  heroPrimeSlide((target + 1) % total);
   const current = heroState.slides[heroState.index];
   const incoming = heroState.slides[target];
   if (incoming) {
@@ -164,7 +167,11 @@ function heroBuildBannerSlide(item) {
   slide.className = "hero-slide hero-slide--banner";
   const img = document.createElement("img");
   img.className = "hero-banner-img";
-  img.src = item.src;
+  // Hold the URL until the slide is nearly due. The carousel used to attach
+  // every banner src on load, so a visitor who never sat through a rotation
+  // still paid to download all of them. heroPrimeSlide() attaches the real
+  // src a full cycle ahead, so the transition itself is unchanged.
+  img.dataset.src = item.src;
   img.alt = item.alt || "";
   img.draggable = false;
   img.style.objectPosition = `center ${item.focus}`;
@@ -172,6 +179,17 @@ function heroBuildBannerSlide(item) {
   img.addEventListener("error", () => heroDropSlide(slide));
   slide.append(img);
   return slide;
+}
+
+// Attach a held-back banner src. Safe to call repeatedly: the data attribute
+// is removed once used, and the default slide (index 0) has no held src.
+function heroPrimeSlide(index) {
+  const slide = heroState.slides[index];
+  if (!slide) return;
+  const img = slide.querySelector("img[data-src]");
+  if (!img) return;
+  img.src = img.dataset.src;
+  delete img.dataset.src;
 }
 
 function heroDropSlide(slide) {
@@ -214,6 +232,9 @@ function applyHeroBanner(rawConfig) {
     heroSlides.append(slide);
     heroState.slides.push(slide);
   });
+  // Slide 1 is the built-in default; slide 2 is the first banner anyone sees,
+  // so it loads now and the first rotation stays as instant as it was.
+  heroPrimeSlide(1);
   heroSlides.style.setProperty(
     "--hero-transition",
     `${heroState.config.duration * 1000}ms`,
@@ -425,11 +446,18 @@ async function heroUploadFile(file, quiet) {
     return false;
   }
   if (!quiet) setHeroStatus("업로드 중…");
-  const safe = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+  // Shrink before upload (see shrinkImage in app.js) — falls back to the
+  // original file whenever re-encoding cannot help.
+  const art = await window.craImg.shrinkImage(
+    file,
+    window.craImg.MAX_EDGE,
+    window.craImg.QUALITY,
+  );
+  const safe = art.name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
   const path = `${HERO_PREFIX}/${Date.now()}-${safe}`;
   const { error } = await sb.storage
     .from(HERO_BUCKET)
-    .upload(path, file, { contentType: file.type });
+    .upload(path, art, { contentType: art.type });
   if (error) {
     setHeroStatus("업로드 실패.");
     return false;

@@ -18,7 +18,52 @@ what's next, so any new session can continue without losing prior context.
 done, what's finished vs. remaining, the next concrete step, and any files touched but not
 yet verified/committed. Clear the entry once the work is completed and logged below.
 
-진행 중인 작업 없음 — **세션 종료 정리 완료 (`2026-08-05`)**. 워킹 트리 클린,
+**진행 중 — Supabase 이그레스 재발 방지 (`2026-08-29`). 코드 3개 + 문서 3개 파일, 미커밋.**
+
+- **상황: 402는 해제됐다.** 8/28 결제 주기가 `28 Aug – 28 Sep`으로 넘어가며 Cached Egress가
+  **28.19/5GB(564%) → 0/5GB**로 초기화됐고, 8/29 **03:29Z**에 REST/Storage/Auth 모두 200으로
+  복구된 것을 실제 호출로 확인했다. 결제도 플랜 변경도 없었다. 다만 **대시보드 리셋(8/28
+  15:19Z)과 실제 해제 사이에 약 12시간의 지연**이 있었다 — 대시보드만 보고 판단하지 말 것.
+  원인 분석과 이번 방지책은 `NOTES.md`의 "Supabase egress — QA burned the free quota" 항목에
+  전부 정리했다.
+- **계정 이전은 하지 않기로 확정(사용자 결정, 8/29).** 개선 작업만 진행한다. 참고로 제한
+  상태에서는 Fair Use Policy상 **프로젝트 이전 자체가 비활성화**되므로, 이전을 다시 검토할
+  일이 생기면 402가 풀린 상태여야 한다.
+- **완료(아직 커밋 안 함):**
+  ① `tests/smoke.spec.js` — Storage 객체 라우트만 1×1 PNG로 스텁 (QA발 이미지 이그레스 → 0)
+  ② 같은 파일 — 밴드 geometry 측정 전 이미지 디코드 대기 (스텁이 드러낸 잠복 flaky 수정)
+  ③ `hero-banner.js` — 배너 지연 로딩 (`dataset.src` + `heroPrimeSlide`, 한 슬라이드 선행 로드)
+  ④ `app.js` + `background-editor.js` + `hero-banner.js` — 업로드 WebP 압축
+  (`shrinkImage`, `window.craImg`로 공유)
+- **검증:** `npm.cmd run qa` **114/114 green을 3회 연속**. 문제됐던 테스트 단독 **60/60**.
+  스텁·지연로딩·압축은 각각 임시 스펙으로 실측 증명한 뒤 스펙을 삭제했다
+  (Storage 요청 2/2 가로챔 · 배너 5개 중 1개만 초기 로드 · 4000×3000 PNG → 9.4배 축소).
+- **의도적으로 하지 않은 것:** 커버 URL의 `?t=${Date.now()}`는 고정 경로 + `upsert` 구조상
+  교체된 표지를 즉시 반영하기 위해 **필요한 장치**라 그대로 뒀다. 건드리면 표지가 갱신되지
+  않는 버그 위험이 있고, 압축 후 커버는 ~5KB라 얻을 이그레스도 없다.
+- **8/29에 추가한 방지책(미커밋):**
+  ⑤ `supabase-config.js` — **로컬 dev 기본 오프라인.** `127.0.0.1`/`localhost`에서만
+  `window.SUPABASE_URL`/`ANON_KEY`를 비워 `app.js`의 기존 "클라이언트 없음" 경로를 타게 한다.
+  실콘텐츠가 필요하면 콘솔에서 `craDevLive(true)` + 새로고침. 운영은 호스트가 달라 무영향.
+  ⑥ `tests/smoke.spec.js` — `beforeEach`가 `addInitScript`로 라이브 플래그를 **명시적으로**
+  켠다. 안 켜면 테스트도 오프라인이 되는데, 그건 이미 기각된 "REST까지 막기"와 같은 결과다.
+  ⑦ 같은 파일 — **예산 가드 스펙 2개.** 스텁이 못 덮는 Storage URL이 하나라도 나가면 실패,
+  그리고 라이브 플래그 없이 메인 플로우를 돌 때 `*.supabase.co` 요청이 0건인지 검증.
+- **다음 단계:**
+  (a) `npm.cmd run qa` 통과 → **사용자 육안 검사** → 커밋/배포.
+  육안 검사는 **두 모드 모두**: 기본(오프라인)에서 정적 콘텐츠·네트워크 0건,
+  `craDevLive(true)`에서 배너 지연로딩과 업로드 압축. **커밋·배포는 사용자가 요청할 때만.**
+  (b) 배포 후 실환경에서 압축·지연로딩이 실제 Storage 상대로 도는지 확인.
+  (c) **남은 과제 — 기존 Storage 39MB 재압축.** 압축은 신규 업로드에만 적용된다. 5GB ÷ 39MB
+  ≈ 월 128회 풀 콜드 다운로드면 다시 한도다. **운영 데이터를 덮어쓰는 유일한 작업**이라
+  이번 배치에서 의도적으로 뺐다 — 버킷을 실제로 확인한 뒤 따로 설계할 것.
+  (d) 사용량 조기 경보는 **만들 수 없다고 결론.** Management API에 org 이그레스/할당량
+  엔드포인트가 문서화돼 있지 않고, PAT가 필요한데 이 저장소는 public이다. ⑦의 예산 가드가
+  대체물이며, 사고의 실제 원인("QA가 운영을 친다는 걸 몰랐다")에 더 정확히 대응한다.
+
+---
+
+**이전 기록 — 세션 종료 정리 (`2026-08-05`).** 워킹 트리 클린,
 origin/master 동기화(`772035d`), `npm.cmd run qa` **114/114 green**, 두 도메인
 (www.cambridgereading.com · new-app0607.vercel.app) 코어 파일 5종 전부 HTTP 200 확인.
 

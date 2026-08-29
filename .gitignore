@@ -16,3 +16,8 @@ debug.log
 Thumbs.db
 
 .vercel
+
+# Claude Code local session notes — LOCAL ONLY.
+# This repo is public: these must never be committed.
+.claude/WORKLOG.md
+.claude/PRIVATE-NOTES.md

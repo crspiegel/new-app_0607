@@ -1,5 +1,53 @@
 import { expect, test } from "@playwright/test";
 
+// Storage objects must never be fetched from the live Supabase project. Every
+// Playwright context starts with a cold cache, so the 114 runs behind one
+// `npm run qa` each re-downloaded every banner and background image straight
+// from Storage — that alone burned the free egress quota (28.19 GB of cached
+// egress out of a 39 MB bucket, against a single monthly active user).
+//
+// Only the object route is stubbed, and it answers with a real (1x1) PNG.
+// Blocking the REST/auth calls too was tried and rejected: their latency is
+// part of the timing this suite was tuned against, and removing it unmasked a
+// reflow race in the band-geometry test. Their payloads are JSON measured in
+// kilobytes (0.195 GB of database egress all month), so they are not what
+// needs stopping. An image is what costs, and every element here is sized by
+// CSS, so a 1x1 stand-in changes no geometry — and unlike an abort it fires
+// no error handler, which would drop hero slides and background elements.
+const BLANK_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+// Every Storage URL, and the subset the stub above answers. The guard spec at
+// the bottom of this file asserts the two sets are the same.
+const STORAGE_ANY = /https?:\/\/[^/]+\.supabase\.co\/storage\//;
+const STORAGE_STUBBED = /https?:\/\/[^/]+\.supabase\.co\/storage\/v1\/object\//;
+
+test.beforeEach(async ({ page }) => {
+  // supabase-config.js turns itself off on localhost so a stray `npm run dev`
+  // cannot spend production egress, and Playwright's baseURL is 127.0.0.1. This
+  // suite has to opt back in: it is tuned against real REST latency, and
+  // stubbing REST was tried and rejected — it unmasked a reflow race in the
+  // band-geometry test. Only Storage objects are stubbed, and those are what
+  // cost. The offline default itself is covered by its own spec below.
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem("cra:dev-live", "1");
+    } catch {
+      /* config falls back to offline; the affected specs will say so */
+    }
+  });
+
+  await page.route(STORAGE_STUBBED, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "image/png",
+      body: BLANK_PNG,
+    }),
+  );
+});
+
 test("main level-to-month-to-content flow renders", async ({ page }) => {
   const failedRequests = [];
   page.on("requestfailed", (request) => failedRequests.push(request.url()));
@@ -1083,6 +1131,15 @@ test("editor: 가로 100% toggles a band and unchecking restores the placement",
 
   // Switching the anchor re-expresses the same pixels from the other edge, so
   // the band must not jump.
+  // A stretch band is an <img> at width:100%/height:auto, so its height — and
+  // with a bottom anchor its top — only settles once the image has decoded.
+  // Measure before that and the anchor swap reads as a jump of exactly the
+  // band's own height.
+  await page.waitForFunction(() => {
+    const el = document.querySelector("#pageBgLayer .bg-edit-el");
+    const img = el && (el.tagName === "IMG" ? el : el.querySelector("img"));
+    return Boolean(img && img.complete && img.naturalWidth > 0);
+  });
   const topBefore = await page.evaluate(
     () =>
       document.querySelector("#pageBgLayer .bg-edit-el").getBoundingClientRect()
@@ -1673,4 +1730,72 @@ test("page background clears when leaving a level page", async ({ page }) => {
   await page.locator(".brand").click();
   await expect(page.locator("body")).not.toHaveClass(/page-bg-active/);
   await expect(page.locator("#pageBgLayer .page-bg-full")).toHaveCount(0);
+});
+
+// --- egress guards ---------------------------------------------------------
+// One `npm run qa` is 38 specs across 3 devices, and every one of those 114
+// contexts starts with a cold cache. When each of them fetched real banner and
+// background images, the free Cached Egress quota went to 564% and Supabase
+// returned 402 for every request to the project — REST, Auth and Storage — for
+// about ten days. The two specs below keep that from being invisible again:
+// the first proves nothing slips past the stub, the second proves a plain
+// `npm run dev` spends nothing at all.
+
+test("no Supabase Storage request escapes the test stub", async ({ page }) => {
+  // The stub only covers /storage/v1/object/. A new code path that reads images
+  // some other way — image transformations, a signed URL, a second bucket
+  // helper — would look fine locally and then quietly bill every future CI run.
+  // Catching it here turns that into a failing test instead of an outage.
+  const escaped = [];
+  page.on("request", (request) => {
+    const url = request.url();
+    if (STORAGE_ANY.test(url) && !STORAGE_STUBBED.test(url)) escaped.push(url);
+  });
+
+  // Walk the paths that actually pull images: home, a level's month grid, a
+  // content page (backgrounds), and the hero carousel on the home screen.
+  await page.goto("/");
+  await expect(page.locator("#homeTitle")).toBeVisible();
+  await page.getByRole("button", { name: "Beginner" }).first().click();
+  await expect(page).toHaveURL(/#months\/Level%201$/);
+  await page.getByRole("button", { name: /March/i }).click();
+  await expect(page).toHaveURL(/#content\/Level%201\/March$/);
+  await page.locator(".brand").click();
+  await expect(page.locator("#homeTitle")).toBeVisible();
+
+  expect(escaped).toEqual([]);
+});
+
+test("local dev defaults to offline so a stray dev server spends no egress", async ({
+  page,
+}) => {
+  // beforeEach opts this suite into live mode; drop that here to exercise what
+  // a developer running `npm run dev` actually gets. Init scripts run in the
+  // order they were added, so this one lands after it.
+  await page.addInitScript(() => {
+    try {
+      localStorage.removeItem("cra:dev-live");
+    } catch {
+      /* already offline, which is what this spec asserts */
+    }
+  });
+
+  const supabaseRequests = [];
+  page.on("request", (request) => {
+    if (/https?:\/\/[^/]+\.supabase\.co\//.test(request.url()))
+      supabaseRequests.push(request.url());
+  });
+
+  await page.goto("/");
+  await expect(page.locator("#homeTitle")).toBeVisible();
+  await page.getByRole("button", { name: "Beginner" }).first().click();
+  await expect(page).toHaveURL(/#months\/Level%201$/);
+  await page.getByRole("button", { name: /March/i }).click();
+  await expect(page.locator("#contentLevelName")).toBeVisible();
+
+  // The config blanks the globals, app.js skips createClient, and the static
+  // site renders anyway — the same path the site served on during the outage.
+  expect(await page.evaluate(() => window.SUPABASE_URL)).toBe("");
+  expect(await page.evaluate(() => window.SUPABASE_ANON_KEY)).toBe("");
+  expect(supabaseRequests).toEqual([]);
 });

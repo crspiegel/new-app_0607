@@ -2648,13 +2648,72 @@ function slugify(text) {
     .replace(/[^a-z0-9]+/g, "-");
 }
 
+// Art used to reach Storage untouched: a 5 MB phone photo stayed 5 MB, and
+// every visitor then paid for it on every view. Re-encode to WebP under a
+// sensible ceiling before uploading. Every failure path returns the ORIGINAL
+// file — no canvas, a decode error, or a result that is not actually smaller
+// must never cost the admin their upload.
+const IMG_MAX_EDGE = 1920; // full-bleed art: page backgrounds, hero banners
+const COVER_MAX_EDGE = 800; // covers only ever paint as small cards
+const IMG_QUALITY = 0.82;
+
+function shrinkImage(file, maxEdge, quality) {
+  return new Promise((resolve) => {
+    if (!file || !String(file.type).startsWith("image/")) {
+      resolve(file);
+      return;
+    }
+    const url = window.URL.createObjectURL(file);
+    const img = new window.Image();
+    img.addEventListener("load", () => {
+      window.URL.revokeObjectURL(url);
+      try {
+        const longest = Math.max(img.naturalWidth, img.naturalHeight);
+        const scale = Math.min(1, maxEdge / longest);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        canvas
+          .getContext("2d")
+          .drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          (blob) => {
+            // Re-encoding a small PNG can grow it; keep whichever is smaller.
+            if (!blob || blob.size >= file.size) {
+              resolve(file);
+              return;
+            }
+            const stem = file.name.replace(/.[^.]+$/, "");
+            resolve(
+              new window.File([blob], stem + ".webp", { type: "image/webp" }),
+            );
+          },
+          "image/webp",
+          quality,
+        );
+      } catch {
+        resolve(file);
+      }
+    });
+    img.addEventListener("error", () => {
+      window.URL.revokeObjectURL(url);
+      resolve(file);
+    });
+    img.src = url;
+  });
+}
+
+// Shared with background-editor.js and hero-banner.js (both load after this).
+window.craImg = { shrinkImage, MAX_EDGE: IMG_MAX_EDGE, QUALITY: IMG_QUALITY };
+
 async function uploadCover(book, file) {
   if (!sb || !file) return;
   setAdminStatus("업로드 중…");
+  const art = await shrinkImage(file, COVER_MAX_EDGE, IMG_QUALITY);
   const path = `${slugify(adminState.level)}/${slugify(adminState.month)}/${book}`;
   const { error: upErr } = await sb.storage
     .from("covers")
-    .upload(path, file, { upsert: true, contentType: file.type });
+    .upload(path, art, { upsert: true, contentType: art.type });
   if (upErr) {
     setAdminStatus("업로드 실패.");
     return;

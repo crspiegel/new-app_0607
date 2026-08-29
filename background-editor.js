@@ -214,11 +214,18 @@ async function bgUploadFile(file, quiet) {
     return false;
   }
   if (!quiet) setBgStatus("업로드 중…");
-  const safe = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
+  // Shrink before upload (see shrinkImage in app.js) — falls back to the
+  // original file whenever re-encoding cannot help.
+  const art = await window.craImg.shrinkImage(
+    file,
+    window.craImg.MAX_EDGE,
+    window.craImg.QUALITY,
+  );
+  const safe = art.name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
   const { error } = await sb.storage
     .from(BG_BUCKET)
-    .upload(`${BG_LIB_PREFIX}/${Date.now()}-${safe}`, file, {
-      contentType: file.type,
+    .upload(`${BG_LIB_PREFIX}/${Date.now()}-${safe}`, art, {
+      contentType: art.type,
     });
   if (error) {
     setBgStatus("업로드 실패.");

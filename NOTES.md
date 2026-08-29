@@ -199,6 +199,92 @@ similar work** so the same problems don't recur. Append to this as you learn mor
     still land ~1px smaller on the longest label. **Re-run that sweep before changing icon size,
     icon padding, or wide-button padding.**
 
+## Supabase egress — QA burned the free quota (2026-08-24)
+
+- **What happened:** the project hit `exceed_cached_egress_quota` and Supabase **restricted
+  every service** — REST, Auth and Storage all return HTTP 402. The site itself stayed up
+  (every hydrate path early-returns on error, and the default hero slide is a local asset),
+  but admin content, custom backgrounds and login were gone.
+- **The cause was NOT a loop.** `supabase-config.js` hardcodes the production URL/key, so the
+  dev server and Playwright both read the **live** project. One `npm run qa` = 38 tests × 3
+  device projects = **114 cold-cache page loads**, each re-downloading every banner and
+  background from Storage. The dashboard confirms it: **28.19 GB of cached egress out of a
+  39 MB bucket** (≈723× the whole bucket) against **1 monthly active user**. Real visitors
+  cannot produce that; automation can.
+- **Cached egress still counts against the quota.** A good CDN hit rate does not protect you.
+  Only fewer requests or smaller files do.
+- **Fix:** `tests/smoke.spec.js` stubs the Storage object route with a 1×1 PNG — that route
+  and nothing else.
+- **⚠ Do NOT stub the REST/auth routes as well.** Tried three ways (empty 200, `route.abort()`,
+  a 4xx) and every one made `editor: 가로 100%…` flaky. `abort()` was worst: supabase-js retries
+  a network failure, which took one page load from 4 Supabase requests to 16 and tripled the
+  run time. Those payloads are kilobytes anyway — 0.195 GB of database egress for the whole
+  month. Images are what cost.
+- **A latent test bug this unmasked:** a stretch band is an `<img>` at `width:100%/height:auto`,
+  so its height — and under a bottom anchor its `top` — only settles once the image decodes.
+  The test measured before that, and the failure delta was always **exactly the band height**
+  (1652 desktop / 939 tablet / 480 mobile). It had passed only because nothing was slowing the
+  image down. Any geometry assertion on a background element must first wait for
+  `img.complete && img.naturalWidth > 0`.
+- **Uploads are re-encoded client-side now** — `shrinkImage()` in `app.js`, shared with the
+  other two scripts via `window.craImg`. WebP, 1920 px long edge for full-bleed art and 800 px
+  for covers, quality 0.82. **Every failure path returns the ORIGINAL `File`** (no canvas, a
+  decode error, or a result that is not actually smaller), so an upload never breaks because
+  compression could not help. Measured: 4000×3000 PNG → 1920×1440 WebP = 9.4× smaller, and the
+  same file at cover size = 45× smaller.
+- **Hero banners load lazily.** `heroBuildBannerSlide` parks the URL in `dataset.src` and
+  `heroPrimeSlide()` attaches it one slide ahead, so a page load fetches one banner instead of
+  all of them. Slide 1 is the local default and slide 2 is primed immediately, so the first
+  rotation is as instant as it always was.
+- **Files already in Storage were NOT re-compressed** — compression applies to new uploads only.
+- **`?t=${Date.now()}` on cover URLs is deliberate, leave it.** Covers upload to a fixed path
+  with `upsert`, so without the query the CDN would keep serving the replaced image. After
+  compression a cover is ~5 KB, so it costs nothing worth reclaiming.
+
+### How it ended, and what the billing cycle actually does (2026-08-29)
+
+- **The quota does reset, and the restriction does lift by itself.** The cycle rolled from
+  `28 Jul – 28 Aug` to `28 Aug – 28 Sep`, Cached Egress went from **28.19 / 5 GB (564%)** to
+  **0 / 5 GB**, and a `$0.00` invoice appeared for Aug 28. No payment, no plan change.
+- **But the lift lags the reset by hours.** The dashboard showed the new cycle at 15:19Z on
+  8/28; REST, Storage and Auth kept returning 402 until **03:29Z on 8/29 — about 12 hours
+  later.** Supabase's own wording is only "a short delay"; community reports run to 24–48 h.
+  So do not read the dashboard and conclude you are back. **Call the API.**
+- **Project transfers are disabled while a project is restricted.** The Fair Use Policy lists
+  the enforcement mechanisms as pausing projects, read-only databases, "disabling new project
+  launches/**transfers**", and 402 on every request. If a move between organizations is ever
+  on the table again, the 402 has to clear first — it is not a matter of caution, the button
+  does not work.
+- **The grace period is spent.** The policy grants one, and says a later violation gets none.
+  The next overage restricts the project immediately, with no warning.
+
+### What now prevents a repeat
+
+- **Local dev is offline by default** (`supabase-config.js`). On `127.0.0.1` / `localhost` the
+  file blanks its own two globals unless `localStorage["cra:dev-live"] === "1"`, and `app.js`
+  already renders the static site when there is no URL/key — the same path that served the
+  whole outage. `craDevLive(true)` + reload opts in and prints a standing console warning;
+  `craDevLive(false)` opts back out. **Production never takes this branch** (hostname check),
+  and a blocked `localStorage` fails closed, toward offline.
+- **Playwright opts back in explicitly** via `addInitScript` in `beforeEach`. It must: the
+  suite is tuned against real REST latency (see the warning above about stubbing REST). What
+  it does not get back is Storage — that stays stubbed.
+- **Two guard specs make the cost visible** (bottom of `tests/smoke.spec.js`):
+  `no Supabase Storage request escapes the test stub` fails if any Storage URL outside
+  `/storage/v1/object/` is requested — a signed URL, an image transformation, a new bucket
+  helper — because the stub would not cover it and every future CI run would pay for it.
+  `local dev defaults to offline…` walks the main flow with the live flag removed and asserts
+  **zero** requests to `*.supabase.co`.
+- **Still open:** the ~39 MB already in Storage is uncompressed, and 5 GB ÷ 39 MB is only about
+  **128 full cold downloads a month** before the cap. Re-encoding what is already uploaded is
+  the remaining lever, and it is the one job that rewrites production data — design it on its
+  own, do not fold it into an unrelated batch.
+- **There is still no usage alarm, and there is no good way to build one.** The Management API
+  documents no organization egress/quota endpoint, and it needs a personal access token, which
+  this **public** repo has nowhere safe to keep. The guard specs replace it by measuring our
+  own consumption instead of Supabase's counter — which is the better signal anyway: the
+  incident was never "we failed to notice the meter", it was "we did not know QA hit prod".
+
 ## Video player modal (Vimeo)
 
 - The custom video modal (Level 1 / March) drives a Vimeo iframe via the **Vimeo Player SDK**
