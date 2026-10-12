@@ -4327,6 +4327,13 @@ body.video-open {
   cursor: pointer;
 }
 
+/* External video page (app.js mountExternalPage): the framed page runs its own
+   player, so our click layer and control bar step aside. */
+.video-player-card.vp-external .vp-click-layer,
+.video-player-card.vp-external .vp-controls {
+  display: none;
+}
+
 /* End-of-video overlay — covers Vimeo's related-videos end screen with our own
    scene + a Replay button. Sits above the click layer; matches the stage wash. */
 .vp-end-overlay {

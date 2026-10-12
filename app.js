@@ -908,8 +908,9 @@ const YT_ID_RE =
 
 // Classify a stored video value. Returns null for an empty slot (no sample
 // fallback — empty means "not ready yet", handled in openSlot). YouTube URLs
-// resolve to { kind: "youtube", id }; everything else stays Vimeo (a numeric id
-// or a full Vimeo URL).
+// resolve to { kind: "youtube", id }; a web page on any other host resolves to
+// { kind: "page", url }; everything else stays Vimeo (a numeric id or a full
+// Vimeo URL).
 function parseVideoSource(source) {
   if (!source) return null;
   const str = String(source).trim();
@@ -917,7 +918,24 @@ function parseVideoSource(source) {
   const yt = str.match(YT_ID_RE);
   if (yt) return { kind: "youtube", id: yt[1] };
   if (/^\d+$/.test(str)) return { kind: "vimeo", id: Number(str) };
+  if (isExternalVideoPage(str)) return { kind: "page", url: str };
   return { kind: "vimeo", url: str };
+}
+
+// A page on a non-Vimeo host that plays the video itself — e.g. a publisher
+// page (tps-education.com/58?video=…) wrapping a Vimeo video whose privacy is
+// locked to that publisher's domain. Vimeo refuses the bare id anywhere else
+// ("Because of its privacy settings…"), but the publisher's own page still
+// plays when framed, since its Vimeo iframe is requested from that domain.
+function isExternalVideoPage(str) {
+  let url;
+  try {
+    url = new URL(str);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+  return !/(^|\.)vimeo\.com$/i.test(url.hostname);
 }
 
 // Classify a background-video URL (배경 편집기's 영상 URL field). Unlike
@@ -1115,6 +1133,7 @@ function teardownPlayer() {
     activePlayer = null;
   }
   if (vpFrame) vpFrame.innerHTML = "";
+  if (videoPlayerCard) videoPlayerCard.classList.remove("vp-external");
 }
 
 function openVideoPlayer(label, source) {
@@ -1136,9 +1155,25 @@ function openVideoPlayer(label, source) {
   if (!parsed) return; // empty is handled by openSlot, but stay safe
   if (parsed.kind === "youtube") {
     mountYouTube(parsed.id);
+  } else if (parsed.kind === "page") {
+    mountExternalPage(parsed.url);
   } else {
     mountVimeo(parsed);
   }
+}
+
+// Frame an external video page (see isExternalVideoPage). The page runs its
+// own player, so there is no activePlayer: .vp-external hides our click layer
+// and control bar, and the child uses the page's own buttons (e.g. unmute).
+function mountExternalPage(url) {
+  vpFrame.innerHTML = "";
+  const frame = document.createElement("iframe");
+  frame.src = url;
+  frame.title = vpTitle ? vpTitle.textContent : "";
+  frame.allow = "autoplay; fullscreen; picture-in-picture";
+  frame.allowFullscreen = true;
+  vpFrame.appendChild(frame);
+  videoPlayerCard.classList.add("vp-external");
 }
 
 // Mount a Vimeo video and wire its events to the shared transport UI.
@@ -2845,6 +2880,9 @@ window.craBg = {
 // Content bridge for Playwright (mirrors craBg). "settled" flips when the
 // hydrateContent fetch attempt finishes — assigned here BEFORE the init IIFE's
 // continuation runs (its first await yields past this synchronous tail).
+// Video bridge for Playwright (mirrors craBg).
+window.craVideo = { parseVideoSource, openVideoPlayer };
+
 window.craContent = {
   contentCache,
   pageKey,

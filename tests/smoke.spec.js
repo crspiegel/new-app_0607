@@ -1296,6 +1296,53 @@ test("background video URL classifier accepts only renderable shapes", async ({
   ]);
 });
 
+test("slot video classifier sends non-Vimeo pages to the page viewer", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const kinds = await page.evaluate(() =>
+    [
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "https://vimeo.com/76979871",
+      "https://player.vimeo.com/video/76979871",
+      "76979871",
+      "https://tps-education.com/58?video=173725167",
+    ].map((value) => window.craVideo.parseVideoSource(value).kind),
+  );
+  expect(kinds).toEqual(["youtube", "vimeo", "vimeo", "vimeo", "page"]);
+});
+
+test("external video page opens inside the video window", async ({ page }) => {
+  // A domain-locked Vimeo video only plays inside its owner's page, so the
+  // slot frames that page. Stub it — the suite never hits the real site.
+  const pageUrl = "https://tps-education.com/58?video=173725167";
+  await page.route("https://tps-education.com/**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><title>stub</title><p>stub</p>",
+    }),
+  );
+  await page.goto("/");
+  await page.evaluate(
+    (url) => window.craVideo.openVideoPlayer("Opening Song", url),
+    pageUrl,
+  );
+  const card = page.locator("#videoModal .video-player-card");
+  await expect(card).toHaveClass(/vp-external/);
+  const iframe = page.locator("#vpFrame iframe");
+  await expect(iframe).toHaveAttribute("src", pageUrl);
+  expect(await iframe.getAttribute("allow")).toContain("autoplay");
+  // Our transport can't drive another site's page: the click layer and the
+  // control bar get out of the way so the page itself is clickable.
+  await expect(page.locator("#vpClickLayer")).toBeHidden();
+  await expect(card.locator(".vp-controls")).toBeHidden();
+
+  await page.locator("#videoModal .vp-close").click();
+  await expect(page.locator("#videoModal")).toBeHidden();
+  await expect(page.locator("#vpFrame iframe")).toHaveCount(0);
+  await expect(card).not.toHaveClass(/vp-external/);
+});
+
 test("video background renders above the full-image fallback", async ({
   page,
 }) => {

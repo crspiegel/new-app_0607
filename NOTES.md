@@ -371,6 +371,16 @@ window.Vimeo.Player` since the SDK loads async and may be absent (offline / head
   buffering (spinner), so `play` never fires and the toggle won't flip in headless. Verify the
   play↔pause icon swap by setting `#vpToggle[data-playing]` directly and checking the icon
   `display`; trust the SDK events for real-browser playback.
+- **Domain-locked Vimeo (2026-10-12):** some publisher videos (e.g. Muzzy via
+  `tps-education.com/58?video=<id>`) are Vimeo "embed only on specific domains". Vimeo checks the
+  iframe request's Referer, so the bare id from our domain returns "Because of its privacy
+  settings, this video cannot be played here" — and the owner (overseas publisher) won't quickly
+  add our domains. So `parseVideoSource` classifies any http(s) URL on a non-Vimeo host as
+  `kind:"page"` and `mountExternalPage` **frames the publisher page itself** (its own Vimeo iframe
+  is then requested from the allowed domain and plays). `.vp-external` hides our click layer and
+  control bar — there's no `activePlayer` for that page. The page auto-opens its modal from
+  `?video=`; if the publisher changes that page, these slots break and only they can fix it. Don't
+  try Referer spoofing or proxying instead — that bypasses the owner's restriction.
 - The modal opens **only** on Level 1 / March — gated at click time by `isLevel1March()`, because
   `#contentScreen` + the 20 `renderLessons()` buttons are shared by all levels/months. When
   testing scope, use a **fresh Playwright page per route** (hash-only navigation doesn't re-run
