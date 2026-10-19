@@ -5,6 +5,22 @@
 > updated to the current `D:\_TPS` root). The live, short status now lives in `PROJECT_MEMORY.md`.
 > Read this only when you need past history, rationale, or old session logs.
 
+## Recent-state entries moved out of PROJECT_MEMORY.md (`2026-10-19`, verbatim)
+
+- `2026-10-19` (deployed) — YouTube captions forced OFF (`disableYouTubeCaptions`, 3 call sites —
+  keep all). Harness setup: `.claude/verify.json`, history → `docs/PROJECT_MEMORY-archive.md`,
+  `.vercelignore` excludes `docs`/`.gitattributes`.
+
+- `2026-10-12` `024a18d` — publisher-page Vimeo URLs (domain-restricted) open the page itself in the
+  video window (`mountExternalPage`).
+- `2026-10-06` — Supabase Auth **new sign-ups disabled on purpose** (bot accounts found and deleted).
+  Do not re-enable. Admins are created in the dashboard (Add user) + a `public.admins` row; admin
+  login ids must contain `@`.
+- `2026-08-29` `32e7726` / `5139e7e` — Supabase egress fixes deployed: Storage stub in QA, banner lazy
+  loading, upload WebP compression, **local dev offline by default** (`craDevLive(true)` to go live),
+  QA budget guard specs. Storage recompressed 24.55MB → 8.90MB served. Account transfer: **not doing**
+  (user decision 8/29). Grace period is used up — the next quota breach means an immediate 402.
+
 ---
 
 # Project Memory — Resume State

@@ -3,5 +3,6 @@
   "framework": null,
   "buildCommand": null,
   "outputDirectory": ".",
+  "trailingSlash": false,
   "rewrites": [{ "source": "/q/:path*", "destination": "/play.html" }]
 }
