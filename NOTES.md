@@ -318,8 +318,11 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   `false` and it reads exactly like a permissions problem when it is an ordering problem.
   Wait for `sb-*-auth-token` to appear in `localStorage`, **then** create the client with
   `global.headers.Authorization` pinned to that token.
-- **Originals are backed up** at `D:\_TPS\reading adventure\_storage-backup-20260829\`
-  (compressed previews under `compressed\`). Restoring is the same operation in reverse.
+- **Originals:** the `_storage-backup-20260829` folder was sent to the Recycle Bin on `2026-10-19`
+  after confirming (sha1) that all six originals also live outside the repo: banners in
+  `D:\_TPS\reading adventure\메인 히어로 섹션 배너_tps제공\`, backgrounds in
+  `D:\_TPS\reading adventure\피드백_0717_레벨별 백그라운드 이미지 요청\LEVEL 1~3\`. Restoring = recompress
+  those and upsert to the same Storage paths. Don't delete those two folders.
 - **New uploads need none of this** — `shrinkImage` has compressed them since the Phase 1
   deploy. This was strictly a one-time cleanup of what predated it.
 

@@ -65,7 +65,9 @@ None. (Last item — YouTube captions forced OFF — was verified by the user an
   `new-app0607.vercel.app` still works.
 - **Supabase:** project `jguuexcgyvyljbcqfpib`; anon key in `supabase-config.js` (public by design).
   Provisioning record: `SUPABASE_SETUP.md`, `supabase/migration.sql`.
-- Storage originals backup (outside repo): `D:\_TPS\reading adventure\_storage-backup-20260829\`.
+- Storage originals (outside repo): the `_storage-backup-20260829` folder went to the Recycle Bin on
+  `2026-10-19`; identical originals live in `메인 히어로 섹션 배너_tps제공\` and
+  `피드백_0717_레벨별 백그라운드 이미지 요청\LEVEL 1~3\` (see `NOTES.md`).
 
 ## Backlog
 
@@ -79,7 +81,6 @@ None. (Last item — YouTube captions forced OFF — was verified by the user an
 - Delete `contentScreenV2`, or keep it as reference?
 - `2026-08-05` admin background re-placement (Beginner/March band 7px overlap; Level 1/2 April
   frame elements) — done by the user?
-- When to delete the `_storage-backup-20260829` folder (keep until sure the recompression is fine).
 
 ## Resume checklist
 
