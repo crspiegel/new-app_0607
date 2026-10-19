@@ -1270,6 +1270,22 @@ function makeYouTubeAdapter(yt) {
   };
 }
 
+// Force YouTube captions (CC, incl. auto-generated) off. Some viewers have
+// "always show captions" on in their YouTube account / OS accessibility
+// settings, and with controls:0 + disablekb:1 a child has no CC button or "c"
+// key to turn them off. There is no official "captions off" parameter
+// (cc_load_policy only forces them ON), so this relies on the undocumented
+// unloadModule — if YouTube changes it, the call just fails silently and
+// captions show as before. "cc" is the module name in older players.
+function disableYouTubeCaptions(yt) {
+  try {
+    yt.unloadModule("captions");
+    yt.unloadModule("cc");
+  } catch {
+    /* player may not be ready yet, or the API changed */
+  }
+}
+
 // Mount a YouTube video. The native chrome is hidden (controls:0) and the
 // #vpClickLayer sits over the iframe, so our own controls drive playback.
 function mountYouTube(videoId) {
@@ -1291,9 +1307,16 @@ function mountYouTube(videoId) {
         fs: 0,
         disablekb: 1,
         iv_load_policy: 3,
+        // Not an official "off" value (only 1 is documented); harmless.
+        // The real work is disableYouTubeCaptions below.
+        cc_load_policy: 0,
       },
       events: {
+        // Fires when the player loads/unloads a module — the captions module
+        // often loads lazily after playback starts, so unload it again here.
+        onApiChange: () => disableYouTubeCaptions(yt),
         onReady: () => {
+          disableYouTubeCaptions(yt);
           try {
             yt.setVolume(Math.round(vpVolumeLevel * 100));
             const d = yt.getDuration();
@@ -1309,6 +1332,7 @@ function mountYouTube(videoId) {
         onStateChange: (event) => {
           const S = window.YT.PlayerState;
           if (event.data === S.PLAYING) {
+            disableYouTubeCaptions(yt);
             setVpPlaying(true);
             setVpEnded(false);
           } else if (event.data === S.PAUSED) {
