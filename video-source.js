@@ -206,13 +206,20 @@ const YT_ID_RE =
 // resolve to { kind: "youtube", id }; a web page on any other host resolves to
 // { kind: "page", url }; everything else stays Vimeo (a numeric id or a full
 // Vimeo URL).
-function parseVideoSource(source) {
+// `publisher: "direct"` (student page on a tps-education.com host only) turns
+// a TPS publisher page into its Vimeo id instead. The teacher site calls
+// without options, so publisher pages stay { kind: "page" } there.
+function parseVideoSource(source, { publisher } = {}) {
   if (!source) return null;
   const str = String(source).trim();
   if (!str) return null;
   const yt = str.match(YT_ID_RE);
   if (yt) return { kind: "youtube", id: yt[1] };
   if (/^\d+$/.test(str)) return { kind: "vimeo", id: Number(str) };
+  if (publisher === "direct") {
+    const id = publisherVimeoId(str);
+    if (id != null) return { kind: "vimeo", id };
+  }
   if (isExternalVideoPage(str)) return { kind: "page", url: str };
   return { kind: "vimeo", url: str };
 }

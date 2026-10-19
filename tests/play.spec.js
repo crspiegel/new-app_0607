@@ -73,6 +73,50 @@ test("video-source.js loads before app.js without redeclaration", async ({
   expect(pageErrors).toEqual([]);
 });
 
+test("parseVideoSource: publisher option turns a TPS page into its Vimeo id", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#homeTitle")).toBeVisible();
+
+  const result = await page.evaluate(() => {
+    const direct = { publisher: "direct" };
+    return {
+      tps58: parseVideoSource(
+        "https://tps-education.com/58?video=173725167",
+        direct,
+      ),
+      tps60www: parseVideoSource(
+        "https://www.tps-education.com/60?video=173728500",
+        direct,
+      ),
+      tps61: parseVideoSource(
+        "https://tps-education.com/61?video=173431191",
+        direct,
+      ),
+      // Not a TPS page with a numeric video id: unchanged by the option.
+      otherHost: parseVideoSource("https://example.com/?video=1", direct),
+      youtube: parseVideoSource("https://youtu.be/LPl2AR2rm0g", direct),
+      // The teacher site calls without the option: still a framed page.
+      noOption: parseVideoSource(
+        "https://tps-education.com/58?video=173725167",
+      ),
+    };
+  });
+
+  expect(result).toEqual({
+    tps58: { kind: "vimeo", id: 173725167 },
+    tps60www: { kind: "vimeo", id: 173728500 },
+    tps61: { kind: "vimeo", id: 173431191 },
+    otherHost: { kind: "page", url: "https://example.com/?video=1" },
+    youtube: { kind: "youtube", id: "LPl2AR2rm0g" },
+    noOption: {
+      kind: "page",
+      url: "https://tps-education.com/58?video=173725167",
+    },
+  });
+});
+
 /* ---- QR student page (play.html) ---------------------------------------
    The page reads exactly one content_pages row over REST. These specs answer
    that request from a fixture instead of the live project: zero egress and a
@@ -292,6 +336,152 @@ test("play: resolvePlayback strategies", async ({ page }) => {
     empty: null,
     blank: null,
   });
+});
+
+/* ---- Direct Vimeo on a tps-education.com host (①안) ----------------------
+   Vimeo plays the publisher's ids only on tps-education.com hosts, so there
+   the page embeds player.vimeo.com directly instead of framing the publisher
+   page. On 127.0.0.1 the ?host= override stands in for that host. The Vimeo
+   SDK and player page are faked: no Vimeo traffic, and `ended` can be fired. */
+async function mockVimeo(page) {
+  await page.route("https://player.vimeo.com/api/player.js", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: `
+        window.__vimeo = { players: [], textTrackOff: 0 };
+        window.Vimeo = {
+          Player: function (el) {
+            const handlers = {};
+            window.__vimeo.players.push({ tag: el.tagName, src: el.src });
+            this.on = (name, fn) => { handlers[name] = fn; };
+            this.play = () => Promise.resolve();
+            this.pause = () => Promise.resolve();
+            this.destroy = () => Promise.resolve();
+            this.disableTextTrack = () => {
+              window.__vimeo.textTrackOff += 1;
+              return Promise.resolve();
+            };
+            window.__vimeo.fire = (name) => handlers[name] && handlers[name]();
+          },
+        };`,
+    }),
+  );
+  await page.route(/^https:\/\/player\.vimeo\.com\/video\//, (route) =>
+    route.fulfill({ contentType: "text/html", body: "<p>vimeo</p>" }),
+  );
+}
+
+test("play: publisher strategy follows the host", async ({ page }) => {
+  await mockContent(page);
+  await page.goto("/play.html?l=b&m=3&s=w1-mon");
+  const result = await page.evaluate(() => {
+    const { publisherStrategy, playHost } = window.craPlay;
+    return {
+      play: publisherStrategy("play.tps-education.com"),
+      apex: publisherStrategy("tps-education.com"),
+      qrtest: publisherStrategy("QRTEST.tps-education.com"),
+      teacher: publisherStrategy("www.cambridgereading.com"),
+      vercel: publisherStrategy("new-app0607.vercel.app"),
+      local: publisherStrategy("127.0.0.1"),
+      lookalike: publisherStrategy("eviltps-education.com"),
+      suffix: publisherStrategy("tps-education.com.example.com"),
+      // ?host= is a test hook: honoured on localhost only.
+      overrideLocal: playHost("127.0.0.1", "?l=b&host=play.tps-education.com"),
+      overrideLocalhost: playHost("localhost", "?host=play.tps-education.com"),
+      overrideLive: playHost(
+        "www.cambridgereading.com",
+        "?host=play.tps-education.com",
+      ),
+      noOverride: playHost("127.0.0.1", "?l=b"),
+    };
+  });
+  expect(result).toEqual({
+    play: "direct",
+    apex: "direct",
+    qrtest: "direct",
+    teacher: "page",
+    vercel: "page",
+    local: "page",
+    lookalike: "page",
+    suffix: "page",
+    overrideLocal: "play.tps-education.com",
+    overrideLocalhost: "play.tps-education.com",
+    overrideLive: "www.cambridgereading.com",
+    noOverride: "127.0.0.1",
+  });
+});
+
+test("play direct: a publisher slot embeds player.vimeo.com", async ({
+  page,
+}) => {
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on(
+    "console",
+    (msg) => msg.type() === "error" && errors.push(msg.text()),
+  );
+  await mockContent(page);
+  await mockVimeo(page);
+  const publisher = [];
+  page.on("request", (request) => {
+    if (/tps-education\.com\//.test(request.url())) {
+      publisher.push(request.url());
+    }
+  });
+
+  await page.goto("/play.html?l=b&m=3&s=w1-mon&host=play.tps-education.com");
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "ready");
+  await page.locator("#playStart").click();
+
+  const frame = page.locator("#playFrame iframe");
+  await expect(frame).toHaveCount(1);
+  await expect(frame).toHaveAttribute(
+    "src",
+    /^https:\/\/player\.vimeo\.com\/video\/173725167\?/,
+  );
+  const src = await frame.getAttribute("src");
+  expect(new URL(src).searchParams.get("playsinline")).toBe("1");
+  await expect(frame).toHaveAttribute(
+    "allow",
+    "autoplay; fullscreen; picture-in-picture",
+  );
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "playing");
+  await expect(page.locator("#play")).toHaveAttribute("data-player", "vimeo");
+  // The SDK wraps our own iframe (no oEmbed lookup) and captions go off.
+  await expect
+    .poll(() => page.evaluate(() => window.__vimeo?.players ?? []))
+    .toEqual([{ tag: "IFRAME", src }]);
+  expect(await page.evaluate(() => window.__vimeo.textTrackOff)).toBe(1);
+  // Ends like YouTube: the overlay, not the inline Next of a framed page.
+  await expect(page.locator("#playNextInline")).toBeHidden();
+  expect(publisher).toEqual([]);
+  // The address bar keeps the override, so a refresh stays in direct mode.
+  await expect(page).toHaveURL(/[?&]host=play\.tps-education\.com/);
+  expect(errors).toEqual([]);
+});
+
+test("play direct: Vimeo ended shows Watch again and Next", async ({
+  page,
+}) => {
+  await mockContent(page);
+  await mockVimeo(page);
+  await page.goto("/play.html?l=b&m=3&s=w1-mon&host=play.tps-education.com");
+  await page.locator("#playStart").click();
+  await expect
+    .poll(() => page.evaluate(() => window.__vimeo?.players.length ?? 0))
+    .toBe(1);
+
+  await page.evaluate(() => window.__vimeo.fire("ended"));
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "ended");
+  await expect(page.locator("#playAgain")).toBeVisible();
+  await expect(page.locator("#playNext")).toBeVisible();
+
+  await page.locator("#playAgain").click();
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "playing");
+  await expect(page.locator("#playFrame iframe")).toHaveAttribute(
+    "src",
+    /^https:\/\/player\.vimeo\.com\/video\/173725167\?/,
+  );
 });
 
 test("play: cost guard — no Storage, one content read", async ({ page }) => {

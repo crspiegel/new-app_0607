@@ -4,5 +4,26 @@
   "buildCommand": null,
   "outputDirectory": ".",
   "trailingSlash": false,
-  "rewrites": [{ "source": "/q/:path*", "destination": "/play.html" }]
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "play.tps-education.com" }],
+      "destination": "/q",
+      "permanent": false
+    },
+    {
+      "source": "/index.html",
+      "has": [{ "type": "host", "value": "play.tps-education.com" }],
+      "destination": "/q",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    { "source": "/q/:path*", "destination": "/play.html" },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "play.tps-education.com" }],
+      "destination": "/play.html"
+    }
+  ]
 }

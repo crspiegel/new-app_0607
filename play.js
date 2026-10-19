@@ -11,11 +11,15 @@
 
 // How a domain-locked publisher video (tps-education.com/58?video=<id>) is
 // played. Vimeo only allows those ids on tps-education.com, so:
-//   "page"        frame the publisher page itself (works on any host — today)
+//   "page"        frame the publisher page itself (works on any host)
 //   "direct"      embed player.vimeo.com/video/<id> (only when this page is
-//                 served from a tps-education.com subdomain)
+//                 served from a tps-education.com host — play.tps-education.com)
 //   "player-page" frame PUBLISHER_PLAYER_URL + <id> (a bare TPS player page)
-const PUBLISHER_STRATEGY = "page";
+// Picked by host, so one deploy serves both www.cambridgereading.com/q/…
+// ("page") and play.tps-education.com/q/… ("direct").
+const PUBLISHER_STRATEGY = publisherStrategy(
+  playHost(window.location.hostname, window.location.search),
+);
 // e.g. "https://tps-education.com/player?video=" once TPS builds that page.
 // While empty, "player-page" behaves like "page".
 const PUBLISHER_PLAYER_URL = "";
@@ -80,6 +84,20 @@ const playState = {
 
 /* ---- Pure helpers (exposed on window.craPlay for tests) ----------------- */
 
+function publisherStrategy(hostname) {
+  return /(^|\.)tps-education\.com$/i.test(String(hostname || ""))
+    ? "direct"
+    : "page";
+}
+
+// The host the page acts as. On a dev machine `?host=play.tps-education.com`
+// stands in for the real host (Playwright checks direct mode with it); a
+// live host ignores the parameter.
+function playHost(hostname, search) {
+  if (hostname !== "127.0.0.1" && hostname !== "localhost") return hostname;
+  return new URLSearchParams(search || "").get("host") || hostname;
+}
+
 // "/q/<lv>/<month>/<slot>" (trailing slash allowed), else "?l=&m=&s=".
 // Every token is case-insensitive; returns null for anything invalid.
 function parsePlayRoute(pathname, search) {
@@ -141,7 +159,7 @@ function resolvePlayback(url, kind, strategy = PUBLISHER_STRATEGY) {
   const str = String(url || "").trim();
   if (!str) return null;
   if (kind === "game") return { type: "game", url: str };
-  const parsed = parseVideoSource(str);
+  const parsed = parseVideoSource(str, { publisher: strategy });
   if (!parsed) return null;
   if (parsed.kind === "youtube") return { type: "youtube", id: parsed.id };
   if (parsed.kind === "vimeo") {
@@ -150,9 +168,6 @@ function resolvePlayback(url, kind, strategy = PUBLISHER_STRATEGY) {
       : { type: "vimeo", url: parsed.url };
   }
   const vimeoId = publisherVimeoId(parsed.url);
-  if (vimeoId != null && strategy === "direct") {
-    return { type: "vimeo", id: vimeoId };
-  }
   if (vimeoId != null && strategy === "player-page" && PUBLISHER_PLAYER_URL) {
     return { type: "frame", url: `${PUBLISHER_PLAYER_URL}${vimeoId}` };
   }
@@ -376,19 +391,37 @@ function mountYouTube(videoId) {
   });
 }
 
+// A Vimeo id plays in our own player.vimeo.com iframe, which the SDK then
+// wraps — it never has to look the id up first. On a tps-education.com host
+// this is how the publisher's domain-locked videos play ("direct").
+function vimeoFrame(id) {
+  const frame = document.createElement("iframe");
+  frame.src = `https://player.vimeo.com/video/${id}?playsinline=1`;
+  frame.title = playTitle.textContent;
+  frame.allow = "autoplay; fullscreen; picture-in-picture";
+  frame.allowFullscreen = true;
+  return frame;
+}
+
 function mountVimeo(playback) {
   const mountId = playState.mountId;
+  const frame = playback.id != null ? vimeoFrame(playback.id) : null;
+  if (frame) playFrame.appendChild(frame);
   loadVimeoApi()
     .then(() => {
       if (mountId !== playState.mountId) return; // superseded by a later tap
-      const player = new window.Vimeo.Player(playFrame, {
-        ...(playback.id != null ? { id: playback.id } : { url: playback.url }),
-        playsinline: true,
-        responsive: false,
-      });
+      const player = frame
+        ? new window.Vimeo.Player(frame)
+        : new window.Vimeo.Player(playFrame, {
+            url: playback.url,
+            playsinline: true,
+            responsive: false,
+          });
       player.on("play", () => setPaused(false));
       player.on("pause", () => setPaused(true));
       player.on("ended", showEnded);
+      // Captions off, like YouTube (a no-op when the video has none).
+      player.disableTextTrack().catch(() => {});
       player.play().catch(() => {});
       playState.player = {
         play: () => player.play().catch(() => {}),
@@ -637,6 +670,8 @@ playGame.addEventListener("click", () => {
 });
 
 window.craPlay = {
+  publisherStrategy,
+  playHost,
   parsePlayRoute,
   fetchPageRow,
   resolvePlayback,
