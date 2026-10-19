@@ -30,6 +30,8 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
   read, 0 Storage, tap-to-play, (B) month list + `?solo=1`; shared data in `video-source.js`.
   Beginner fill 102/240. Live-checked (200 + noindex, no teacher markup under `/q/`, `/docs/` 404).
   `trailingSlash: false` so `/q/.../` 308s to the no-slash URL (`16be3c5`, live-checked). Gotchas: `NOTES.md` "QR 학생 페이지".
+  Full screen (⛶, `0670666`, live): Fullscreen API on `#playStage` where supported, else CSS pseudo
+  full screen (`body.play-fullscreen`, iPhone); ✕/Esc exits. Real devices not checked yet.
 - Older entries (captions OFF, harness setup, publisher pages, egress fixes) →
   `docs/PROJECT_MEMORY-archive.md` (top).
 
@@ -75,6 +77,8 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
 2. Responsive + accessibility QA pass.
 3. 1366×768-and-below no-scroll on 페이지2 (footer/weekday spacing) — only if requested.
 4. Font-loading FOUT improvement (last).
+5. (확인 필요) `tests/smoke.spec.js:1419` "editor: 영상 URL input…" intermittent fail — tablet only,
+   `#bgEditorPanel` stayed hidden after the FAB click; passed on rerun (`2026-10-19`). Not fixed.
 
 ## Open questions (확인 필요 — carried over, may be stale)
 

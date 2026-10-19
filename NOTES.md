@@ -570,7 +570,11 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
 - **Git Bash mangles `/q/...`-style strings in `curl -w` output** (MSYS path conversion turned
   `/q/b/3/w1-mon/` into `Q:/b/3/...` and `/` into `C:/Program Files/Git/`, `2026-10-19`). Prefix the
   command with `export MSYS_NO_PATHCONV=1;` when printing or passing URL paths, and read redirects
-  from `curl -sI … | grep -i location` rather than `%{redirect_url}`.
+  from `curl -sI … | grep -i location` rather than `%{redirect_url}`. With it on, `/tmp/...` is no
+  longer translated either — `curl -o /tmp/x` then fails silently; use a Windows path (`C:/...`).
+- `scripts/run-playwright.mjs` takes no arguments. For one spec, start Vite yourself
+  (`node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173`), run
+  `npx.cmd playwright test <file> -g <name>`, then stop Vite before `qa`.
 - A local static server matching the deploy (serve repo root, hash routing handled client-side)
   is the faithful way to preview; the Vite dev server also works for local checks.
 - **Line endings (Windows):** `.gitattributes` (`* text=auto eol=lf`) forces LF so Windows
