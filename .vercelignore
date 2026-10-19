@@ -28,3 +28,7 @@ supabase
 
 # Claude Code config (hooks) — internal, not for public hosting
 .claude
+
+# Design specs/plans and the PROJECT_MEMORY archive — internal docs, not for public hosting
+docs
+.gitattributes
