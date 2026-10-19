@@ -83,6 +83,43 @@
               </svg>
             </button>
           </div>
+          <!-- Full screen: the Fullscreen API where the phone has it,
+               otherwise (iPhone Safari) a CSS pseudo full screen. -->
+          <button
+            type="button"
+            class="play-fs play-fs-enter"
+            id="playFullscreen"
+            aria-label="Full screen"
+            hidden
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="play-fs play-fs-exit"
+            id="playFullscreenExit"
+            aria-label="Exit full screen"
+            hidden
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M6 6l12 12M18 6L6 18"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.8"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
         </div>
         <h2 class="play-title" id="playTitle"></h2>
         <!-- A framed publisher page never reports its end, so for those

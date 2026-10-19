@@ -39,6 +39,7 @@ const playRoot = document.querySelector("#play");
 const playLevel = document.querySelector("#playLevel");
 const playMonth = document.querySelector("#playMonth");
 const playTitle = document.querySelector("#playTitle");
+const playStage = document.querySelector("#playStage");
 const playFrame = document.querySelector("#playFrame");
 const playStart = document.querySelector("#playStart");
 const playClickLayer = document.querySelector("#playClickLayer");
@@ -53,6 +54,8 @@ const playAgain = document.querySelector("#playAgain");
 const playNext = document.querySelector("#playNext");
 const playNextInline = document.querySelector("#playNextInline");
 const playList = document.querySelector("#playList");
+const playFullscreen = document.querySelector("#playFullscreen");
+const playFullscreenExit = document.querySelector("#playFullscreenExit");
 
 const playState = {
   route: null, // { level, month, slot, solo }
@@ -70,6 +73,9 @@ const playState = {
   // if the child tapped again meanwhile (even the same video), the older
   // mount's id is stale and it must not build a second, audible player.
   mountId: 0,
+  // "native" (Fullscreen API on #playStage), "pseudo" (CSS, iPhone Safari
+  // has no element Fullscreen API) or "" when not full screen.
+  fullscreen: "",
 };
 
 /* ---- Pure helpers (exposed on window.craPlay for tests) ----------------- */
@@ -215,6 +221,11 @@ function syncControls() {
     (state === "ready" || state === "playing")
   );
   playList.hidden = solo || !playState.listReady;
+  playFullscreen.hidden = !(
+    (state === "playing" || state === "ended") &&
+    !playState.fullscreen
+  );
+  playFullscreenExit.hidden = !playState.fullscreen;
 }
 
 const CARDS = {
@@ -403,6 +414,34 @@ function startPlayback() {
   else mountVimeo(playback);
 }
 
+/* ---- Full screen ----------------------------------------------------------- */
+
+function setFullscreen(mode) {
+  playState.fullscreen = mode;
+  if (mode) playRoot.dataset.fullscreen = mode;
+  else delete playRoot.dataset.fullscreen;
+  // Pseudo full screen is all CSS (play.css "Full screen"): the stage covers
+  // the viewport, everything else is hidden and the page cannot scroll.
+  document.body.classList.toggle("play-fullscreen", mode === "pseudo");
+  syncControls();
+}
+
+// The stage (not the video iframe) goes full screen, so our own buttons stay
+// on top of the picture. YouTube keeps fs:0 — this is the only way in.
+function enterFullscreen() {
+  if (document.fullscreenEnabled && playStage.requestFullscreen) {
+    // fullscreenchange sets "native"; a refused request falls back.
+    playStage.requestFullscreen().catch(() => setFullscreen("pseudo"));
+  } else {
+    setFullscreen("pseudo");
+  }
+}
+
+function exitFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else setFullscreen("");
+}
+
 /* ---- Slots ----------------------------------------------------------------- */
 
 function showSlot(slot) {
@@ -569,6 +608,20 @@ function playNextSlot() {
 }
 playNext.addEventListener("click", playNextSlot);
 playNextInline.addEventListener("click", playNextSlot);
+
+playFullscreen.addEventListener("click", enterFullscreen);
+playFullscreenExit.addEventListener("click", exitFullscreen);
+
+// Native full screen also ends by the phone's back gesture or Esc.
+document.addEventListener("fullscreenchange", () => {
+  setFullscreen(document.fullscreenElement === playStage ? "native" : "");
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && playState.fullscreen === "pseudo") {
+    setFullscreen("");
+  }
+});
 
 playList.addEventListener("click", (event) => {
   const item = event.target.closest(".play-item");

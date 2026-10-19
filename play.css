@@ -522,9 +522,87 @@ button {
   }
 }
 
+/* ---- Full screen (⛶ enter / ✕ exit) --------------------------------------
+   play.js sets .play[data-fullscreen] = "native" (Fullscreen API on the
+   stage) or "pseudo" (+ body.play-fullscreen; iPhone Safari has no element
+   Fullscreen API). Keyed on attributes, not :fullscreen, so one rule serves
+   both and an old browser can't drop it as an unknown selector. */
+.play-fs {
+  position: absolute;
+  z-index: 5; /* over the tap layer (2) and the end overlay (4) */
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--canvas);
+  cursor: pointer;
+}
+
+.play-fs svg {
+  width: 28px;
+  height: 28px;
+}
+
+.play-fs:focus-visible {
+  outline: 3px solid var(--canvas);
+  outline-offset: 2px;
+}
+
+.play-fs-enter {
+  right: 10px;
+  bottom: 10px;
+}
+
+.play-fs-exit {
+  top: 12px;
+  right: 12px;
+}
+
+/* The stage is the whole screen, black; the picture is the largest 16:9 box
+   in its middle (bars at the sides sideways, above/below upright). */
+.play[data-fullscreen] .play-stage {
+  border-radius: 0;
+  box-shadow: none;
+  background: #000;
+}
+
+.play[data-fullscreen] .play-frame {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: min(100vw, calc(100vh * 16 / 9));
+  width: min(100vw, calc(100dvh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  transform: translate(-50%, -50%);
+}
+
+body.play-fullscreen {
+  overflow: hidden; /* scroll lock */
+  background: #000;
+}
+
+body.play-fullscreen .play-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  width: auto;
+  aspect-ratio: auto;
+}
+
+body.play-fullscreen .play-header,
+body.play-fullscreen .play-title,
+body.play-fullscreen .play-next-row,
+body.play-fullscreen .play-list {
+  display: none;
+}
+
 /* ---- Phone turned sideways: the video fills the screen ------------------
-   iPhone Safari has no element Fullscreen API, so rotating is the way to
-   get a big picture. Only while a video is on screen. */
+   Rotating alone already gives a big picture (no ⛶ tap needed). Only while
+   a video is on screen. */
 @media (orientation: landscape) and (max-height: 500px) {
   .play[data-state="playing"],
   .play[data-state="ended"] {

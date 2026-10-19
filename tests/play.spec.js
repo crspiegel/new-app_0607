@@ -567,3 +567,163 @@ test("play inline next: shown under a publisher page only", async ({
   await page.goto("/play.html?l=b&m=3&s=w4-mon");
   await expect(page.locator("#playNextInline")).toBeHidden();
 });
+
+/* ---- Full screen (⛶) ---------------------------------------------------
+   Phones with the element Fullscreen API put #playStage itself into full
+   screen; iPhone Safari has none, so the page falls back to a CSS "pseudo
+   full screen" (body.play-fullscreen). The pseudo specs switch the API off. */
+async function withoutFullscreenApi(page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(Document.prototype, "fullscreenEnabled", {
+      configurable: true,
+      get: () => false,
+    });
+  });
+}
+
+test("play fullscreen: button shows only while playing or ended", async ({
+  page,
+}) => {
+  await mockContent(page);
+  await page.goto("/play.html?l=b&m=3&s=w2-mon");
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#playFullscreen")).toBeHidden();
+
+  await page.locator("#playStart").click();
+  await expect(page.locator("#playFullscreen")).toBeVisible();
+  const box = await page.locator("#playFullscreen").boundingBox();
+  expect(box.width).toBeGreaterThanOrEqual(56);
+  expect(box.height).toBeGreaterThanOrEqual(56);
+  // Bottom-right corner of the player.
+  const stage = await page.locator("#playStage").boundingBox();
+  expect(stage.x + stage.width - (box.x + box.width)).toBeLessThan(24);
+  expect(stage.y + stage.height - (box.y + box.height)).toBeLessThan(24);
+  await expect(page.locator("#playFullscreenExit")).toBeHidden();
+
+  await page.evaluate(() => window.craPlay.showEnded());
+  await expect(page.locator("#playFullscreen")).toBeVisible();
+
+  // Coming soon card: nothing to blow up.
+  await page.goto("/play.html?l=b&m=3&s=w2-tue");
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "empty");
+  await expect(page.locator("#playFullscreen")).toBeHidden();
+});
+
+test("play fullscreen: Fullscreen API puts the stage in full screen", async ({
+  page,
+}) => {
+  await mockContent(page);
+  await page.goto("/play.html?l=b&m=3&s=w2-mon");
+  await page.locator("#playStart").click();
+  await page.locator("#playFullscreen").click();
+  await expect
+    .poll(() => page.evaluate(() => document.fullscreenElement?.id || ""))
+    .toBe("playStage");
+  await expect(page.locator("body")).not.toHaveClass(/play-fullscreen/);
+  await expect(page.locator("#playFullscreenExit")).toBeVisible();
+  await expect(page.locator("#playFullscreen")).toBeHidden();
+
+  await page.locator("#playFullscreenExit").click();
+  await expect
+    .poll(() => page.evaluate(() => document.fullscreenElement?.id || ""))
+    .toBe("");
+  await expect(page.locator("#playFullscreenExit")).toBeHidden();
+  await expect(page.locator("#playFullscreen")).toBeVisible();
+});
+
+test("play fullscreen: pseudo full screen without the API, exit by ✕ or Esc", async ({
+  page,
+}) => {
+  await withoutFullscreenApi(page);
+  await mockContent(page);
+  await page.goto("/play.html?l=b&m=3&s=w2-mon");
+  await page.locator("#playStart").click();
+  await page.locator("#playFullscreen").click();
+
+  await expect(page.locator("body")).toHaveClass(/play-fullscreen/);
+  await expect(page.locator("#playList")).toBeHidden();
+  await expect(page.locator(".play-header")).toBeHidden();
+  await expect(page.locator("#playTitle")).toBeHidden();
+  await expect(page.locator("#playFullscreen")).toBeHidden();
+  const layout = await page.evaluate(() => {
+    const stage = document.querySelector("#playStage");
+    const exit = document.querySelector("#playFullscreenExit");
+    const s = stage.getBoundingClientRect();
+    const x = exit.getBoundingClientRect();
+    return {
+      stage: [s.left, s.top, s.width, s.height],
+      viewport: [0, 0, window.innerWidth, window.innerHeight],
+      position: getComputedStyle(stage).position,
+      background: getComputedStyle(stage).backgroundColor,
+      overflow: getComputedStyle(document.body).overflow,
+      exit: { right: window.innerWidth - x.right, top: x.top, w: x.width },
+    };
+  });
+  expect(layout.stage).toEqual(layout.viewport);
+  expect(layout.position).toBe("fixed");
+  expect(layout.background).toBe("rgb(0, 0, 0)");
+  expect(layout.overflow).toBe("hidden");
+  expect(layout.exit.w).toBeGreaterThanOrEqual(56);
+  expect(layout.exit.right).toBeLessThan(24);
+  expect(layout.exit.top).toBeLessThan(24);
+
+  // Portrait: the 16:9 picture sits in the vertical middle.
+  const frame = await page.locator("#playFrame").boundingBox();
+  const viewport = page.viewportSize();
+  expect(
+    Math.abs(frame.y + frame.height / 2 - viewport.height / 2),
+  ).toBeLessThan(2);
+
+  await page.locator("#playFullscreenExit").click();
+  await expect(page.locator("body")).not.toHaveClass(/play-fullscreen/);
+  await expect(page.locator("#playList")).toBeVisible();
+  await expect(page.locator("#playFullscreen")).toBeVisible();
+
+  await page.locator("#playFullscreen").click();
+  await expect(page.locator("body")).toHaveClass(/play-fullscreen/);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("body")).not.toHaveClass(/play-fullscreen/);
+  await expect(page.locator("#playFullscreenExit")).toBeHidden();
+});
+
+test("play fullscreen: sideways phone, the 16:9 picture fills the screen", async ({
+  page,
+}) => {
+  await withoutFullscreenApi(page);
+  await mockContent(page);
+  await page.setViewportSize({ width: 812, height: 375 });
+  await page.goto("/play.html?l=b&m=3&s=w2-mon");
+  await page.locator("#playStart").click();
+  await page.locator("#playFullscreen").click();
+  await expect(page.locator("body")).toHaveClass(/play-fullscreen/);
+  const { stage, frame } = await page.evaluate(() => {
+    const r = (el) => {
+      const b = el.getBoundingClientRect();
+      return { x: b.left, y: b.top, w: b.width, h: b.height };
+    };
+    return {
+      stage: r(document.querySelector("#playStage")),
+      frame: r(document.querySelector("#playFrame")),
+    };
+  });
+  expect(stage).toEqual({ x: 0, y: 0, w: 812, h: 375 });
+  // Full height, 16:9 wide, centered left-right.
+  expect(frame.y).toBeCloseTo(0, 0);
+  expect(frame.h).toBeCloseTo(375, 0);
+  expect(frame.w).toBeCloseTo((375 * 16) / 9, 0);
+  expect(frame.x + frame.w / 2).toBeCloseTo(406, 0);
+});
+
+test("play fullscreen: framed page keeps fullscreen permissions", async ({
+  page,
+}) => {
+  await mockContent(page);
+  await page.goto("/play.html?l=b&m=3&s=w2-mon");
+  await page.locator("#playStart").click();
+  const frame = page.locator("#playFrame iframe");
+  await expect(frame).toHaveAttribute(
+    "allow",
+    "autoplay; fullscreen; picture-in-picture",
+  );
+  await expect(frame).toHaveAttribute("allowfullscreen", "");
+});
