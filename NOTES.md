@@ -31,6 +31,14 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   the crspiegel token). Pushes work now.
 - The device-auth login flow (`vercel login`, `gh auth login`) reuses the **browser session** —
   log the wrong account out of the site in the browser first, or it re-authorizes the wrong one.
+- **Vercel CLI `--global-config` 폴더를 배포 폴더 안에 두면 토큰이 업로드되어 공개된다**
+  (2026-10-19 사고: `<site>/.vc-cfg/auth.json`이 200). Vercel은 점(.)으로 시작하는 폴더도 올린다.
+  로그인 설정은 배포 폴더 **밖**에 두고 `vercel deploy <배포폴더> --global-config <설정폴더>`로,
+  배포 전 폴더 내용 검사·배포 후 공개 주소에서 설정 파일 404 확인. 노출되면 즉시 `vercel logout`
+  (토큰 무효화) + 그 배포 삭제 + 대시보드 Tokens 확인.
+- **사용자에게 주는 `!` 명령은 한 줄·짧게.** 긴 명령은 붙여 넣을 때 터미널 줄바꿈에서 잘려 뒤쪽
+  인자(`--scope`·`--global-config`)가 빠진 채 실행됐고, PC 기본 CLI 로그인(다른 계정)으로 배포됐다.
+  길면 스크립트로 만들어 `! bash "<경로>"` 하나만 주고, 스크립트가 `whoami`를 먼저 검사하게 한다.
 
 ## Custom domain (Gabia + Vercel)
 
