@@ -882,6 +882,9 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
 - **같은 영상을 API 로딩 중에 두 번 탭하면 플레이어가 2개 생겨 소리가 겹쳤다**(영상 id 비교 가드는
   같은 id라 통과). 지금은 `playState.mountId`를 teardown마다 올리고, API를 기다리던 마운트는 id가
   바뀌었으면 버린다. 가드를 id·객체 비교로 되돌리지 말 것.
+- **전체화면 스타일은 `:fullscreen`이 아니라 `data-fullscreen` 속성 기준**(`.play[data-fullscreen]`,
+  유사 전체화면은 `body.play-fullscreen`도). 오래된 브라우저는 모르는 선택자가 섞인 규칙을 통째로
+  버리고, 아이폰 Safari(유사 전체화면 경로)가 그 대상이다. `:fullscreen`으로 "정리"하지 말 것.
 - **REST 읽기는 10초 타임아웃**(`FETCH_TIMEOUT_MS`, AbortController). 응답 없는 네트워크에서도
   "Can't load right now." + Try again이 뜬다. 테스트는 `page.clock`으로 시간을 넘긴다.
 - **비용:** Storage 요청 0, `content_pages` 읽기는 로드당 1회(목록 전환은 캐시 사용), 쓰기 코드 없음.
