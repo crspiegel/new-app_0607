@@ -3,27 +3,9 @@ const state = {
   month: "",
 };
 
-const months = [
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-const lessonTypes = [
-  "Opening Song",
-  "Story",
-  "Word Chant",
-  "Sentence Chant",
-  "Ending Song",
-];
-const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+// months, lessonTypes, weekdays, LEVEL_LABELS/levelLabel, TOOLBAR_BUTTONS/
+// toolbarButtons, the slot-key helpers and the video URL parsers live in
+// video-source.js (loaded before this file; shared with play.html).
 const contentTypeMeta = [
   {
     key: "openingSong",
@@ -63,78 +45,6 @@ const monthlyBooks = [
     title: "Title B",
   },
 ];
-
-/* ---- Level display labels ----------------------------------------------
-   Internal keys stay "Level 1".."Level 4" (DB rows, URL hash, data-level
-   attributes all use them) — only the on-screen label is remapped. */
-const LEVEL_LABELS = {
-  "Level 1": "Beginner",
-  "Level 2": "Level 1",
-  "Level 3": "Level 2",
-  "Level 4": "Level 3",
-};
-function levelLabel(level) {
-  return LEVEL_LABELS[level] || level;
-}
-
-/* ---- Content-page toolbar (per level) ----------------------------------
-   Single source of truth for the buttons above the weekday board on the
-   content page. The USER toolbar and the ADMIN editor's top row both render
-   from this, so they always stay in sync (work rule: admin mirrors the user
-   screen). Each slot key is stored in content_pages.videos per level/month.
-   kind "video" plays the slot's YouTube/Vimeo URL in the video player;
-   kind "game" opens the slot's URL in the game modal. */
-const TOOLBAR_BUTTONS = {
-  // Beginner (internal key "Level 1") — icons unified, no tags (user decision).
-  "Level 1": [
-    {
-      slot: "opening",
-      kind: "video",
-      label: "Good Morning Song",
-      icon: "video",
-    },
-    { slot: "ending", kind: "video", label: "Good Bye Song", icon: "video" },
-    { slot: "game", kind: "game", label: "Game", icon: "game" },
-    { slot: "unit", kind: "video", label: "Unit Song", icon: "music" },
-  ],
-  // Level 1-3 (internal keys "Level 2".."Level 4"). `tag` renders the GAME/SONG
-  // corner pill, so default labels drop the redundant suffix — admins fill in
-  // per-month book titles via the label editor.
-  default: [
-    {
-      slot: "opening",
-      kind: "video",
-      label: "Good Morning Song",
-      icon: "video",
-    },
-    { slot: "ending", kind: "video", label: "Good Bye Song", icon: "video" },
-    { slot: "game", kind: "game", label: "I Sit", icon: "game", tag: "game" },
-    {
-      slot: "game2",
-      kind: "game",
-      label: "I Like School",
-      icon: "game",
-      tag: "game",
-    },
-    {
-      slot: "song1",
-      kind: "video",
-      label: "I Sit",
-      icon: "music",
-      tag: "song",
-    },
-    {
-      slot: "song2",
-      kind: "video",
-      label: "I Like School",
-      icon: "music",
-      tag: "song",
-    },
-  ],
-};
-function toolbarButtons(level) {
-  return TOOLBAR_BUTTONS[level] || TOOLBAR_BUTTONS.default;
-}
 
 // Full-color toolbar icons: colored body + a darker copy offset ~1.3px down as
 // a 3D bottom lip (matches the app's beveled buttons) + a small white glint.
@@ -234,8 +144,9 @@ if (document.fonts && document.fonts.ready) {
    keyed by level → month. Phase 2 swaps the backing store to Supabase
    WITHOUT changing the getVideoUrl / getCover callers below.
 
-   Slot keys (22 per page): "opening", "ending", and the 20 weekday buttons
-   "w{1..4}-{Mon..Fri}". Cover keys: "book-1", "book-2". */
+   Slot keys (24 per page for Beginner, 26 for Level 1-3): the level's
+   toolbar slots (TOOLBAR_BUTTONS) and the 20 weekday buttons
+   "w{1..4}-{Mon..Fri}" — see allSlotKeys(). Cover keys: "book-1", "book-2". */
 const contentData = {
   "Level 1": {
     March: {
@@ -901,42 +812,7 @@ let vpCurrentSeconds = 0;
 let vpDragging = false;
 let vpHideTimer = null;
 
-// Matches the 11-char video id in any common YouTube URL shape
-// (watch?v=, youtu.be/, embed/, shorts/, live/).
-const YT_ID_RE =
-  /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/;
-
-// Classify a stored video value. Returns null for an empty slot (no sample
-// fallback — empty means "not ready yet", handled in openSlot). YouTube URLs
-// resolve to { kind: "youtube", id }; a web page on any other host resolves to
-// { kind: "page", url }; everything else stays Vimeo (a numeric id or a full
-// Vimeo URL).
-function parseVideoSource(source) {
-  if (!source) return null;
-  const str = String(source).trim();
-  if (!str) return null;
-  const yt = str.match(YT_ID_RE);
-  if (yt) return { kind: "youtube", id: yt[1] };
-  if (/^\d+$/.test(str)) return { kind: "vimeo", id: Number(str) };
-  if (isExternalVideoPage(str)) return { kind: "page", url: str };
-  return { kind: "vimeo", url: str };
-}
-
-// A page on a non-Vimeo host that plays the video itself — e.g. a publisher
-// page (tps-education.com/58?video=…) wrapping a Vimeo video whose privacy is
-// locked to that publisher's domain. Vimeo refuses the bare id anywhere else
-// ("Because of its privacy settings…"), but the publisher's own page still
-// plays when framed, since its Vimeo iframe is requested from that domain.
-function isExternalVideoPage(str) {
-  let url;
-  try {
-    url = new URL(str);
-  } catch {
-    return false;
-  }
-  if (url.protocol !== "https:" && url.protocol !== "http:") return false;
-  return !/(^|\.)vimeo\.com$/i.test(url.hostname);
-}
+// YT_ID_RE, parseVideoSource and isExternalVideoPage are in video-source.js.
 
 // Classify a background-video URL (배경 편집기's 영상 URL field). Unlike
 // parseVideoSource, which trusts any non-YouTube string to be Vimeo, this
@@ -1270,21 +1146,7 @@ function makeYouTubeAdapter(yt) {
   };
 }
 
-// Force YouTube captions (CC, incl. auto-generated) off. Some viewers have
-// "always show captions" on in their YouTube account / OS accessibility
-// settings, and with controls:0 + disablekb:1 a child has no CC button or "c"
-// key to turn them off. There is no official "captions off" parameter
-// (cc_load_policy only forces them ON), so this relies on the undocumented
-// unloadModule — if YouTube changes it, the call just fails silently and
-// captions show as before. "cc" is the module name in older players.
-function disableYouTubeCaptions(yt) {
-  try {
-    yt.unloadModule("captions");
-    yt.unloadModule("cc");
-  } catch {
-    /* player may not be ready yet, or the API changed */
-  }
-}
+// disableYouTubeCaptions(yt) is in video-source.js (shared with play.js).
 
 // Mount a YouTube video. The native chrome is hidden (controls:0) and the
 // #vpClickLayer sits over the iframe, so our own controls drive playback.
