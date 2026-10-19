@@ -18,19 +18,24 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
 
 ## ⏳ In-progress work
 
-None. (Last item — YouTube captions forced OFF — was verified by the user and deployed on
-`2026-10-19`; see Recent state.)
+- **Beginner QR codes + student video page (`play.html`)** — stage 2 (build) done and committed
+  locally `2026-10-19` (`4fd7ad1` split, `13facda` page, then the CSV/rewrite/fix and docs
+  commits), **not pushed/deployed**. Left: user push →
+  deploy checks (plan Task 4 Step 4) → real-device checklist (plan Task 6, user) → Naver QR entry
+  from `npm run qr:list`. Hosting: option ③ (`PUBLISHER_STRATEGY = "page"`); the user is testing
+  option ① (TPS subdomain) with `docs/worker-briefs/qrtest/index.html` — if it plays, switch the
+  constant to `"direct"`. Design/plan: `docs/superpowers/specs|plans/2026-10-19-qr-student-play-page-*`.
 
 ## Recent state (newest first)
 
-- `2026-10-19` — **YouTube captions forced OFF: user-verified (10/19), committed and deployed.**
-  `disableYouTubeCaptions(yt)` (undocumented `unloadModule("captions"/"cc")`, try/catch) runs from
-  `onReady`, `onStateChange` PLAYING and `onApiChange` — keep all three. Gotcha in `NOTES.md`.
+- `2026-10-19` — **QR student page built** (local): `/q/<lv>/<month>/<slot>` → `play.html`, one
+  `content_pages` REST read, no Storage, tap-to-play, (B) month list + `?solo=1` (A), end overlay
+  with Watch again / Next. Shared data/parsers moved to `video-source.js` (loaded before `app.js`).
+  Beginner fill 102/240. Gotchas in `NOTES.md` "QR 학생 페이지".
 
-- `2026-10-19` `f9fa6fc` / `5b515db` (deployed) — harness setup: `.claude/verify.json` (Stop hook runs
-  `npm run check`), CLAUDE.md Superpowers + session-end sections, this file shortened (history →
-  `docs/PROJECT_MEMORY-archive.md`). `.vercelignore` now excludes `docs` and `.gitattributes` (they
-  were publicly served); verified 404 on both live domains.
+- `2026-10-19` (deployed) — YouTube captions forced OFF (`disableYouTubeCaptions`, 3 call sites —
+  keep all). Harness setup: `.claude/verify.json`, history → `docs/PROJECT_MEMORY-archive.md`,
+  `.vercelignore` excludes `docs`/`.gitattributes`.
 
 - `2026-10-12` `024a18d` — publisher-page Vimeo URLs (domain-restricted) open the page itself in the
   video window (`mountExternalPage`).
@@ -63,6 +68,8 @@ None. (Last item — YouTube captions forced OFF — was verified by the user an
   do not use it here (see `CLAUDE.md`).
 - **Domain:** `cambridgereading.com` (Gabia DNS records) — `www` primary, apex → `www` (308);
   `new-app0607.vercel.app` still works.
+- **Student QR page:** `/q/<lv>/<month>/<slot>` rewritten to `play.html` (`vercel.json`); query
+  fallback `play.html?l=b&m=3&s=w1-mon`. Printed QR → Naver QR (re-pointable) → this path.
 - **Supabase:** project `jguuexcgyvyljbcqfpib`; anon key in `supabase-config.js` (public by design).
   Provisioning record: `SUPABASE_SETUP.md`, `supabase/migration.sql`.
 - Storage originals (outside repo): the `_storage-backup-20260829` folder went to the Recycle Bin on

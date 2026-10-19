@@ -396,10 +396,11 @@ window.Vimeo.Player` since the SDK loads async and may be absent (offline / head
   control bar — there's no `activePlayer` for that page. The page auto-opens its modal from
   `?video=`; if the publisher changes that page, these slots break and only they can fix it. Don't
   try Referer spoofing or proxying instead — that bypasses the owner's restriction.
-- The modal opens **only** on Level 1 / March — gated at click time by `isLevel1March()`, because
-  `#contentScreen` + the 20 `renderLessons()` buttons are shared by all levels/months. When
-  testing scope, use a **fresh Playwright page per route** (hash-only navigation doesn't re-run
-  `app.js`, so `state.level` leaks and the gate looks broken — see the hash-nav note below).
+- The modal opens on **every** level/month now (`openSlot()` → `getVideoUrl()`; an empty slot shows
+  Coming soon). The old Level 1 / March-only gate `isLevel1March()` no longer exists (corrected
+  `2026-10-19`). When testing per-route behavior, still use a **fresh Playwright page per route**
+  (hash-only navigation doesn't re-run `app.js`, so `state.level` leaks — see the hash-nav note
+  below).
 
 ## Responsive layout (hero, content board)
 
@@ -840,3 +841,44 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
     `main`/`.site-footer`는 그 밖에서 `z-index:2`다. 레이어 내부 z를 아무리 올려도 못 넘는다.
   - 편집기 셸은 이제 두 부모(레이어/프레임)에 나뉘어 붙으므로 **NodeList 인덱스로 셸을 찾으면
     안 된다** — `shell.dataset.bgIndex` + `bgShellAt(index)`를 쓸 것.
+
+## QR 학생 페이지 (`play.html`, `2026-10-19`)
+
+설계 `docs/superpowers/specs/2026-10-19-qr-student-play-page-design.md`. 도서 QR(네이버 QR) →
+`/q/<lv>/<month>/<slot>` → `play.html`이 그 레벨·월의 `content_pages` 1행을 읽어 그 슬롯만 재생.
+
+- ⚠ **슬롯 키와 `/q` 토큰은 인쇄물 계약이다.** `opening`·`ending`·`game`·`unit`·`w1-Mon`… 이름,
+  레벨 코드(`b`=Beginner, `l1`~`l3`=표시 Level 1~3), 월 숫자(3~12)를 바꾸면 인쇄된 QR이 죽는다.
+  (네이버 QR에서 연결 주소를 240개 다시 고치면 살릴 수는 있지만 비싸다.)
+- **`video-source.js`는 `app.js`·`play.js`보다 먼저 로드되는 공유 classic script다.** 여기 있는
+  이름(`months`, `TOOLBAR_BUTTONS`, `parseVideoSource`, `slotTitle` …)을 `app.js`에 다시 선언하면
+  classic script 전역 스코프에서 재선언 `SyntaxError`가 나 **사이트 전체가 멈춘다.** 또한 이 파일은
+  최상위에서 DOM을 건드리면 안 된다 — `scripts/make-qr-list.mjs`가 Node `vm`으로 읽는다.
+  새 이름을 추가하면 파일 머리의 `/* exported */`와 `eslint.config.mjs`의 `videoSourceGlobals`도 갱신.
+- **`play.html`의 자산 경로는 전부 절대경로**(`/play.js` …). `/q/b/3/w1-mon`에서 상대경로는
+  `/q/b/3/play.js`로 풀려 404가 된다.
+- **`/q/...` rewrite(`vercel.json`)는 Vite dev 서버에서 동작하지 않는다.** 로컬·테스트는
+  `play.html?l=b&m=3&s=w1-mon` 쿼리 형식으로, rewrite는 배포 후 curl·실기기로 확인한다.
+- **`play.css`는 `styles.css`를 로드하지 않는다**(163KB, 선생님 사이트 전역 규칙). 필요한 토큰만
+  복제했으니 `styles.css :root`나 DESIGN.md 레벨 표를 바꾸면 `play.css`도 맞춘다.
+- **재생 방식 = `play.js`의 `PUBLISHER_STRATEGY`.** 도메인 잠금 Vimeo(`tps-education.com/58?video=`)는
+  `"page"`(퍼블리셔 페이지 iframe, 현재) / `"direct"`(`tps-education.com` 하위 도메인에서 호스팅할
+  때만) / `"player-page"`(`PUBLISHER_PLAYER_URL` 채운 뒤). 선생님 사이트의 `kind:"page"` 동작과는
+  별개다. Referer 위조·프록시·재업로드는 금지(출판사 접근제어 우회).
+- **자동재생 없음.** 모바일은 제스처 없이 소리 재생을 막으므로 ▶ 탭(또는 목록 탭) 안에서 플레이어를
+  만든다. YouTube 위 탭 레이어는 **첫 PLAYING 이후에만** 켠다 — iOS가 스크립트 재생을 막으면 아이의
+  첫 탭이 YouTube 자체 재생 버튼에 닿아야 하기 때문.
+- **빈 플레이어 틀이 안내 카드를 덮는 함정:** `.play-frame`은 absolute라 in-flow 카드 버튼("Try
+  again", "Let's play!") 위에 깔려 탭을 삼켰다(테스트로 발견). 카드가 보일 때(`.play[data-card]`)
+  틀을 숨긴다.
+- **같은 영상을 API 로딩 중에 두 번 탭하면 플레이어가 2개 생겨 소리가 겹쳤다**(영상 id 비교 가드는
+  같은 id라 통과). 지금은 `playState.mountId`를 teardown마다 올리고, API를 기다리던 마운트는 id가
+  바뀌었으면 버린다. 가드를 id·객체 비교로 되돌리지 말 것.
+- **REST 읽기는 10초 타임아웃**(`FETCH_TIMEOUT_MS`, AbortController). 응답 없는 네트워크에서도
+  "Can't load right now." + Try again이 뜬다. 테스트는 `page.clock`으로 시간을 넘긴다.
+- **비용:** Storage 요청 0, `content_pages` 읽기는 로드당 1회(목록 전환은 캐시 사용), 쓰기 코드 없음.
+  `tests/play.spec.js`는 **REST를 픽스처로 응답**한다 — `smoke.spec.js`의 "REST 스텁 금지"는 메인
+  사이트의 타이밍 민감 스펙 때문이고, 별도 페이지인 학생 페이지에는 해당하지 않는다. 가드 스펙이
+  Storage 0·REST 1회를 단언한다.
+- **네이버 QR 입력 목록:** `npm run qr:list` → `qr/beginner-qr-list.csv`(+ `README-naver-qr.txt`).
+  `qr/`는 `.gitignore`·`.vercelignore` 대상(생성물). REST 1회. `--offline`·`--host`·`--solo` 옵션.
