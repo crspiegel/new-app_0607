@@ -8,7 +8,7 @@
 
 /* exported months, lessonTypes, weekdays, levelLabel, toolbarButtons,
    allSlotKeys, qrLevelCode, levelFromQrCode, monthNumber, monthFromNumber,
-   slotToQr, slotFromQr, qrPath, YT_ID_RE, parseVideoSource,
+   slotToQr, slotFromQr, slotTitle, qrPath, YT_ID_RE, parseVideoSource,
    publisherVimeoId, disableYouTubeCaptions */
 
 const months = [
@@ -172,6 +172,22 @@ function slotToQr(slot) {
 function slotFromQr(token, level) {
   const wanted = String(token || "").toLowerCase();
   return allSlotKeys(level).find((key) => key.toLowerCase() === wanted) || null;
+}
+
+// A slot's on-screen title, as on the student page and in the Naver QR list.
+// Weekday slots read like the teacher site's slotLabel() ("Week 1 · Mon ·
+// Opening Song"); toolbar slots use the admin's custom label for that month
+// (`labels`, may be omitted), else the TOOLBAR_BUTTONS default ("<title> ·
+// Song" for tagged song slots, as in the teacher player title).
+function slotTitle(level, slot, labels) {
+  const item = toolbarButtons(level).find((b) => b.slot === slot);
+  if (item) {
+    const label = (labels && labels[slot]) || item.label;
+    return item.tag === "song" ? `${label} · Song` : label;
+  }
+  const m = slot.match(/^w(\d)-(\w+)$/);
+  if (!m) return slot;
+  return `Week ${m[1]} · ${m[2]} · ${lessonTypes[weekdays.indexOf(m[2])]}`;
 }
 
 function qrPath(level, month, slot) {

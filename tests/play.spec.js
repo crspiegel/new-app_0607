@@ -232,6 +232,26 @@ test("play: REST failure shows retry", async ({ page }) => {
   expect(calls).toHaveLength(2);
 });
 
+test("play: a REST read that never answers times out to retry", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.route(CONTENT_ROUTE, () => {
+    /* never answered — a hung network */
+  });
+  await page.goto("/play.html?l=b&m=3&s=w1-mon");
+  const play = page.locator("#play");
+  await expect(play).toHaveAttribute("data-state", "loading");
+
+  await page.clock.runFor(9000);
+  await expect(play).toHaveAttribute("data-state", "loading");
+
+  await page.clock.runFor(1500); // past the 10 s limit
+  await expect(play).toHaveAttribute("data-state", "error");
+  await expect(page.getByText("Can't load right now.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
 test("play: game slot navigates on tap", async ({ page }) => {
   await mockContent(page);
   await page.goto("/play.html?l=b&m=3&s=game");
@@ -421,6 +441,42 @@ test("play list: current mark is a corner badge, label stays one line", async ({
   expect(result.badge).toContain("▶");
   expect(result.badgePosition).toBe("absolute");
   expect(result.currentLabelHeight).toBe(result.otherLabelHeight);
+});
+
+test("play: a second tap while YouTube loads mounts one player", async ({
+  page,
+}) => {
+  await mockContent(page);
+  // A fake IFrame API that arrives late and counts live players.
+  await page.route("https://www.youtube.com/iframe_api", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.fulfill({
+      contentType: "text/javascript",
+      body: `
+        window.__ytLive = 0;
+        window.YT = {
+          PlayerState: { ENDED: 0, PLAYING: 1, PAUSED: 2 },
+          Player: function () {
+            window.__ytLive += 1;
+            this.destroy = () => { window.__ytLive -= 1; };
+            this.playVideo = () => {};
+            this.pauseVideo = () => {};
+            this.unloadModule = () => {};
+          },
+        };
+        window.onYouTubeIframeAPIReady();`,
+    });
+  });
+  await page.goto("/play.html?l=b&m=3&s=w1-tue", {
+    waitUntil: "domcontentloaded",
+  });
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "ready");
+  await page.locator("#playStart").click();
+  // The child taps the same video again in the list before the API is in.
+  await page.locator('#playList .play-item[data-slot="w1-Tue"]').click();
+  await page.waitForFunction(() => window.__ytLive !== undefined);
+  await page.waitForTimeout(200);
+  expect(await page.evaluate(() => window.__ytLive)).toBe(1);
 });
 
 test("play end overlay: next only when a filled slot follows", async ({

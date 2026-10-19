@@ -17,6 +17,7 @@ const videoSourceGlobals = {
   monthFromNumber: "readonly",
   slotToQr: "readonly",
   slotFromQr: "readonly",
+  slotTitle: "readonly",
   qrPath: "readonly",
   YT_ID_RE: "readonly",
   parseVideoSource: "readonly",

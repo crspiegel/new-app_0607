@@ -21,3 +21,9 @@ Thumbs.db
 # This repo is public: these must never be committed.
 .claude/WORKLOG.md
 .claude/PRIVATE-NOTES.md
+
+# Naver QR input list (npm run qr:list) — generated, local only
+qr/
+
+# PM worker briefs — kept outside the repo (internal instructions)
+docs/worker-briefs/

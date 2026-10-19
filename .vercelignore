@@ -32,3 +32,6 @@ supabase
 # Design specs/plans and the PROJECT_MEMORY archive — internal docs, not for public hosting
 docs
 .gitattributes
+
+# Naver QR input list (npm run qr:list) — generated, not for public hosting
+qr

@@ -66,6 +66,10 @@ const playState = {
   // own play button instead.
   layerArmed: false,
   listReady: false, // the month list is built once the row has loaded
+  // Bumped by every teardown. A YouTube/Vimeo mount waits for its API script;
+  // if the child tapped again meanwhile (even the same video), the older
+  // mount's id is stale and it must not build a second, audible player.
+  mountId: 0,
 };
 
 /* ---- Pure helpers (exposed on window.craPlay for tests) ----------------- */
@@ -92,9 +96,14 @@ function parsePlayRoute(pathname, search) {
   return { level, month, slot, solo: params.get("solo") === "1" };
 }
 
+// A phone on a dead connection can leave a request hanging far longer than a
+// child will wait; after this the page shows "Can't load right now." + Try
+// again instead of an endless loading state.
+const FETCH_TIMEOUT_MS = 10000;
+
 // One row of content_pages. null = the month has no row yet (not an error);
-// throws on a missing config (offline dev), HTTP error (e.g. 402) or network
-// failure.
+// throws on a missing config (offline dev), HTTP error (e.g. 402), network
+// failure or the FETCH_TIMEOUT_MS limit.
 async function fetchPageRow(level, month) {
   const base = window.SUPABASE_URL;
   const key = window.SUPABASE_ANON_KEY;
@@ -104,13 +113,20 @@ async function fetchPageRow(level, month) {
     `?level=eq.${encodeURIComponent(level)}` +
     `&month=eq.${encodeURIComponent(month)}` +
     "&select=videos,labels";
-  const response = await window.fetch(url, {
-    headers: { apikey: key, Authorization: `Bearer ${key}` },
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const rows = await response.json();
-  if (!Array.isArray(rows) || rows.length === 0) return null;
-  return { videos: rows[0].videos || {}, labels: rows[0].labels || {} };
+  const controller = new window.AbortController();
+  const timer = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await window.fetch(url, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const rows = await response.json();
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    return { videos: rows[0].videos || {}, labels: rows[0].labels || {} };
+  } finally {
+    window.clearTimeout(timer);
+  }
 }
 
 // What to mount for a stored slot value. kind is the slot's kind ("video" or
@@ -142,20 +158,8 @@ function slotKind(level, slot) {
   return item ? item.kind : "video";
 }
 
-// Same wording as the teacher site: weekday slots read like slotLabel()
-// ("Week 1 · Mon · Opening Song"); toolbar slots use the admin's custom label
-// for that month, else the TOOLBAR_BUTTONS default ("<title> · Song" for
-// tagged song slots, as in the teacher player title).
-function slotTitle(level, slot, labels) {
-  const item = toolbarButtons(level).find((b) => b.slot === slot);
-  if (item) {
-    const label = (labels && labels[slot]) || item.label;
-    return item.tag === "song" ? `${label} · Song` : label;
-  }
-  const m = slot.match(/^w(\d)-(\w+)$/);
-  if (!m) return slot;
-  return `Week ${m[1]} · ${m[2]} · ${lessonTypes[weekdays.indexOf(m[2])]}`;
-}
+// slotTitle(level, slot, labels) is in video-source.js (shared with
+// scripts/make-qr-list.mjs, so the Naver QR list reads like this page).
 
 function slotUrl(row, slot) {
   return (row && row.videos && row.videos[slot]) || "";
@@ -294,6 +298,7 @@ function teardownPlayer() {
   playState.paused = false;
   playState.layerArmed = false;
   playFrame.innerHTML = "";
+  playState.mountId += 1;
 }
 
 function setPaused(paused) {
@@ -319,9 +324,9 @@ function mountFrame(url) {
 }
 
 function mountYouTube(videoId) {
+  const mountId = playState.mountId;
   loadYouTubeApi().then(() => {
-    // The child may have picked another slot while the API was loading.
-    if (!playState.playback || playState.playback.id !== videoId) return;
+    if (mountId !== playState.mountId) return; // superseded by a later tap
     const host = document.createElement("div");
     playFrame.appendChild(host);
     const yt = new window.YT.Player(host, {
@@ -361,9 +366,10 @@ function mountYouTube(videoId) {
 }
 
 function mountVimeo(playback) {
+  const mountId = playState.mountId;
   loadVimeoApi()
     .then(() => {
-      if (playState.playback !== playback) return; // slot changed meanwhile
+      if (mountId !== playState.mountId) return; // superseded by a later tap
       const player = new window.Vimeo.Player(playFrame, {
         ...(playback.id != null ? { id: playback.id } : { url: playback.url }),
         playsinline: true,
