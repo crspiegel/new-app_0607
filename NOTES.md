@@ -314,7 +314,7 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   `false` and it reads exactly like a permissions problem when it is an ordering problem.
   Wait for `sb-*-auth-token` to appear in `localStorage`, **then** create the client with
   `global.headers.Authorization` pinned to that token.
-- **Originals are backed up** at `D:\_BigWave\reading adventure\_storage-backup-20260829\`
+- **Originals are backed up** at `D:\_TPS\reading adventure\_storage-backup-20260829\`
   (compressed previews under `compressed\`). Restoring is the same operation in reverse.
 - **New uploads need none of this** — `shrinkImage` has compressed them since the Phase 1
   deploy. This was strictly a one-time cleanup of what predated it.
