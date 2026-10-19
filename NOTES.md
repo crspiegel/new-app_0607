@@ -567,6 +567,10 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
 …\ms-playwright\chromium_headless_shell-1223\…` — Chromium had vanished from
   `%LOCALAPPDATA%\ms-playwright` (only WebKit left). `npx.cmd playwright install chromium` fixed it.
 - Always delete temp verification files (`_*.mjs`, `_*.png`) afterward — they are not gitignored.
+- **Git Bash mangles `/q/...`-style strings in `curl -w` output** (MSYS path conversion turned
+  `/q/b/3/w1-mon/` into `Q:/b/3/...` and `/` into `C:/Program Files/Git/`, `2026-10-19`). Prefix the
+  command with `export MSYS_NO_PATHCONV=1;` when printing or passing URL paths, and read redirects
+  from `curl -sI … | grep -i location` rather than `%{redirect_url}`.
 - A local static server matching the deploy (serve repo root, hash routing handled client-side)
   is the faithful way to preview; the Vite dev server also works for local checks.
 - **Line endings (Windows):** `.gitattributes` (`* text=auto eol=lf`) forces LF so Windows
@@ -859,6 +863,10 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   `/q/b/3/play.js`로 풀려 404가 된다.
 - **`/q/...` rewrite(`vercel.json`)는 Vite dev 서버에서 동작하지 않는다.** 로컬·테스트는
   `play.html?l=b&m=3&s=w1-mon` 쿼리 형식으로, rewrite는 배포 후 curl·실기기로 확인한다.
+- **끝 슬래시: Vercel의 `/q/:path*`는 `/q/b/3/w1-mon/`을 매칭하지 않았다(첫 배포에서 404).** 직접 만든
+  로컬 흉내 서버(정규식)는 통과시켜 놓쳤다 — **rewrite·redirect 동작은 흉내 서버가 아니라 배포 후 curl로만
+  믿을 것.** 지금은 `"trailingSlash": false`로 끝 슬래시 주소가 308로 슬래시 없는 주소로 간다
+  (`2026-10-19` `16be3c5`, 운영 확인). `/q`(슬래시 없음)도 rewrite에 걸려 학생 페이지의 invalid 카드가 뜬다.
 - **`play.css`는 `styles.css`를 로드하지 않는다**(163KB, 선생님 사이트 전역 규칙). 필요한 토큰만
   복제했으니 `styles.css :root`나 DESIGN.md 레벨 표를 바꾸면 `play.css`도 맞춘다.
 - **재생 방식 = `play.js`의 `PUBLISHER_STRATEGY`.** 도메인 잠금 Vimeo(`tps-education.com/58?video=`)는
