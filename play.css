@@ -1,0 +1,567 @@
+/* ---- QR student page (play.html) ------------------------------------------
+   Self-contained on purpose: styles.css (163 KB) is the teacher site and is
+   NOT loaded here. Tokens below mirror styles.css :root and the per-level
+   table in DESIGN.md — keep the values in sync if those change. */
+
+:root {
+  --macaw-blue: #1cb0f6;
+  --macaw-blue-shadow: #1899d6;
+  --deep-blue: #2b70c9;
+  --canvas: #ffffff;
+  --ink: #3c3c3c;
+  --radius-control: 16px;
+  --radius-card: 18px;
+  --font-display: "Fredoka", "Nunito", "Segoe UI", sans-serif;
+  --font-ui: "Nunito", "Segoe UI", "Noto Sans", Arial, sans-serif;
+}
+
+/* Per-level colors (DESIGN.md "Per-level theme system"). Beginner = L1. */
+body {
+  --level-accent: #ffc800;
+  --level-accent-shadow: #d49a00;
+  --level-accent-soft: #fff3cc;
+  --content-day-bg: #ffd43b;
+  --content-day-shadow: #c78f00;
+  --content-day-text: #8a6400;
+  --content-week-tint: #ffe9a8;
+}
+
+body[data-level="Level 2"] {
+  --level-accent: #ff4b4b;
+  --level-accent-shadow: #d83434;
+  --level-accent-soft: #ffe8e8;
+  --content-day-bg: #ff7676;
+  --content-day-shadow: #e85555;
+  --content-day-text: #a83838;
+  --content-week-tint: #ffcfcf;
+}
+
+body[data-level="Level 3"] {
+  --level-accent: #1cb0f6;
+  --level-accent-shadow: #1899d6;
+  --level-accent-soft: #e8f6ff;
+  --content-day-bg: #45c0f7;
+  --content-day-shadow: #2aa6e3;
+  --content-day-text: #135f95;
+  --content-week-tint: #c6e7ff;
+}
+
+body[data-level="Level 4"] {
+  --level-accent: #ce82ff;
+  --level-accent-shadow: #9f55d8;
+  --level-accent-soft: #f4e3ff;
+  --content-day-bg: #da99ff;
+  --content-day-shadow: #ad6ce0;
+  --content-day-text: #71399f;
+  --content-week-tint: #e6c9ff;
+}
+
+/* Site-wide hard rule: no italics anywhere. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  font-style: normal !important;
+  font-synthesis: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  background: var(--level-accent-soft);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  -webkit-text-size-adjust: 100%;
+}
+
+button {
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.play {
+  min-height: 100vh;
+  min-height: 100dvh;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px 16px 32px;
+}
+
+/* (A) solo mode: the player + title block sits in the vertical middle of the
+   screen; the header stays on top. */
+.play[data-solo] {
+  display: flex;
+  flex-direction: column;
+}
+
+.play[data-solo] .play-player {
+  margin: auto 0;
+}
+
+/* Spacer that mirrors what is above the block (padding-top 16 + header 52 +
+   its margin 14 = 82 = padding-bottom 32 + 50), so the block is centered on
+   the whole screen rather than on the space under the header. */
+.play[data-solo]::after {
+  content: "";
+  flex: none;
+  height: 50px;
+}
+
+/* ---- Header: level name + month badge (like the content page banner) --- */
+.play-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 52px;
+  margin-bottom: 14px;
+}
+
+.play-level {
+  font-family: "Sniglet", var(--font-display);
+  font-weight: 800;
+  font-size: 32px;
+  line-height: 1;
+  color: var(--level-accent-shadow);
+}
+
+.play-month:empty,
+.play-level:empty {
+  display: none;
+}
+
+.play-month {
+  display: inline-grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--level-accent);
+  color: var(--canvas);
+  font-family: "Manrope", var(--font-display);
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1;
+}
+
+/* ---- Player stage -------------------------------------------------------- */
+.play-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: linear-gradient(
+    160deg,
+    var(--content-day-bg),
+    var(--level-accent)
+  );
+  box-shadow: 0 7px 0 var(--content-day-shadow);
+  /* Own layer so the rounded clip also cuts the cross-origin iframe
+     (NOTES.md "Rounded-corner dark seam"). */
+  transform: translateZ(0);
+}
+
+.play[data-state="playing"] .play-stage,
+.play[data-state="ended"] .play-stage {
+  background: #000;
+}
+
+.play-frame,
+.play-frame > div {
+  position: absolute;
+  inset: 0;
+}
+
+/* Square iframe overscanned 1px past the rounded clip (no dark seam). */
+.play-frame iframe {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  border: 0;
+}
+
+.play-click-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.play-start {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 104px;
+  height: 104px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--canvas);
+  color: var(--level-accent-shadow);
+  box-shadow:
+    0 7px 0 var(--content-day-shadow),
+    0 12px 24px rgba(0, 0, 0, 0.18);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.play-start:active {
+  transform: translate(-50%, calc(-50% + 4px));
+}
+
+.play-start svg {
+  width: 56px;
+  height: 56px;
+  margin-left: 6px; /* optical centering of the triangle */
+  fill: currentColor;
+}
+
+.play-start:focus-visible,
+.play-btn:focus-visible {
+  outline: 3px solid var(--deep-blue);
+  outline-offset: 3px;
+}
+
+/* ---- Message card (empty / error / invalid / game) ----------------------
+   Shown in place of the 16:9 stage, which is too short for an emoji + title
+   + text + 56px button on a phone, so the stage grows to fit it. */
+.play[data-card] .play-stage {
+  aspect-ratio: auto;
+  min-height: 220px;
+  background: var(--canvas);
+}
+
+/* The (empty) absolute frame would otherwise sit over the in-flow card and
+   swallow taps on its buttons. */
+.play[data-card] .play-frame {
+  display: none;
+}
+
+.play-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 220px;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.play-card-emoji {
+  font-size: 52px;
+  line-height: 1;
+}
+
+.play-card-title {
+  margin: 0;
+  font-family: "Sniglet", var(--font-display);
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--macaw-blue);
+}
+
+.play-card-text {
+  margin: 0;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--ink);
+}
+
+.play-card-title:empty,
+.play-card-text:empty {
+  display: none;
+}
+
+.play-btn {
+  min-width: 160px;
+  min-height: 56px;
+  margin-top: 6px;
+  padding: 12px 28px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--macaw-blue);
+  color: var(--canvas);
+  font-weight: 800;
+  font-size: 19px;
+  box-shadow: 0 5px 0 var(--macaw-blue-shadow);
+  cursor: pointer;
+}
+
+.play-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 var(--macaw-blue-shadow);
+}
+
+.play-title {
+  margin: 16px 0 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 21px;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--content-day-text);
+}
+
+.play-title:empty {
+  display: none;
+}
+
+/* ---- End of video overlay + Next ---------------------------------------- */
+.play-end {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+  background: rgba(28, 28, 28, 0.62);
+}
+
+.play-btn-light {
+  background: var(--canvas);
+  color: var(--content-day-text);
+  box-shadow: 0 5px 0 #dadada;
+}
+
+.play-btn-light:active {
+  box-shadow: 0 2px 0 #dadada;
+}
+
+.play-btn svg,
+.play-next-inline svg {
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  vertical-align: -2px;
+  fill: currentColor;
+}
+
+.play-next-row {
+  display: flex;
+  justify-content: center;
+}
+
+.play-next-inline {
+  min-height: 56px;
+  margin-top: 10px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--canvas);
+  color: var(--content-day-text);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  box-shadow: 0 4px 0 var(--content-day-shadow);
+  cursor: pointer;
+}
+
+.play-next-inline:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--content-day-shadow);
+}
+
+/* ---- (B) This month's list ---------------------------------------------- */
+.play-list {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 2px dashed var(--content-week-tint);
+}
+
+.play-list-tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.play-week-row {
+  display: grid;
+  grid-template-columns: 34px repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.play-week {
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--content-week-tint);
+  color: var(--content-day-text);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.play-week-word {
+  display: none;
+}
+
+.play-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 56px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--content-day-bg);
+  color: var(--content-day-text);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1.1;
+  box-shadow: 0 5px 0 var(--content-day-shadow);
+  cursor: pointer;
+}
+
+.play-item-tool {
+  padding: 8px 10px;
+  background: var(--canvas);
+  font-size: 16px;
+  box-shadow: 0 4px 0 #dadada;
+}
+
+.play-item:active {
+  transform: translateY(3px);
+}
+
+.play-item:focus-visible,
+.play-next-inline:focus-visible {
+  outline: 3px solid var(--deep-blue);
+  outline-offset: 3px;
+}
+
+/* Not ready yet: flat and faded, still tappable (shows Coming soon). */
+.play-item.is-empty {
+  background: var(--content-week-tint);
+  color: var(--content-day-text);
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.play-soon {
+  margin-top: 2px;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* What is on the player right now: thick ring + play mark. */
+.play-item[aria-current="true"] {
+  opacity: 1;
+  outline: 4px solid var(--content-day-text);
+  outline-offset: 2px;
+}
+
+/* Corner badge, so the label ("Mon") keeps its single line. */
+.play-item[aria-current="true"]::after {
+  content: "▶";
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding-left: 2px;
+  border-radius: 50%;
+  background: var(--content-day-text);
+  color: var(--canvas);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1;
+}
+
+@media (min-width: 480px) {
+  .play-week-row {
+    grid-template-columns: 64px repeat(5, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .play-week-word {
+    display: inline;
+    font-size: 14px;
+  }
+
+  .play-item {
+    min-height: 64px;
+    font-size: 20px;
+  }
+
+  .play-item-tool {
+    font-size: 18px;
+  }
+}
+
+/* ---- Phone turned sideways: the video fills the screen ------------------
+   iPhone Safari has no element Fullscreen API, so rotating is the way to
+   get a big picture. Only while a video is on screen. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .play[data-state="playing"],
+  .play[data-state="ended"] {
+    max-width: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    background: #000;
+  }
+
+  .play[data-state="playing"] .play-header,
+  .play[data-state="playing"] .play-title,
+  .play[data-state="playing"] .play-next-row,
+  .play[data-state="playing"] .play-list,
+  .play[data-state="ended"] .play-header,
+  .play[data-state="ended"] .play-title,
+  .play[data-state="ended"] .play-next-row,
+  .play[data-state="ended"] .play-list {
+    display: none;
+  }
+
+  .play[data-state="playing"] .play-player,
+  .play[data-state="ended"] .play-player {
+    width: min(100vw, calc(100dvh * 16 / 9));
+  }
+
+  .play[data-state="playing"] .play-stage,
+  .play[data-state="ended"] .play-stage {
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-start {
+    transition: none;
+  }
+}

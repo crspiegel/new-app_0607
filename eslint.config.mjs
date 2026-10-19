@@ -42,6 +42,25 @@ export default [
       "no-undef": "error",
     },
   },
+  // play.js is the QR student page (play.html) — a classic script loaded after
+  // video-source.js and supabase-config.js. Browser-only; reads, never writes.
+  {
+    files: ["play.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "script",
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        URLSearchParams: "readonly",
+        ...videoSourceGlobals,
+      },
+    },
+    rules: {
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "no-undef": "error",
+    },
+  },
   // background-editor.js and hero-banner.js are classic scripts loaded after
   // app.js, sharing its top-level lexical scope — those cross-file identifiers
   // are globals here.

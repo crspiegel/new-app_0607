@@ -2,9 +2,14 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const scannedFiles = ["index.html", "styles.css", "app.js"].filter((file) =>
-  existsSync(path.join(root, file)),
-);
+const scannedFiles = [
+  "index.html",
+  "styles.css",
+  "app.js",
+  "play.html",
+  "play.css",
+  "play.js",
+].filter((file) => existsSync(path.join(root, file)));
 
 const assetRefs = new Set();
 const assetPattern = /assets\/[A-Za-z0-9._/-]+/g;

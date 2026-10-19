@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Student page opened from the QR codes in the books — keep it out of
+         search results (the teacher site is the public face). -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Cambridge Reading Adventures</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Manrope:wght@800&family=Nunito:wght@700;800;900&family=Sniglet:wght@800&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Every asset path is ABSOLUTE: this page is also served at
+         /q/<level>/<month>/<slot> (vercel.json rewrite), where a relative
+         "play.css" would resolve under /q/b/3/. -->
+    <link rel="stylesheet" href="/play.css" />
+  </head>
+  <body>
+    <main id="play" class="play" data-state="loading">
+      <header class="play-header">
+        <span class="play-level" id="playLevel"></span>
+        <span class="play-month" id="playMonth" aria-label="Month"></span>
+      </header>
+
+      <section class="play-player" aria-live="polite">
+        <div class="play-stage" id="playStage">
+          <div class="play-frame" id="playFrame"></div>
+          <!-- Tap target over our own players (YouTube / Vimeo SDK): the
+               cross-origin iframe would swallow the tap otherwise. -->
+          <button
+            type="button"
+            class="play-click-layer"
+            id="playClickLayer"
+            aria-label="Pause"
+          ></button>
+          <!-- Mobile browsers block autoplay with sound, so nothing plays
+               until this tap (a user gesture). Also the resume button. -->
+          <button
+            type="button"
+            class="play-start"
+            id="playStart"
+            aria-label="Play"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 5.5v13l11-6.5z" />
+            </svg>
+          </button>
+          <div class="play-card" id="playCard" hidden>
+            <div
+              class="play-card-emoji"
+              id="playCardEmoji"
+              aria-hidden="true"
+            ></div>
+            <h1 class="play-card-title" id="playCardTitle"></h1>
+            <p class="play-card-text" id="playCardText"></p>
+            <button type="button" class="play-btn" id="playRetry" hidden>
+              Try again
+            </button>
+            <button type="button" class="play-btn" id="playGame" hidden>
+              Let's play!
+            </button>
+          </div>
+          <!-- End of a YouTube/Vimeo video (covers the related-videos
+               screen). Next = the next filled video slot, list mode only. -->
+          <div class="play-end" id="playEnd" hidden>
+            <button
+              type="button"
+              class="play-btn play-btn-light"
+              id="playAgain"
+            >
+              Watch again
+            </button>
+            <button type="button" class="play-btn" id="playNext">
+              Next
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 5.5v13l11-6.5z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <h2 class="play-title" id="playTitle"></h2>
+        <!-- A framed publisher page never reports its end, so for those
+             slots Next waits under the player instead. -->
+        <div class="play-next-row">
+          <button
+            type="button"
+            class="play-next-inline"
+            id="playNextInline"
+            hidden
+          >
+            Next
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 5.5v13l11-6.5z" />
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- (B) This month only: toolbar slots, then Mon-Fri for weeks 1-4.
+           Buttons, never links — no way out to other months, levels or the
+           teacher site. Hidden in solo mode (?solo=1). -->
+      <nav class="play-list" id="playList" aria-label="This month" hidden></nav>
+    </main>
+
+    <script src="/video-source.js"></script>
+    <script src="/supabase-config.js"></script>
+    <script src="/play.js"></script>
+  </body>
+</html>
