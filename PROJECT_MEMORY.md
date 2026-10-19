@@ -18,16 +18,19 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
 
 ## ⏳ In-progress work
 
-**YouTube captions forced OFF (`2026-10-08`) — `app.js` modified, NOT committed.** The `M app.js` in
-the working tree is intentional; do not mix it into unrelated commits.
-
-- `disableYouTubeCaptions(yt)` (undocumented `unloadModule("captions"/"cc")`, try/catch) called from
-  `onReady`, `onStateChange` PLAYING and `onApiChange` — keep all three. `cc_load_policy: 0` is a no-op aid.
-- `npm.cmd run qa` passed, but there is no YouTube mount test, so the fix itself is **unverified**.
-- Next: ① verify in a real browser (options in WORKLOG 10/08) ② commit/deploy on user request
-  ③ record the "captions OFF relies on unofficial `unloadModule`" gotcha in `NOTES.md`.
+None. (Last item — YouTube captions forced OFF — was verified by the user and deployed on
+`2026-10-19`; see Recent state.)
 
 ## Recent state (newest first)
+
+- `2026-10-19` — **YouTube captions forced OFF: user-verified (10/19), committed and deployed.**
+  `disableYouTubeCaptions(yt)` (undocumented `unloadModule("captions"/"cc")`, try/catch) runs from
+  `onReady`, `onStateChange` PLAYING and `onApiChange` — keep all three. Gotcha in `NOTES.md`.
+
+- `2026-10-19` `f9fa6fc` / `5b515db` (deployed) — harness setup: `.claude/verify.json` (Stop hook runs
+  `npm run check`), CLAUDE.md Superpowers + session-end sections, this file shortened (history →
+  `docs/PROJECT_MEMORY-archive.md`). `.vercelignore` now excludes `docs` and `.gitattributes` (they
+  were publicly served); verified 404 on both live domains.
 
 - `2026-10-12` `024a18d` — publisher-page Vimeo URLs (domain-restricted) open the page itself in the
   video window (`mountExternalPage`).

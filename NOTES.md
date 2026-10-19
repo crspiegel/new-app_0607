@@ -13,6 +13,10 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 - `.vercelignore` keeps only the site public (`index.html`, `styles.css`, `app.js`, `assets/`,
   `vercel.json`); internal docs and dev tooling are excluded. New public asset → make sure
   it's not ignored. New internal doc → add it to `.vercelignore`.
+- **`.vercelignore` is a deny-list, so a new folder is public by default.** `docs/` (Superpowers
+  specs/plans) was served at `/docs/...` with HTTP 200 for months until `2026-10-19`; `.gitattributes`
+  too. Both are now listed. When adding any new top-level file or folder that isn't site code, add it
+  here, and after the deploy probe the live URL (`curl -o /dev/null -w '%{http_code}'`) to confirm 404.
 - Deploy = Git: `git push` to `master` triggers Vercel auto-deploy to production. Manual
   fallback: `npx vercel --prod --yes`.
 
@@ -325,6 +329,14 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   (`<script src="https://player.vimeo.com/api/player.js">`, loaded before `app.js`). It's an
   external CDN script — fine for the static no-build deploy, but make sure `.vercelignore`
   doesn't exclude anything it needs (it doesn't; the SDK is remote).
+- **YouTube captions OFF relies on the unofficial `unloadModule` (`2026-10-08`, deployed `2026-10-19`).**
+  Some viewers have "always show captions" on in their YouTube account / OS settings, and with
+  `controls:0` + `disablekb:1` a child cannot turn CC off. There is no official off switch
+  (`cc_load_policy` only documents `1` = force ON), so `disableYouTubeCaptions(yt)` calls
+  `unloadModule("captions")`/`("cc")` in try/catch from `onReady`, PLAYING and `onApiChange` — the
+  module loads lazily after playback starts, so **keep all three calls**. If captions reappear
+  someday, YouTube probably changed this API (it fails silently). No automated test covers it; the
+  fix was verified by the user in a real browser. Vimeo, if ever needed: official `disableTextTrack()`.
 - **ESLint `no-undef`:** reference the SDK as `window.Vimeo` (e.g. `new window.Vimeo.Player(...)`),
   not the bare `Vimeo` global, or `eslint app.js` fails. Always guard with `window.Vimeo &&
 window.Vimeo.Player` since the SDK loads async and may be absent (offline / headless).
@@ -546,6 +558,10 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   on inactive screens don't trigger strict-mode conflicts.
 - `npm.cmd run qa` runs Prettier over `*.md` too — run `npx prettier --write` on edited markdown
   or `check`/`qa` fails. Playwright browsers need `npx playwright install chromium` once.
+- **If every Playwright test fails at once, check the browser cache before the code.** On
+  `2026-10-19` all 126 failed with `browserType.launch: Executable doesn't exist at
+…\ms-playwright\chromium_headless_shell-1223\…` — Chromium had vanished from
+  `%LOCALAPPDATA%\ms-playwright` (only WebKit left). `npx.cmd playwright install chromium` fixed it.
 - Always delete temp verification files (`_*.mjs`, `_*.png`) afterward — they are not gitignored.
 - A local static server matching the deploy (serve repo root, hash routing handled client-side)
   is the faithful way to preview; the Vite dev server also works for local checks.
