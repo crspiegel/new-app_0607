@@ -18,11 +18,13 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
 
 ## ⏳ In-progress work
 
-- **Beginner QR codes + student page (`play.html`)** — live since `2026-10-19`. Left (user):
-  real-device checklist (plan Task 6 table) → `npm run qr:list` → Naver QR entry. Hosting =
-  option ③ (`PUBLISHER_STRATEGY = "page"`); if the user's TPS-subdomain test
-  (`docs/worker-briefs/qrtest/`, local) plays, switch to `"direct"`. Docs:
-  `docs/superpowers/specs|plans/2026-10-19-qr-student-play-page-*`.
+- **Beginner QR codes + student page (`play.html`)** — live since `2026-10-19`. **Option ① chosen**
+  (`qrtest.tps-education.com` played the publisher Vimeo on PC/iPhone/Android): student host
+  `play.tps-education.com` on this Vercel project, publisher Vimeo embedded directly there (strategy
+  by host; `www.cambridgereading.com/q/…` keeps framing the publisher page). Code done, **not
+  committed** (stage 4 brief). Next: commit/push → add the domain (CNAME) → live checks → Naver QR
+  with `qr/beginner-qr-list.csv` (now `play.tps-education.com`). Test project `vimeo-domain-test` +
+  `qrtest` domain stay until the live domain is checked. Docs: `docs/superpowers/specs|plans/2026-10-19-qr-student-play-page-*`.
 
 ## Recent state (newest first)
 
@@ -65,11 +67,10 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
   `new-app0607.vercel.app` still works.
 - **Student QR page:** `/q/<lv>/<month>/<slot>` → `play.html` (`vercel.json` rewrite,
   `trailingSlash: false`); query fallback `play.html?l=b&m=3&s=w1-mon`. Printed QR → Naver QR → here.
+  Host `play.tps-education.com` (pending DNS): only the student page (`/`, `/index.html` → `/q`).
 - **Supabase:** project `jguuexcgyvyljbcqfpib`; anon key in `supabase-config.js` (public by design).
   Provisioning record: `SUPABASE_SETUP.md`, `supabase/migration.sql`.
-- Storage originals (outside repo): the `_storage-backup-20260829` folder went to the Recycle Bin on
-  `2026-10-19`; identical originals live in `메인 히어로 섹션 배너_tps제공\` and
-  `피드백_0717_레벨별 백그라운드 이미지 요청\LEVEL 1~3\` (see `NOTES.md`).
+- Storage originals (outside repo): see `NOTES.md` (backup folder is gone; two source folders remain).
 
 ## Backlog
 

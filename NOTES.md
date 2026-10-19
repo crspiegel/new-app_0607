@@ -881,10 +881,20 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   (`2026-10-19` `16be3c5`, 운영 확인). `/q`(슬래시 없음)도 rewrite에 걸려 학생 페이지의 invalid 카드가 뜬다.
 - **`play.css`는 `styles.css`를 로드하지 않는다**(163KB, 선생님 사이트 전역 규칙). 필요한 토큰만
   복제했으니 `styles.css :root`나 DESIGN.md 레벨 표를 바꾸면 `play.css`도 맞춘다.
-- **재생 방식 = `play.js`의 `PUBLISHER_STRATEGY`.** 도메인 잠금 Vimeo(`tps-education.com/58?video=`)는
-  `"page"`(퍼블리셔 페이지 iframe, 현재) / `"direct"`(`tps-education.com` 하위 도메인에서 호스팅할
-  때만) / `"player-page"`(`PUBLISHER_PLAYER_URL` 채운 뒤). 선생님 사이트의 `kind:"page"` 동작과는
-  별개다. Referer 위조·프록시·재업로드는 금지(출판사 접근제어 우회).
+- **재생 방식은 호스트로 정해진다** (`play.js` `publisherStrategy()` → `PUBLISHER_STRATEGY`). 도메인
+  잠금 Vimeo(`tps-education.com/58?video=`)는 `tps-education.com`·그 하위 호스트(`play.`)에서
+  `"direct"`(`player.vimeo.com/video/<id>` iframe을 직접 만들고 SDK로 감쌈, `ended` → 종료 오버레이),
+  그 외 호스트에서 `"page"`(퍼블리셔 페이지 iframe + 인라인 Next). id 추출은
+  `parseVideoSource(url, { publisher: "direct" })` — 선생님 사이트는 옵션 없이 불러 `kind:"page"`
+  그대로다. 로컬에서는 `?host=play.tps-education.com`으로 direct 경로를 흉내 낸다(127.0.0.1·localhost에서만
+  유효). 로컬 Vimeo는 허용 도메인이 아니라 "개인정보보호 설정" 오류가 정상이다. Referer 위조·프록시·
+  재업로드는 금지(출판사 접근제어 우회).
+- **play 호스트 라우팅(`vercel.json`): Vercel은 rewrite보다 실제 파일을 먼저 서빙한다.** 그래서
+  `has: host` rewrite만으로는 `play.tps-education.com/`·`/index.html`이 선생님 사이트를 연다.
+  이 둘은 `redirects`(파일 확인보다 먼저 적용)로 `/q`(invalid 카드)에 보내고, 파일 없는 나머지 경로만
+  rewrite로 `/play.html`에 보낸다. 학생 페이지 자산(`/play.js`·`/play.css`·`/video-source.js`·
+  `/supabase-config.js`)을 가리는 규칙을 넣지 말 것. `tests/vercel-config.spec.js`가 규칙을 고정하지만
+  실제 동작은 배포 후 curl로만 믿는다.
 - **자동재생 없음.** 모바일은 제스처 없이 소리 재생을 막으므로 ▶ 탭(또는 목록 탭) 안에서 플레이어를
   만든다. YouTube 위 탭 레이어는 **첫 PLAYING 이후에만** 켠다 — iOS가 스크립트 재생을 막으면 아이의
   첫 탭이 YouTube 자체 재생 버튼에 닿아야 하기 때문.
