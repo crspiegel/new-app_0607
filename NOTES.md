@@ -889,6 +889,18 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   그대로다. 로컬에서는 `?host=play.tps-education.com`으로 direct 경로를 흉내 낸다(127.0.0.1·localhost에서만
   유효). 로컬 Vimeo는 허용 도메인이 아니라 "개인정보보호 설정" 오류가 정상이다. Referer 위조·프록시·
   재업로드는 금지(출판사 접근제어 우회).
+- **아이폰 Vimeo 전체화면은 iOS 자체 전체화면(`playsinline=0`)으로 한다.** 아이폰 Safari·앱 내 브라우저는
+  요소 Fullscreen API가 없어(`fullscreenEnabled`·`webkitFullscreenEnabled` 둘 다 false) 우리 ⛶는 유사
+  전체화면(주소창 남음)밖에 못 한다. 그래서 이 조건(`play.js` `noFullscreenApi()`, 재생할 때 판별)에서는
+  Vimeo iframe에 `playsinline=0`을 주고 우리 ⛶를 숨긴다 — 재생이 시작되면 iOS가 전체화면으로 연다(10/19
+  qrtest 실측: 우리 ▶·플레이어 ▶ 모두 즉시 전환). YouTube는 진짜 전체화면이 플레이어 자체 버튼
+  (`controls 1`)뿐이라 로고·채널 링크가 노출되므로 손대지 않았다. 학생 페이지는 `vimeo.com/<id>`,
+  `vimeo.com/<id>/<hash>`, `player.vimeo.com/video/<id>?h=`도 id(+hash)로 바꿔 직접 iframe을 만든다
+  (`vimeoLink()`; 선생님 사이트 `app.js`는 SDK URL 경로 그대로).
+- **일시정지한 플레이어는 밖으로 나가는 링크를 보여준다**(Vimeo 로고 — 무료 플랜은 못 없앰; YouTube 제목·로고·
+  추천 영상). 그래서 탭 레이어는 한 번 재생된 뒤로는 **일시정지 중에도** 플레이어 전체를 덮고, 탭하면 다시
+  재생한다(YouTube·Vimeo 공통). 첫 재생 전(자동재생 차단)에만 비워 둔다 — 플레이어 자체 ▶을 눌러야 해서.
+  Vimeo iframe에는 `title=0&byline=0&portrait=0`(무료 플랜도 적용됨)을 준다.
 - **play 호스트 라우팅(`vercel.json`): Vercel은 rewrite보다 실제 파일을 먼저 서빙한다.** 그래서
   `has: host` rewrite만으로는 `play.tps-education.com/`·`/index.html`이 선생님 사이트를 연다.
   이 둘은 `redirects`(파일 확인보다 먼저 적용)로 `/q`(invalid 카드)에 보내고, 파일 없는 나머지 경로만
