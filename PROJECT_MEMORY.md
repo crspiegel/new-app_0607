@@ -18,15 +18,16 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
 
 ## ⏳ In-progress work
 
-- **Beginner QR codes + student page (`play.html`)** — live since `2026-10-19`. **Option ① chosen**
-  (`qrtest.tps-education.com` played the publisher Vimeo on PC/iPhone/Android): student host
-  `play.tps-education.com` on this Vercel project, publisher Vimeo embedded directly there (strategy
-  by host; `www.cambridgereading.com/q/…` keeps framing the publisher page). Pushed `c01693b`, domain
-  live, C1–C7 checked (`2026-10-20`). iPhone full screen: Vimeo now plays with `playsinline=0` where
-  there is no Fullscreen API (**not committed**); TPS will move its YouTube songs to its own Vimeo
-  (`vimeo.com/<id>`). Next: commit/push → iPhone re-check (C8) → Naver QR with
-  `qr/beginner-qr-list.csv` (`play.tps-education.com`). Test project `vimeo-domain-test` + `qrtest`
-  domain stay until told to delete. Docs: `docs/superpowers/specs|plans/2026-10-19-qr-student-play-page-*`.
+- **Beginner QR codes + student page (`play.html`)** — **option ① live in production** (`2026-10-21`).
+  Student host `play.tps-education.com` on this Vercel project, publisher Vimeo embedded directly
+  there (strategy by host; `www.cambridgereading.com/q/…` keeps framing the publisher page). C1–C7
+  checked (`2026-10-20`). iPhone full screen: Vimeo plays with `playsinline=0` where there is no
+  Fullscreen API, tap layer stays while paused — pushed (`acc4af7`), iPhone C8 passed (`2026-10-21`).
+  Test project `vimeo-domain-test` + `qrtest` domain deleted (`2026-10-21`).
+  **Remaining:** TPS uploads its songs to its own Vimeo and the DB URLs are swapped
+  (`vimeo.com/<id>`); TPS talks (A/B, game QR, printing); register 240 Naver QR codes with
+  `qr/beginner-qr-list.csv` (`play.tps-education.com`). Docs:
+  `docs/superpowers/specs|plans/2026-10-19-qr-student-play-page-*`.
 
 ## Recent state (newest first)
 
