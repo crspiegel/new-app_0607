@@ -90,6 +90,40 @@ function publisherStrategy(hostname) {
     : "page";
 }
 
+// A Vimeo link we can embed ourselves: vimeo.com/<id>, vimeo.com/<id>/<hash>
+// (a private link) or player.vimeo.com/video/<id>?h=<hash>. null for any
+// other shape (showcase, channel ...), which the SDK then looks up by URL.
+function vimeoLink(str) {
+  let url;
+  try {
+    url = new window.URL(String(str || "").trim());
+  } catch {
+    return null;
+  }
+  const host = url.hostname.toLowerCase();
+  let id = null;
+  let hash = null;
+  if (host === "vimeo.com" || host === "www.vimeo.com") {
+    const match = url.pathname.match(/^\/(\d+)(?:\/([0-9a-f]+))?\/?$/i);
+    if (match) [, id, hash] = match;
+  } else if (host === "player.vimeo.com") {
+    const match = url.pathname.match(/^\/video\/(\d+)\/?$/);
+    if (match) [, id] = match;
+    hash = url.searchParams.get("h");
+  }
+  if (id == null) return null;
+  return hash && /^[0-9a-f]+$/i.test(hash)
+    ? { id: Number(id), hash }
+    : { id: Number(id) };
+}
+
+// No Fullscreen API at all (iPhone Safari, in-app browsers on iPhone): there
+// a Vimeo video plays with playsinline=0, so iOS shows it in its own real
+// full screen instead of our pseudo one. Read at play time.
+function noFullscreenApi() {
+  return !(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+}
+
 // The host the page acts as. On a dev machine `?host=play.tps-education.com`
 // stands in for the real host (Playwright checks direct mode with it); a
 // live host ignores the parameter.
@@ -163,8 +197,10 @@ function resolvePlayback(url, kind, strategy = PUBLISHER_STRATEGY) {
   if (!parsed) return null;
   if (parsed.kind === "youtube") return { type: "youtube", id: parsed.id };
   if (parsed.kind === "vimeo") {
-    return parsed.id != null
-      ? { type: "vimeo", id: parsed.id }
+    if (parsed.id != null) return { type: "vimeo", id: parsed.id };
+    const link = vimeoLink(parsed.url);
+    return link
+      ? { type: "vimeo", ...link }
       : { type: "vimeo", url: parsed.url };
   }
   const vimeoId = publisherVimeoId(parsed.url);
@@ -222,11 +258,12 @@ function syncControls() {
     (state === "ready" && type && type !== "game") ||
     (state === "playing" && playState.paused)
   );
+  // Paused too: a paused player shows links out (Vimeo logo; YouTube title,
+  // logo, more videos), so the layer keeps covering it and a tap resumes.
   playClickLayer.hidden = !(
     state === "playing" &&
     playState.player &&
-    playState.layerArmed &&
-    !playState.paused
+    playState.layerArmed
   );
   playEnd.hidden = state !== "ended";
   playNext.hidden = !next;
@@ -236,9 +273,11 @@ function syncControls() {
     (state === "ready" || state === "playing")
   );
   playList.hidden = solo || !playState.listReady;
+  // iPhone + Vimeo: iOS's own full screen replaces ours (see noFullscreenApi).
   playFullscreen.hidden = !(
     (state === "playing" || state === "ended") &&
-    !playState.fullscreen
+    !playState.fullscreen &&
+    !(type === "vimeo" && noFullscreenApi())
   );
   playFullscreenExit.hidden = !playState.fullscreen;
 }
@@ -394,9 +433,17 @@ function mountYouTube(videoId) {
 // A Vimeo id plays in our own player.vimeo.com iframe, which the SDK then
 // wraps — it never has to look the id up first. On a tps-education.com host
 // this is how the publisher's domain-locked videos play ("direct").
-function vimeoFrame(id) {
+function vimeoFrame(id, hash) {
   const frame = document.createElement("iframe");
-  frame.src = `https://player.vimeo.com/video/${id}?playsinline=1`;
+  const params = new URLSearchParams();
+  if (hash) params.set("h", hash);
+  // No title / uploader / portrait links out (honoured on free plans too;
+  // the Vimeo logo stays, under our tap layer).
+  params.set("title", "0");
+  params.set("byline", "0");
+  params.set("portrait", "0");
+  params.set("playsinline", noFullscreenApi() ? "0" : "1");
+  frame.src = `https://player.vimeo.com/video/${id}?${params}`;
   frame.title = playTitle.textContent;
   frame.allow = "autoplay; fullscreen; picture-in-picture";
   frame.allowFullscreen = true;
@@ -405,7 +452,8 @@ function vimeoFrame(id) {
 
 function mountVimeo(playback) {
   const mountId = playState.mountId;
-  const frame = playback.id != null ? vimeoFrame(playback.id) : null;
+  const frame =
+    playback.id != null ? vimeoFrame(playback.id, playback.hash) : null;
   if (frame) playFrame.appendChild(frame);
   loadVimeoApi()
     .then(() => {
@@ -414,7 +462,10 @@ function mountVimeo(playback) {
         ? new window.Vimeo.Player(frame)
         : new window.Vimeo.Player(playFrame, {
             url: playback.url,
-            playsinline: true,
+            title: false,
+            byline: false,
+            portrait: false,
+            playsinline: !noFullscreenApi(),
             responsive: false,
           });
       player.on("play", () => setPaused(false));
@@ -624,7 +675,9 @@ playStart.addEventListener("click", () => {
 });
 
 playClickLayer.addEventListener("click", () => {
-  if (playState.player) playState.player.pause();
+  if (!playState.player) return;
+  if (playState.paused) playState.player.play();
+  else playState.player.pause();
 });
 
 playRetry.addEventListener("click", loadRow);

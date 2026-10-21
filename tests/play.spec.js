@@ -348,14 +348,20 @@ async function mockVimeo(page) {
     route.fulfill({
       contentType: "text/javascript",
       body: `
-        window.__vimeo = { players: [], textTrackOff: 0 };
+        window.__vimeo = { players: [], textTrackOff: 0, plays: 0, pauses: 0 };
         window.Vimeo = {
-          Player: function (el) {
+          Player: function (el, options) {
             const handlers = {};
-            window.__vimeo.players.push({ tag: el.tagName, src: el.src });
+            window.__vimeo.players.push({ tag: el.tagName, src: el.src, options });
             this.on = (name, fn) => { handlers[name] = fn; };
-            this.play = () => Promise.resolve();
-            this.pause = () => Promise.resolve();
+            this.play = () => {
+              window.__vimeo.plays += 1;
+              return Promise.resolve();
+            };
+            this.pause = () => {
+              window.__vimeo.pauses += 1;
+              return Promise.resolve();
+            };
             this.destroy = () => Promise.resolve();
             this.disableTextTrack = () => {
               window.__vimeo.textTrackOff += 1;
@@ -482,6 +488,326 @@ test("play direct: Vimeo ended shows Watch again and Next", async ({
     "src",
     /^https:\/\/player\.vimeo\.com\/video\/173725167\?/,
   );
+});
+
+/* ---- Vimeo links and iPhone full screen ----------------------------------
+   TPS moves its own songs to Vimeo (stored as vimeo.com/<id>). The student
+   page turns every Vimeo link it can read into our own player.vimeo.com
+   iframe. Where the page has no Fullscreen API at all (iPhone Safari and
+   in-app browsers), Vimeo plays with playsinline=0: iOS then shows the video
+   in its own full screen, and our ⛶ (pseudo full screen only) is hidden. */
+const VIMEO_ID = 76979871;
+const VIMEO_ROW = {
+  videos: {
+    opening: `https://vimeo.com/${VIMEO_ID}`,
+    ending: `https://vimeo.com/${VIMEO_ID}/abc123def0`,
+    "w1-Mon": `https://player.vimeo.com/video/${VIMEO_ID}?h=abc123def0`,
+    "w1-Tue": "https://vimeo.com/showcase/11111",
+    "w1-Wed": "https://youtu.be/LPl2AR2rm0g",
+    "w1-Thu": PUBLISHER_58,
+  },
+  labels: {},
+};
+
+// The src params of the one Vimeo iframe on the page.
+async function vimeoParams(page) {
+  const frame = page.locator("#playFrame iframe");
+  await expect(frame).toHaveCount(1);
+  const url = new URL(await frame.getAttribute("src"));
+  return {
+    path: `${url.origin}${url.pathname}`,
+    params: Object.fromEntries(url.searchParams),
+  };
+}
+
+test("play: Vimeo links become an id (and private-link hash)", async ({
+  page,
+}) => {
+  await mockContent(page);
+  await page.goto("/play.html?l=b&m=3&s=w1-mon");
+  const result = await page.evaluate((id) => {
+    const resolve = (url, strategy = "page") =>
+      window.craPlay.resolvePlayback(url, "video", strategy);
+    return {
+      plain: resolve(`https://vimeo.com/${id}`),
+      plainDirect: resolve(`https://vimeo.com/${id}`, "direct"),
+      www: resolve(`https://www.vimeo.com/${id}/`),
+      hash: resolve(`https://vimeo.com/${id}/abc123def0`),
+      player: resolve(`https://player.vimeo.com/video/${id}`),
+      playerHash: resolve(`https://player.vimeo.com/video/${id}?h=abc123def0`),
+      showcase: resolve("https://vimeo.com/showcase/11111"),
+      notVimeo: resolve(`https://notvimeo.com/${id}`),
+    };
+  }, VIMEO_ID);
+  expect(result).toEqual({
+    plain: { type: "vimeo", id: VIMEO_ID },
+    plainDirect: { type: "vimeo", id: VIMEO_ID },
+    www: { type: "vimeo", id: VIMEO_ID },
+    hash: { type: "vimeo", id: VIMEO_ID, hash: "abc123def0" },
+    player: { type: "vimeo", id: VIMEO_ID },
+    playerHash: { type: "vimeo", id: VIMEO_ID, hash: "abc123def0" },
+    // Shapes we can't read stay a URL for the SDK to look up.
+    showcase: { type: "vimeo", url: "https://vimeo.com/showcase/11111" },
+    notVimeo: { type: "frame", url: `https://notvimeo.com/${VIMEO_ID}` },
+  });
+});
+
+test("play iPhone: Vimeo plays in iOS full screen, our ⛶ is hidden", async ({
+  page,
+}) => {
+  await withoutFullscreenApi(page);
+  await mockContent(page);
+  await mockVimeo(page);
+  await page.goto("/play.html?l=b&m=3&s=w1-mon&host=play.tps-education.com");
+  await expect(page.locator("#playStart")).toBeVisible();
+  await page.locator("#playStart").click();
+
+  expect(await vimeoParams(page)).toEqual({
+    path: "https://player.vimeo.com/video/173725167",
+    params: { title: "0", byline: "0", portrait: "0", playsinline: "0" },
+  });
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "playing");
+  await expect(page.locator("#playFullscreen")).toBeHidden();
+
+  await page.evaluate(() => window.__vimeo.fire("ended"));
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "ended");
+  await expect(page.locator("#playFullscreen")).toBeHidden();
+});
+
+test("play iPhone: leaving iOS full screen pauses, our ▶ resumes", async ({
+  page,
+}) => {
+  await withoutFullscreenApi(page);
+  await mockContent(page);
+  await mockVimeo(page);
+  await page.goto("/play.html?l=b&m=3&s=w1-mon&host=play.tps-education.com");
+  await page.locator("#playStart").click();
+  await expect
+    .poll(() => page.evaluate(() => window.__vimeo?.plays ?? 0))
+    .toBe(1);
+
+  await page.evaluate(() => window.__vimeo.fire("play"));
+  await expect(page.locator("#playStart")).toBeHidden();
+  // iOS pauses the video when the child taps Done in its full screen.
+  await page.evaluate(() => window.__vimeo.fire("pause"));
+  await expect(page.locator("#playStart")).toBeVisible();
+  await page.locator("#playStart").click();
+  await expect.poll(() => page.evaluate(() => window.__vimeo.plays)).toBe(2);
+  // Same player, not a new one.
+  expect(await page.evaluate(() => window.__vimeo.players.length)).toBe(1);
+});
+
+test("play iPhone: Vimeo ended in iOS full screen offers Watch again", async ({
+  page,
+}) => {
+  await withoutFullscreenApi(page);
+  await mockContent(page);
+  await mockVimeo(page);
+  await page.goto("/play.html?l=b&m=3&s=w1-mon&host=play.tps-education.com");
+  await page.locator("#playStart").click();
+  await expect
+    .poll(() => page.evaluate(() => window.__vimeo?.players.length ?? 0))
+    .toBe(1);
+
+  await page.evaluate(() => window.__vimeo.fire("ended"));
+  await expect(page.locator("#playAgain")).toBeVisible();
+  await expect(page.locator("#playNext")).toBeVisible();
+  await page.locator("#playAgain").click();
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "playing");
+  expect((await vimeoParams(page)).params.playsinline).toBe("0");
+});
+
+test("play iPhone: a vimeo.com private link keeps its hash", async ({
+  page,
+}) => {
+  await withoutFullscreenApi(page);
+  await mockContent(page, [VIMEO_ROW]);
+  await mockVimeo(page);
+  // No host override: TPS's own Vimeo plays on every host.
+  await page.goto("/play.html?l=b&m=3&s=ending");
+  await page.locator("#playStart").click();
+  expect(await vimeoParams(page)).toEqual({
+    path: `https://player.vimeo.com/video/${VIMEO_ID}`,
+    params: {
+      h: "abc123def0",
+      title: "0",
+      byline: "0",
+      portrait: "0",
+      playsinline: "0",
+    },
+  });
+  await expect(page.locator("#playFullscreen")).toBeHidden();
+
+  // A Vimeo URL we can't read: the SDK builds the player, still not inline.
+  await page.goto("/play.html?l=b&m=3&s=w1-tue");
+  await page.locator("#playStart").click();
+  await expect
+    .poll(() => page.evaluate(() => window.__vimeo?.players ?? []))
+    .toEqual([
+      {
+        tag: "DIV",
+        options: {
+          url: "https://vimeo.com/showcase/11111",
+          title: false,
+          byline: false,
+          portrait: false,
+          playsinline: false,
+          responsive: false,
+        },
+      },
+    ]);
+});
+
+test("play: with a Fullscreen API, Vimeo stays inline with our ⛶", async ({
+  page,
+}) => {
+  await mockContent(page, [VIMEO_ROW]);
+  await mockVimeo(page);
+  await page.goto("/play.html?l=b&m=3&s=opening");
+  await page.locator("#playStart").click();
+  expect(await vimeoParams(page)).toEqual({
+    path: `https://player.vimeo.com/video/${VIMEO_ID}`,
+    params: { title: "0", byline: "0", portrait: "0", playsinline: "1" },
+  });
+  await expect(page.locator("#playFullscreen")).toBeVisible();
+
+  await page.goto("/play.html?l=b&m=3&s=w1-mon");
+  await page.locator("#playStart").click();
+  expect(await vimeoParams(page)).toEqual({
+    path: `https://player.vimeo.com/video/${VIMEO_ID}`,
+    params: {
+      h: "abc123def0",
+      title: "0",
+      byline: "0",
+      portrait: "0",
+      playsinline: "1",
+    },
+  });
+});
+
+test("play iPhone: YouTube is unchanged (inline, our ⛶)", async ({ page }) => {
+  await withoutFullscreenApi(page);
+  await mockContent(page, [VIMEO_ROW]);
+  await page.route("https://www.youtube.com/iframe_api", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: `
+        window.YT = {
+          PlayerState: { ENDED: 0, PLAYING: 1, PAUSED: 2 },
+          Player: function (el, options) {
+            window.__ytVars = options.playerVars;
+            this.destroy = () => {};
+            this.playVideo = () => {};
+            this.pauseVideo = () => {};
+            this.unloadModule = () => {};
+          },
+        };
+        window.onYouTubeIframeAPIReady();`,
+    }),
+  );
+  await page.goto("/play.html?l=b&m=3&s=w1-wed");
+  await page.locator("#playStart").click();
+  await expect
+    .poll(() => page.evaluate(() => window.__ytVars ?? null))
+    .toEqual({
+      autoplay: 1,
+      controls: 0,
+      rel: 0,
+      modestbranding: 1,
+      playsinline: 1,
+      fs: 0,
+      disablekb: 1,
+      iv_load_policy: 3,
+      cc_load_policy: 0,
+    });
+  await expect(page.locator("#playFullscreen")).toBeVisible();
+});
+
+/* ---- Tap layer while paused ---------------------------------------------
+   A paused Vimeo/YouTube player shows links out (Vimeo logo; YouTube title,
+   logo, more videos). Once a video has played, our tap layer stays over the
+   whole player — paused too — and a tap there resumes. Before the first play
+   (autoplay blocked) it stays off, so the player's own ▶ can be tapped. */
+async function expectLayerCoversStage(page) {
+  const layer = page.locator("#playClickLayer");
+  await expect(layer).toBeVisible();
+  const [l, s] = await Promise.all([
+    layer.boundingBox(),
+    page.locator("#playStage").boundingBox(),
+  ]);
+  expect(l).toEqual(s);
+}
+
+test("play layer: a paused Vimeo stays covered, a tap resumes", async ({
+  page,
+}) => {
+  await mockContent(page, [VIMEO_ROW]);
+  await mockVimeo(page);
+  await page.goto("/play.html?l=b&m=3&s=opening");
+  await page.locator("#playStart").click();
+  await expect
+    .poll(() => page.evaluate(() => window.__vimeo?.players.length ?? 0))
+    .toBe(1);
+  // Not played yet (autoplay may be blocked): the player's own ▶ is open.
+  await expect(page.locator("#playClickLayer")).toBeHidden();
+
+  await page.evaluate(() => window.__vimeo.fire("play"));
+  await expectLayerCoversStage(page);
+  await page.locator("#playClickLayer").click();
+  expect(await page.evaluate(() => window.__vimeo.pauses)).toBe(1);
+
+  await page.evaluate(() => window.__vimeo.fire("pause"));
+  await expectLayerCoversStage(page);
+  await expect(page.locator("#playStart")).toBeVisible();
+  const plays = await page.evaluate(() => window.__vimeo.plays);
+  // A tap off our ▶ (top-left corner, where the title sits) resumes too.
+  await page.locator("#playClickLayer").click({ position: { x: 8, y: 8 } });
+  expect(await page.evaluate(() => window.__vimeo.plays)).toBe(plays + 1);
+  expect(await page.evaluate(() => window.__vimeo.pauses)).toBe(1);
+
+  await page.evaluate(() => window.__vimeo.fire("play"));
+  await expect(page.locator("#playStart")).toBeHidden();
+  await expectLayerCoversStage(page);
+});
+
+test("play layer: a paused YouTube stays covered, a tap resumes", async ({
+  page,
+}) => {
+  await mockContent(page);
+  await page.route("https://www.youtube.com/iframe_api", (route) =>
+    route.fulfill({
+      contentType: "text/javascript",
+      body: `
+        window.__yt = { plays: 0, pauses: 0 };
+        window.YT = {
+          PlayerState: { ENDED: 0, PLAYING: 1, PAUSED: 2 },
+          Player: function (el, options) {
+            window.__yt.state = (data) => options.events.onStateChange({ data });
+            this.destroy = () => {};
+            this.playVideo = () => { window.__yt.plays += 1; };
+            this.pauseVideo = () => { window.__yt.pauses += 1; };
+            this.unloadModule = () => {};
+          },
+        };
+        window.onYouTubeIframeAPIReady();`,
+    }),
+  );
+  await page.goto("/play.html?l=b&m=3&s=w1-tue");
+  await page.locator("#playStart").click();
+  await page.waitForFunction(() => window.__yt?.state);
+  await expect(page.locator("#playClickLayer")).toBeHidden();
+
+  await page.evaluate(() => window.__yt.state(1)); // PLAYING
+  await expectLayerCoversStage(page);
+  await page.locator("#playClickLayer").click();
+  expect(await page.evaluate(() => window.__yt.pauses)).toBe(1);
+
+  await page.evaluate(() => window.__yt.state(2)); // PAUSED
+  await expectLayerCoversStage(page);
+  await expect(page.locator("#playStart")).toBeVisible();
+  await page.locator("#playClickLayer").click({ position: { x: 8, y: 8 } });
+  expect(await page.evaluate(() => window.__yt.plays)).toBe(1);
+  expect(await page.evaluate(() => window.__yt.pauses)).toBe(1);
 });
 
 test("play: cost guard — no Storage, one content read", async ({ page }) => {
@@ -761,13 +1087,16 @@ test("play inline next: shown under a publisher page only", async ({
 /* ---- Full screen (⛶) ---------------------------------------------------
    Phones with the element Fullscreen API put #playStage itself into full
    screen; iPhone Safari has none, so the page falls back to a CSS "pseudo
-   full screen" (body.play-fullscreen). The pseudo specs switch the API off. */
+   full screen" (body.play-fullscreen). The pseudo specs switch the API off
+   (prefixed too, like iPhone Safari). */
 async function withoutFullscreenApi(page) {
   await page.addInitScript(() => {
-    Object.defineProperty(Document.prototype, "fullscreenEnabled", {
-      configurable: true,
-      get: () => false,
-    });
+    for (const name of ["fullscreenEnabled", "webkitFullscreenEnabled"]) {
+      Object.defineProperty(Document.prototype, name, {
+        configurable: true,
+        get: () => false,
+      });
+    }
   });
 }
 
