@@ -9,7 +9,8 @@
 /* exported months, lessonTypes, weekdays, levelLabel, toolbarButtons,
    allSlotKeys, qrLevelCode, levelFromQrCode, monthNumber, monthFromNumber,
    slotToQr, slotFromQr, slotTitle, qrPath, BOOK_LAYOUT, bookLayout, bookEntry,
-   bookSlotKeys, bookToolbarButtons, bookQrPath, bookQrName, YT_ID_RE,
+   bookSlotKeys, bookToolbarButtons, bookQrPath, bookQrName, bookTitle,
+   COVER_EXT, coverAssetPath, YT_ID_RE,
    GAME_HOSTS, isGameUrl, setExtraGameHosts, parseVideoSource,
    publisherVimeoId, disableYouTubeCaptions */
 
@@ -192,6 +193,37 @@ function bookToolbarButtons(level, book) {
   return entry.toolbar
     .map((slot) => buttons.find((item) => item.slot === slot))
     .filter(Boolean);
+}
+
+// The book's on-screen title: the admin's custom label on that book's game
+// slot (content_pages.labels — by convention game/song1 = book 1, game2/song2
+// = book 2 carry the book title), else "<Level> Book <n>". Used for the
+// cover card's aria-label and the Naver QR list; never the TOOLBAR_BUTTONS
+// placeholder names ("I Sit"), which are not titles.
+function bookTitle(level, book, labels) {
+  const entry = bookEntry(level, book);
+  if (!entry) return null;
+  const gameSlot = entry.toolbar.find((slot) => slot.startsWith("game"));
+  const custom = labels && gameSlot ? labels[gameSlot] : "";
+  return custom ? String(custom) : `${levelLabel(level)} Book ${entry.book}`;
+}
+
+/* ---- Static book covers (decision D4 2026-10-22) --------------------------
+   The student page never reads Storage: covers are committed files under
+   assets/covers/<level-slug>/<month-slug>/book-<n>.<COVER_EXT>, mirroring the
+   Storage path (scripts/sync-covers.mjs copies them). The slug is app.js
+   slugify(): lower case, runs of non [a-z0-9] → "-". */
+const COVER_EXT = "webp";
+
+function coverAssetPath(level, month, book) {
+  const entry = bookEntry(level, book);
+  if (!entry) return null;
+  const slug = (text) =>
+    String(text)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-");
+  return `assets/covers/${slug(level)}/${slug(month)}/book-${entry.book}.${COVER_EXT}`;
 }
 
 /* ---- QR route tokens (/q/<lv>/<month>/<book>) ---------------------------

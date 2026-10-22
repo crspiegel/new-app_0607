@@ -2,10 +2,12 @@ import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-// scripts/make-qr-list.mjs builds the list typed into Naver QR (one QR per
-// slot, 240 for Beginner). Pure Node — no page — so it runs on one project
-// only, and always with --offline (no REST read).
-const HEADER = "qr_name,level,month,slot,label,student_url,current_video_url";
+// scripts/make-qr-list.mjs builds the list typed into Naver QR: one QR per
+// BOOK (Beginner 1 × 10 months + Level 1-3 2 × 10 months each = 70). Pure
+// Node — no page — so it runs on one project only, and always with
+// --offline (no REST read).
+const HEADER =
+  "qr_name,level,month,book,title,student_url,cover_file,filled_slots";
 
 function makeList(outFile, ...args) {
   execFileSync(
@@ -17,41 +19,52 @@ function makeList(outFile, ...args) {
   return { text, lines: text.replace(/^﻿/, "").trimEnd().split(/\r?\n/) };
 }
 
-test("qr list: 240 Beginner rows for Naver QR", async ({}, testInfo) => {
+test("qr list: 70 book rows for Naver QR", async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
   const { text, lines } = makeList(testInfo.outputPath("list.csv"));
 
   expect(text.startsWith("﻿")).toBe(true); // Excel reads UTF-8 with BOM
   expect(lines[0]).toBe(HEADER);
   const rows = lines.slice(1);
-  expect(rows).toHaveLength(240);
+  expect(rows).toHaveLength(70);
 
   const names = rows.map((row) => row.split(",")[0]);
-  expect(new Set(names).size).toBe(240);
+  expect(new Set(names).size).toBe(70);
+  // Beginner first (10), then Level 1-3 (20 each), month by month, book 1
+  // before book 2.
+  expect(names.slice(0, 11)).toEqual([
+    "B-03-1",
+    "B-04-1",
+    "B-05-1",
+    "B-06-1",
+    "B-07-1",
+    "B-08-1",
+    "B-09-1",
+    "B-10-1",
+    "B-11-1",
+    "B-12-1",
+    "L1-03-1",
+  ]);
+  expect(names[11]).toBe("L1-03-2");
 
   expect(rows[0]).toBe(
-    "B-03-OPENING,Beginner,3,opening,Good Morning Song,https://www.cambridgereading.com/q/b/3/opening,",
+    "B-03-1,Beginner,3,1,Beginner Book 1,https://play.tps-education.com/q/b/3/1,assets/covers/level-1/march/book-1.webp,0/24",
   );
-  expect(rows[3]).toBe(
-    "B-03-UNIT,Beginner,3,unit,Unit Song,https://www.cambridgereading.com/q/b/3/unit,",
+  expect(rows[11]).toBe(
+    "L1-03-2,Level 1,3,2,Level 1 Book 2,https://play.tps-education.com/q/l1/3/2,assets/covers/level-2/march/book-2.webp,0/14",
   );
-  expect(rows[4]).toBe(
-    "B-03-W1-MON,Beginner,3,w1-Mon,Week 1 · Mon · Opening Song,https://www.cambridgereading.com/q/b/3/w1-mon,",
-  );
-  expect(rows[239]).toBe(
-    "B-12-W4-FRI,Beginner,12,w4-Fri,Week 4 · Fri · Ending Song,https://www.cambridgereading.com/q/b/12/w4-fri,",
+  expect(rows[69]).toBe(
+    "L3-12-2,Level 3,12,2,Level 3 Book 2,https://play.tps-education.com/q/l3/12/2,assets/covers/level-4/december/book-2.webp,0/14",
   );
 });
 
-test("qr list: --host and --solo shape the student URL", async ({}, testInfo) => {
+test("qr list: --host shapes the student URL", async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
   const { lines } = makeList(
-    testInfo.outputPath("solo.csv"),
+    testInfo.outputPath("host.csv"),
     "--host",
-    "https://play.tps-education.com/",
-    "--solo",
+    "https://www.cambridgereading.com/",
   );
-  expect(lines[1]).toContain(
-    ",https://play.tps-education.com/q/b/3/opening?solo=1,",
-  );
+  expect(lines[1]).toContain(",https://www.cambridgereading.com/q/b/3/1,");
+  expect(lines[70]).toContain(",https://www.cambridgereading.com/q/l3/12/2,");
 });
