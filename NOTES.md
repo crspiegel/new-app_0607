@@ -858,6 +858,27 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   - 편집기 셸은 이제 두 부모(레이어/프레임)에 나뉘어 붙으므로 **NodeList 인덱스로 셸을 찾으면
     안 된다** — `shell.dataset.bgIndex` + `bgShellAt(index)`를 쓸 것.
 
+## 페이지2 보드 공유 파일 — `board-view.js` · `board.css` (`2026-10-22`, Phase 2A)
+
+- **`board.css`는 `styles.css`에서 잘라낸(복사 아님) 페이지2 보드 규칙이다** — 레벨 테마 변수(`.level-theme-N`),
+  `.section-box/.section-inner/.section-blue`, 레벨 배너·타이틀 블록, 툴바(`.content-type*`), 보드 그리드(`.lesson-*`,
+  `.book-title-card`, `.week-label`), 공유 3D 버튼 기본 규칙(`.level-button,.month-button,.content-type,.lesson-button,
+.back-button`)과 그 미디어 블록 전부(128개 규칙, 1,113행). **`index.html`에서 `styles.css`보다 먼저 로드**해야 선생님
+  사이트의 캐스케이드가 그대로다(남은 styles.css 규칙이 원래처럼 뒤에 온다). 보드 규칙은 board.css에만 둔다 — styles.css에
+  다시 쓰면 두 파일이 어긋난다. 토큰(`--sunny-yellow`, `--radius-control`, 폰트)은 각 페이지 스타일시트(:root)가 준다.
+- Back/Next(`.content-v2-back/next`, `.content-nav-*`), V2·V3 전용, hero·month 화면의 `.section-inner` 변형, 배경 레이어
+  규칙은 styles.css에 남겼다(학생 페이지에 없는 요소).
+- **`board-view.js`는 `video-source.js` 다음·`app.js`/`play.js` 앞에 로드되는 공유 classic script**(`ICON_SVGS`,
+  `buildToolbarButton`, `buildCoverCard`, `buildWeekRow`). 최상위 DOM 접근 없음, 이벤트 없음. 이름 재선언 금지(SyntaxError),
+  새 이름은 `/* exported */` + `eslint.config.mjs` `boardViewGlobals`.
+- **픽셀 비교 테스트 `tests/board-visual.spec.js`(19장, `maxDiffPixels 0`, `threshold 0`)가 "페이지2 무변경"의 증거다.**
+  처음엔 19장 중 1~3장이 간헐 실패했다 — 원인은 레이아웃이 아니라 **Windows 헤드리스 Chromium의 글자 안티에일리어싱
+  비결정성**(원시 비교 2,076픽셀이 4~8단계 차이, 기본 임계값 0.2를 넘는 건 1~8픽셀, "Next"·푸터 글자 가장자리). 완화 대신
+  `launchOptions.args`에 `--disable-lcd-text --disable-font-subpixel-positioning --font-render-hinting=none`을 줘서
+  정확 일치로 만들었다(5회 연속 통과). 보드 CSS를 바꾸는 의도적 변경이면 `--update-snapshots`로 기준선을 갱신하고 PNG를
+  커밋한다. 다른 스펙에는 이 플래그가 없으니 거기서 스크린샷을 비교하지 말 것.
+- 기준선 생성 절차(추출 전 상태에서 찍어야 증거가 된다): `git stash` → 기준선 생성·커밋 → `git stash pop` → 비교.
+
 ## 요일 슬롯 게임 URL (`2026-10-22`, R1)
 
 - **비-Vimeo http(s) 호스트는 기본이 `kind:"page"`(출판사 페이지 iframe)이고, 게임은 `GAME_HOSTS`에 있는

@@ -4,6 +4,7 @@ import path from "node:path";
 const root = process.cwd();
 const scannedFiles = [
   "index.html",
+  "board.css",
   "styles.css",
   "app.js",
   "board-view.js",
