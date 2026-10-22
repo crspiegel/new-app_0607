@@ -192,3 +192,40 @@ test("관리자 보드 Level 2 @1366x900", async ({ page }, info) => {
     maxDiffPixels: 0,
   });
 });
+
+/* ---- Student page (play.html): the same board for one book ---------------
+   Same fixture rows, same stubs; covers served as the 1x1 PNG. These are the
+   student page's own baseline (not compared against the teacher shots — the
+   page has a different frame), kept exact like the rest. */
+const STUDENT_SHOTS = [
+  ["beginner-3-book-1", "?l=b&m=3&b=1"],
+  ["level-1-3-book-2", "?l=l1&m=3&b=2"],
+];
+for (const [w, h] of [
+  [375, 812],
+  [1366, 900],
+]) {
+  for (const [name, query] of STUDENT_SHOTS) {
+    test(`학생 페이지 ${name} @${w}x${h}`, async ({ page }, info) => {
+      test.skip(info.project.name !== "desktop", "one project, by viewport");
+      await page.route(/\/assets\/covers\//, (route) =>
+        route.fulfill({ contentType: "image/png", body: BLANK_PNG }),
+      );
+      await page.setViewportSize({ width: w, height: h });
+      await page.goto(`/play.html${query}`);
+      await expect(page.locator("#play")).toHaveAttribute(
+        "data-state",
+        "board",
+      );
+      await expect(page.locator("#lessonGrid .book-title-card")).toHaveClass(
+        /has-cover/,
+      );
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForFunction(() => document.fonts.status === "loaded");
+      await expect(page).toHaveScreenshot(`student-${name}-${w}x${h}.png`, {
+        ...SHOT,
+        maxDiffPixels: 0,
+      });
+    });
+  }
+}

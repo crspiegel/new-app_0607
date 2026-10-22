@@ -1,13 +1,16 @@
 /* ---- QR student page (play.html) ------------------------------------------
-   A QR code printed in the book opens /q/<lv>/<month>/<slot> (or the
-   play.html?l=&m=&s= fallback). The page reads that level/month's one
-   content_pages row over REST and plays the slot's video — or offers the
-   slot's game — on its own, with no link back into the teacher site.
+   One printed QR per BOOK: /q/<lv>/<month>/<book> (or the play.html?l=&m=&b=
+   fallback). The page reads that level/month's one content_pages row over
+   REST and shows the teacher 페이지2 board for THAT BOOK ONLY (board-view.js
+   markup + board.css): the book's toolbar slots, its cover, its weeks.
+   Tapping a button opens the player overlay (video) or offers the game. No
+   link back into the teacher site, no other month, level or book.
 
-   Loaded after video-source.js (shared data + URL parsers) and
-   supabase-config.js (public URL + anon key; blanks itself on localhost
-   unless craDevLive(true)). Read-only: there is no write call anywhere in
-   this file, and no Storage request (no banners, backgrounds or covers). */
+   Loaded after video-source.js (shared data + URL parsers), board-view.js
+   (shared DOM builders) and supabase-config.js (public URL + anon key; blanks
+   itself on localhost unless craDevLive(true)). Read-only: there is no write
+   call anywhere in this file, and no Storage request (covers are static
+   files under /assets/covers, see coverAssetPath). */
 
 // How a domain-locked publisher video (tps-education.com/58?video=<id>) is
 // played. Vimeo only allows those ids on tps-education.com, so:
@@ -39,32 +42,48 @@ const YT_PLAYER_VARS = {
   cc_load_policy: 0,
 };
 
-const playRoot = document.querySelector("#play");
-const playLevel = document.querySelector("#playLevel");
-const playMonth = document.querySelector("#playMonth");
-const playTitle = document.querySelector("#playTitle");
-const playStage = document.querySelector("#playStage");
-const playFrame = document.querySelector("#playFrame");
-const playStart = document.querySelector("#playStart");
-const playClickLayer = document.querySelector("#playClickLayer");
-const playCard = document.querySelector("#playCard");
-const playCardEmoji = document.querySelector("#playCardEmoji");
-const playCardTitle = document.querySelector("#playCardTitle");
-const playCardText = document.querySelector("#playCardText");
-const playRetry = document.querySelector("#playRetry");
-const playGame = document.querySelector("#playGame");
-const playEnd = document.querySelector("#playEnd");
-const playAgain = document.querySelector("#playAgain");
-const playNext = document.querySelector("#playNext");
-const playNextInline = document.querySelector("#playNextInline");
-const playList = document.querySelector("#playList");
-const playFullscreen = document.querySelector("#playFullscreen");
-const playFullscreenExit = document.querySelector("#playFullscreenExit");
+const $ = (selector) => document.querySelector(selector);
+
+const playRoot = $("#play");
+// Page-level notice (invalid code / could not load).
+const playNotice = $("#playNotice");
+const playNoticeEmoji = $("#playNoticeEmoji");
+const playNoticeTitle = $("#playNoticeTitle");
+const playNoticeText = $("#playNoticeText");
+const playRetry = $("#playRetry");
+// The board (same ids as the teacher 페이지2).
+const boardScreen = $("#contentScreen");
+const contentLevelName = $("#contentLevelName");
+const contentBannerMonthNumber = $("#contentBannerMonthNumber");
+const contentMainMonthNumber = $("#contentMainMonthNumber");
+const contentTitle = $("#contentTitle");
+const contentPathTag = $("#contentPathTag");
+const contentToolbar = $("#contentScreen .content-toolbar");
+const lessonGrid = $("#lessonGrid");
+// The player overlay.
+const playOverlay = $("#playOverlay");
+const playClose = $("#playClose");
+const playStage = $("#playStage");
+const playFrame = $("#playFrame");
+const playStart = $("#playStart");
+const playClickLayer = $("#playClickLayer");
+const playCard = $("#playCard");
+const playCardEmoji = $("#playCardEmoji");
+const playCardTitle = $("#playCardTitle");
+const playCardText = $("#playCardText");
+const playGame = $("#playGame");
+const playEnd = $("#playEnd");
+const playAgain = $("#playAgain");
+const playNext = $("#playNext");
+const playNextInline = $("#playNextInline");
+const playTitle = $("#playTitle");
+const playFullscreen = $("#playFullscreen");
+const playFullscreenExit = $("#playFullscreenExit");
 
 const playState = {
-  route: null, // { level, month, slot, solo }
+  route: null, // { level, month, book }
   row: null, // { videos, labels } or null when the month has no row
-  slot: "",
+  slot: "", // the slot on the player (overlay open)
   playback: null, // resolvePlayback() result for the current slot
   player: null, // { play, pause, destroy } for YouTube / Vimeo SDK players
   paused: false,
@@ -72,7 +91,6 @@ const playState = {
   // mobile browser blocked autoplay, the first tap must reach the player's
   // own play button instead.
   layerArmed: false,
-  listReady: false, // the month list is built once the row has loaded
   // Bumped by every teardown. A YouTube/Vimeo mount waits for its API script;
   // if the child tapped again meanwhile (even the same video), the older
   // mount's id is stale and it must not build a second, audible player.
@@ -80,6 +98,10 @@ const playState = {
   // "native" (Fullscreen API on #playStage), "pseudo" (CSS, iPhone Safari
   // has no element Fullscreen API) or "" when not full screen.
   fullscreen: "",
+  open: false, // overlay showing
+  // One history entry is pushed when the overlay opens, so the phone's back
+  // button closes it (popstate) instead of leaving the page.
+  pushed: false,
 };
 
 /* ---- Pure helpers (exposed on window.craPlay for tests) ----------------- */
@@ -132,14 +154,17 @@ function playHost(hostname, search) {
   return new URLSearchParams(search || "").get("host") || hostname;
 }
 
-// "/q/<lv>/<month>/<slot>" (trailing slash allowed), else "?l=&m=&s=".
-// Every token is case-insensitive; returns null for anything invalid.
+// "/q/<lv>/<month>/<book>" (trailing slash allowed), else "?l=&m=&b=".
+// Level and month tokens are case-insensitive (video-source.js); the book
+// must be one the level has (Beginner: 1 only). null for anything else —
+// including the first-generation weekday tokens (/q/b/3/w1-mon), which were
+// never printed or registered.
 function parsePlayRoute(pathname, search) {
   const params = new URLSearchParams(search || "");
   const match = String(pathname || "").match(
     /^\/q\/([^/]+)\/([^/]+)\/([^/]+)\/?$/i,
   );
-  let tokens = [params.get("l"), params.get("m"), params.get("s")];
+  let tokens = [params.get("l"), params.get("m"), params.get("b")];
   if (match) {
     try {
       tokens = match.slice(1).map(decodeURIComponent);
@@ -149,9 +174,11 @@ function parsePlayRoute(pathname, search) {
   }
   const level = levelFromQrCode(tokens[0]);
   const month = monthFromNumber(tokens[1]);
-  const slot = level ? slotFromQr(tokens[2], level) : null;
-  if (!level || !month || !slot) return null;
-  return { level, month, slot, solo: params.get("solo") === "1" };
+  const bookToken = String(tokens[2] == null ? "" : tokens[2]).trim();
+  const book =
+    level && /^\d$/.test(bookToken) ? bookEntry(level, bookToken) : null;
+  if (!level || !month || !book) return null;
+  return { level, month, book: book.book };
 }
 
 // A phone on a dead connection can leave a request hanging far longer than a
@@ -161,7 +188,8 @@ const FETCH_TIMEOUT_MS = 10000;
 
 // One row of content_pages. null = the month has no row yet (not an error);
 // throws on a missing config (offline dev), HTTP error (e.g. 402), network
-// failure or the FETCH_TIMEOUT_MS limit.
+// failure or the FETCH_TIMEOUT_MS limit. The row holds every slot of the
+// month; the page only ever uses this book's keys (bookSlotKeys).
 async function fetchPageRow(level, month) {
   const base = window.SUPABASE_URL;
   const key = window.SUPABASE_ANON_KEY;
@@ -217,19 +245,17 @@ function slotKind(level, slot) {
   return item ? item.kind : "video";
 }
 
-// slotTitle(level, slot, labels) is in video-source.js (shared with
-// scripts/make-qr-list.mjs, so the Naver QR list reads like this page).
-
 function slotUrl(row, slot) {
   return (row && row.videos && row.videos[slot]) || "";
 }
 
-// The next slot after `slot` (board order: toolbar, then w1-Mon..w4-Fri)
-// that has a playable VIDEO — games and empty/whitespace slots are skipped.
-// null when nothing follows, so Next never leads to a "Coming soon".
-function nextFilledSlot(row, level, slot) {
+// The next slot after `slot` in THIS BOOK (board order: its toolbar slots,
+// then its weeks Mon..Fri) that has a playable VIDEO — games and
+// empty/whitespace slots are skipped. null when nothing follows in the book,
+// so Next never leads to a "Coming soon" or into the other book.
+function nextFilledSlot(row, level, book, slot) {
   if (!row) return null;
-  const keys = allSlotKeys(level);
+  const keys = bookSlotKeys(level, book);
   const after = keys.slice(keys.indexOf(slot) + 1);
   return (
     after.find(
@@ -240,22 +266,60 @@ function nextFilledSlot(row, level, slot) {
   );
 }
 
-/* ---- Screen state -------------------------------------------------------- */
+/* ---- Page state (loading / invalid / error / board) ---------------------- */
+
+const NOTICES = {
+  invalid: {
+    emoji: "🤔",
+    title: "Oops! This code doesn't work.",
+    text: "Try scanning it again.",
+  },
+  error: {
+    emoji: "📡",
+    title: "Can't load right now.",
+    text: "Check the internet and try again.",
+    retry: true,
+  },
+};
 
 function setState(state) {
   playRoot.dataset.state = state;
+}
+
+function showNotice(name) {
+  const notice = NOTICES[name];
+  playNoticeEmoji.textContent = notice.emoji;
+  playNoticeTitle.textContent = notice.title;
+  playNoticeText.textContent = notice.text;
+  playRetry.hidden = !notice.retry;
+  playNotice.hidden = false;
+}
+
+function hideNotice() {
+  playNotice.hidden = true;
+}
+
+/* ---- Overlay state ------------------------------------------------------- */
+
+function setOverlayState(state) {
+  if (state) playOverlay.dataset.state = state;
+  else delete playOverlay.dataset.state;
   syncControls();
 }
 
 function syncControls() {
-  const state = playRoot.dataset.state;
+  const state = playOverlay.dataset.state || "";
   const type = playState.playback && playState.playback.type;
-  const solo = Boolean(playState.route && playState.route.solo);
   const next =
-    !solo && playState.route
-      ? nextFilledSlot(playState.row, playState.route.level, playState.slot)
+    playState.route && playState.slot
+      ? nextFilledSlot(
+          playState.row,
+          playState.route.level,
+          playState.route.book,
+          playState.slot,
+        )
       : null;
-  playRoot.dataset.player = state === "playing" ? type || "" : "";
+  playOverlay.dataset.player = state === "playing" ? type || "" : "";
   playStart.hidden = !(
     (state === "ready" && type && type !== "game") ||
     (state === "playing" && playState.paused)
@@ -274,7 +338,6 @@ function syncControls() {
     type === "frame" &&
     (state === "ready" || state === "playing")
   );
-  playList.hidden = solo || !playState.listReady;
   // iPhone + Vimeo: iOS's own full screen replaces ours (see noFullscreenApi).
   playFullscreen.hidden = !(
     (state === "playing" || state === "ended") &&
@@ -282,20 +345,11 @@ function syncControls() {
     !(type === "vimeo" && noFullscreenApi())
   );
   playFullscreenExit.hidden = !playState.fullscreen;
+  // Full screen has its own ✕ on the stage.
+  playClose.hidden = Boolean(playState.fullscreen);
 }
 
 const CARDS = {
-  invalid: {
-    emoji: "🤔",
-    title: "Oops! This code doesn't work.",
-    text: "Try scanning it again.",
-  },
-  error: {
-    emoji: "📡",
-    title: "Can't load right now.",
-    text: "Check the internet and try again.",
-    retry: true,
-  },
   empty: {
     emoji: "🎬",
     title: "Coming soon!",
@@ -306,17 +360,16 @@ const CARDS = {
 
 function showCard(name) {
   const card = CARDS[name];
-  playRoot.dataset.card = name;
+  playOverlay.dataset.card = name;
   playCardEmoji.textContent = card.emoji;
   playCardTitle.textContent = card.title;
   playCardText.textContent = card.text;
-  playRetry.hidden = !card.retry;
   playGame.hidden = !card.game;
   playCard.hidden = false;
 }
 
 function hideCard() {
-  delete playRoot.dataset.card;
+  delete playOverlay.dataset.card;
   playCard.hidden = true;
 }
 
@@ -377,8 +430,9 @@ function setPaused(paused) {
 // A YouTube/Vimeo video finished (a framed publisher page cannot tell us):
 // stop and offer Watch again / Next over the player's end screen.
 function showEnded() {
-  if (!playState.playback || playState.playback.type === "game") return;
-  setState("ended");
+  if (!playState.open || !playState.playback) return;
+  if (playState.playback.type === "game") return;
+  setOverlayState("ended");
 }
 
 function mountFrame(url) {
@@ -483,7 +537,9 @@ function mountVimeo(playback) {
       };
     })
     .catch(() => {
-      showCard("error");
+      // The SDK could not load: fall back to the page-level notice.
+      closeOverlay({ viaHistory: true });
+      showNotice("error");
       setState("error");
     });
 }
@@ -494,7 +550,7 @@ function startPlayback() {
   if (!playback || playback.type === "game") return;
   teardownPlayer();
   hideCard();
-  setState("playing");
+  setOverlayState("playing");
   if (playback.type === "frame") mountFrame(playback.url);
   else if (playback.type === "youtube") mountYouTube(playback.id);
   else mountVimeo(playback);
@@ -504,8 +560,8 @@ function startPlayback() {
 
 function setFullscreen(mode) {
   playState.fullscreen = mode;
-  if (mode) playRoot.dataset.fullscreen = mode;
-  else delete playRoot.dataset.fullscreen;
+  if (mode) playOverlay.dataset.fullscreen = mode;
+  else delete playOverlay.dataset.fullscreen;
   // Pseudo full screen is all CSS (play.css "Full screen"): the stage covers
   // the viewport, everything else is hidden and the page cannot scroll.
   document.body.classList.toggle("play-fullscreen", mode === "pseudo");
@@ -528,162 +584,168 @@ function exitFullscreen() {
   else setFullscreen("");
 }
 
-/* ---- Slots ----------------------------------------------------------------- */
+/* ---- Overlay open / close --------------------------------------------------- */
 
-function showSlot(slot) {
+function openOverlay() {
+  if (playState.open) return;
+  playState.open = true;
+  playOverlay.hidden = false;
+  document.body.classList.add("play-overlay-open");
+  if (!playState.pushed) {
+    window.history.pushState({ playOverlay: true }, "");
+    playState.pushed = true;
+  }
+}
+
+// ✕ and Esc go back through history (so the entry pushed on open is consumed
+// and the next back leaves the page as expected); popstate then lands here
+// with viaHistory and does the actual closing.
+function closeOverlay({ viaHistory = false } = {}) {
+  if (!playState.open) return;
+  if (!viaHistory && playState.pushed) {
+    window.history.back();
+    return;
+  }
+  playState.pushed = false;
+  if (playState.fullscreen) exitFullscreen();
+  teardownPlayer();
+  hideCard();
+  playState.open = false;
+  playState.playback = null;
+  playState.slot = "";
+  playTitle.textContent = "";
+  playOverlay.hidden = true;
+  document.body.classList.remove("play-overlay-open");
+  setOverlayState("");
+}
+
+/* ---- Board ----------------------------------------------------------------- */
+
+function labelsOf() {
+  return (playState.row && playState.row.labels) || {};
+}
+
+// Paint the static cover (assets/covers/…) only once it has loaded, so a
+// missing file leaves the white placeholder like the teacher site does.
+function applyCover(card, level, month, book) {
+  const src = coverAssetPath(level, month, book);
+  if (!src) return;
+  const img = new window.Image();
+  img.addEventListener("load", () => {
+    card.classList.add("has-cover");
+    card.style.backgroundImage = `url("/${src}")`;
+  });
+  img.src = `/${src}`;
+}
+
+// The teacher 페이지2 board for this book: banner + title block, the book's
+// toolbar slots, its cover card and its week rows — same builders and class
+// names as index.html, so board.css styles both identically.
+function renderBoard() {
+  const { level, month, book } = playState.route;
+  const entry = bookEntry(level, book);
+  const labels = labelsOf();
+  const levelNumber = level.match(/\d+/)[0];
+  boardScreen.className = `screen screen-active level-theme-${levelNumber}`;
+  boardScreen.dataset.month = month;
+  const number = String(monthNumber(month));
+  contentLevelName.textContent = levelLabel(level);
+  contentBannerMonthNumber.textContent = number;
+  contentMainMonthNumber.textContent = number;
+  contentTitle.textContent = `${month} Reading Plan`;
+  contentPathTag.textContent = levelLabel(level);
+
+  const buttons = bookToolbarButtons(level, book);
+  contentToolbar.innerHTML = "";
+  // 6-button levels get a 2-row grid on the teacher site; a book shows 4.
+  contentToolbar.classList.toggle("content-toolbar--wide", buttons.length > 4);
+  buttons.forEach((item, index) => {
+    contentToolbar.append(
+      buildToolbarButton(item, labels[item.slot] || item.label, {
+        active: index === 0,
+      }),
+    );
+  });
+
+  const title = bookTitle(level, book, labels);
+  lessonGrid.innerHTML = "";
+  const card = buildCoverCard(entry.book, title);
+  applyCover(card, level, month, book);
+  lessonGrid.append(card);
+  entry.weeks.forEach((week) => {
+    const row = buildWeekRow(week, title);
+    lessonGrid.append(row.label, ...row.buttons);
+  });
+}
+
+// A board tap: open the overlay and play (the tap is the user gesture), or
+// show the game / coming-soon card.
+function openSlot(slot) {
   const { level } = playState.route;
   teardownPlayer();
   playState.slot = slot;
-  playTitle.textContent = slotTitle(
-    level,
-    slot,
-    playState.row && playState.row.labels,
-  );
+  playTitle.textContent = slotTitle(level, slot, labelsOf());
   const playback = resolvePlayback(
     slotUrl(playState.row, slot),
     slotKind(level, slot),
   );
   playState.playback = playback;
+  openOverlay();
   if (!playback) {
     showCard("empty");
-    setState("empty");
+    setOverlayState("empty");
     return;
   }
   if (playback.type === "game") {
     showCard("game");
-  } else {
-    hideCard();
-    // Fetch the API now so the player can be built sooner after the tap.
-    if (playback.type === "youtube") loadYouTubeApi();
+    setOverlayState("ready");
+    return;
   }
-  setState("ready");
-}
-
-// Keep the address bar on the slot being shown, in whichever form the page
-// was opened (/q/... or play.html?...), so a refresh stays put.
-function slotAddress(slot) {
-  const { level, month } = playState.route;
-  const { pathname, search } = window.location;
-  if (/^\/q\//i.test(pathname)) return qrPath(level, month, slot) + search;
-  const params = new URLSearchParams(search);
-  params.set("s", slotToQr(slot));
-  return `${pathname}?${params}`;
-}
-
-function markCurrent() {
-  playList.querySelectorAll(".play-item").forEach((item) => {
-    if (item.dataset.slot === playState.slot) {
-      item.setAttribute("aria-current", "true");
-    } else {
-      item.removeAttribute("aria-current");
-    }
-  });
-}
-
-// Switch slots without another REST read (the row is cached). Called from a
-// tap, so with `play` the video mounts straight away (user gesture).
-function goToSlot(slot, { play = false } = {}) {
-  showSlot(slot);
-  playState.route.slot = slot;
-  window.history.replaceState(null, "", slotAddress(slot));
-  markCurrent();
-  if (play && playRoot.dataset.state === "ready") startPlayback();
-}
-
-function listItem(level, slot, text) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "play-item";
-  button.dataset.slot = slot;
-  const title = slotTitle(level, slot, playState.row && playState.row.labels);
-  const label = document.createElement("span");
-  label.className = "play-item-label";
-  label.textContent = text;
-  button.append(label);
-  const playback = resolvePlayback(
-    slotUrl(playState.row, slot),
-    slotKind(level, slot),
-  );
-  if (playback && playback.type === "game") {
-    // Games (toolbar slot or a weekday game URL) carry the same mark as the
-    // "Let's play!" card, so the child knows which buttons are games.
-    button.classList.add("is-game");
-    button.setAttribute("aria-label", `${title} · Game`);
-    const mark = document.createElement("span");
-    mark.className = "play-game-mark";
-    mark.setAttribute("aria-hidden", "true");
-    mark.textContent = CARDS.game.emoji;
-    button.append(mark);
-  } else {
-    button.setAttribute("aria-label", title);
-  }
-  if (!playback) {
-    // Still tappable — it shows the Coming soon card.
-    button.classList.add("is-empty");
-    const soon = document.createElement("span");
-    soon.className = "play-soon";
-    soon.textContent = "Soon";
-    button.append(soon);
-  }
-  return button;
-}
-
-// The month at a glance, shaped like the teacher board: toolbar slots, then
-// one row per week with Mon-Fri.
-function renderList() {
-  const { level } = playState.route;
-  const labels = playState.row && playState.row.labels;
-  playList.innerHTML = "";
-
-  const tools = document.createElement("div");
-  tools.className = "play-list-tools";
-  toolbarButtons(level).forEach((item) => {
-    const button = listItem(
-      level,
-      item.slot,
-      slotTitle(level, item.slot, labels),
-    );
-    button.classList.add("play-item-tool");
-    tools.append(button);
-  });
-  playList.append(tools);
-
-  for (let week = 1; week <= 4; week += 1) {
-    const row = document.createElement("div");
-    row.className = "play-week-row";
-    const weekLabel = document.createElement("span");
-    weekLabel.className = "play-week";
-    weekLabel.innerHTML = `${week}<span class="play-week-word"> week</span>`;
-    row.append(weekLabel);
-    weekdays.forEach((day) => {
-      const button = listItem(level, `w${week}-${day}`, day);
-      button.classList.add("play-item-day");
-      row.append(button);
-    });
-    playList.append(row);
-  }
-  playState.listReady = true;
-  markCurrent();
+  hideCard();
+  startPlayback();
 }
 
 async function loadRow() {
   const { level, month } = playState.route;
-  hideCard();
-  playState.listReady = false;
+  hideNotice();
   setState("loading");
   try {
     playState.row = await fetchPageRow(level, month);
   } catch {
-    showCard("error");
+    showNotice("error");
     setState("error");
     return;
   }
-  playState.slot = playState.route.slot;
-  renderList();
-  showSlot(playState.route.slot);
+  renderBoard();
+  setState("board");
 }
 
 /* ---- Events + boot --------------------------------------------------------- */
+
+// Toolbar + weekday taps (delegated — the buttons are re-rendered per book).
+if (contentToolbar) {
+  contentToolbar.addEventListener("click", (event) => {
+    const button = event.target.closest(".content-type");
+    if (!button || !button.dataset.slot) return;
+    contentToolbar
+      .querySelectorAll(".content-type")
+      .forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+    openSlot(button.dataset.slot);
+  });
+}
+
+lessonGrid.addEventListener("click", (event) => {
+  const button = event.target.closest(".lesson-button");
+  if (button && button.dataset.slot) openSlot(button.dataset.slot);
+});
+
+playClose.addEventListener("click", () => closeOverlay());
+
+window.addEventListener("popstate", () => {
+  if (playState.open) closeOverlay({ viaHistory: true });
+  else playState.pushed = false;
+});
 
 playStart.addEventListener("click", () => {
   if (playState.player && playState.paused) playState.player.play();
@@ -704,9 +766,10 @@ function playNextSlot() {
   const next = nextFilledSlot(
     playState.row,
     playState.route.level,
+    playState.route.book,
     playState.slot,
   );
-  if (next) goToSlot(next, { play: true });
+  if (next) openSlot(next);
 }
 playNext.addEventListener("click", playNextSlot);
 playNextInline.addEventListener("click", playNextSlot);
@@ -719,15 +782,11 @@ document.addEventListener("fullscreenchange", () => {
   setFullscreen(document.fullscreenElement === playStage ? "native" : "");
 });
 
+// Esc leaves pseudo full screen first, then closes the overlay.
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && playState.fullscreen === "pseudo") {
-    setFullscreen("");
-  }
-});
-
-playList.addEventListener("click", (event) => {
-  const item = event.target.closest(".play-item");
-  if (item) goToSlot(item.dataset.slot, { play: true });
+  if (event.key !== "Escape") return;
+  if (playState.fullscreen === "pseudo") setFullscreen("");
+  else if (playState.open && !playState.fullscreen) closeOverlay();
 });
 
 playGame.addEventListener("click", () => {
@@ -754,15 +813,12 @@ playState.route = parsePlayRoute(
   window.location.search,
 );
 if (!playState.route) {
-  showCard("invalid");
+  showNotice("invalid");
   setState("invalid");
 } else {
   document.body.dataset.level = playState.route.level; // per-level colors
-  if (playState.route.solo) playRoot.dataset.solo = "1"; // (A) layout
-  playLevel.textContent = levelLabel(playState.route.level);
-  playMonth.textContent = String(monthNumber(playState.route.month));
   document.title = `${levelLabel(playState.route.level)} ${monthNumber(
     playState.route.month,
-  )} · Cambridge Reading Adventures`;
+  )} · Book ${playState.route.book} · Cambridge Reading Adventures`;
   loadRow();
 }

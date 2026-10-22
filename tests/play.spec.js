@@ -351,11 +351,14 @@ test("parseVideoSource: publisher option turns a TPS page into its Vimeo id", as
 });
 
 /* ---- QR student page (play.html) ---------------------------------------
-   The page reads exactly one content_pages row over REST. These specs answer
-   that request from a fixture instead of the live project: zero egress and a
+   One QR per BOOK (/q/<lv>/<month>/<book>). The page reads exactly one
+   content_pages row over REST and renders the teacher 페이지2 board for that
+   book; a board tap opens the player overlay. These specs answer the REST
+   request from a fixture instead of the live project: zero egress and a
    deterministic row. (smoke.spec.js keeps REST live because its main-site
    specs were tuned against real REST latency; play.html is a separate page
-   with no such timing.) Publisher pages and the game host are stubbed too. */
+   with no such timing.) Publisher pages, the game host and the static covers
+   are stubbed too. */
 const PUBLISHER_58 = "https://tps-education.com/58?video=173725167";
 const GAME_URL = "https://book-english-games.vercel.app/play/the-tractor";
 const MARCH_ROW = {
@@ -375,10 +378,39 @@ const MARCH_ROW = {
   },
   labels: {},
 };
+// A Level 1 (internal "Level 2") month: two books, custom titles, book 2's
+// game slot filled, a video in each book's weeks.
+const LEVEL2_ROW = {
+  videos: {
+    opening: "https://youtu.be/tHybl0l9tbQ",
+    ending: "https://youtu.be/P23iESqE8lk",
+    game: GAME_URL,
+    game2: GAME_URL,
+    song1: "https://youtu.be/LPl2AR2rm0g",
+    song2: "",
+    "w1-Mon": PUBLISHER_58,
+    "w2-Mon": "https://tps-education.com/58?video=173725165",
+    "w3-Mon": "https://tps-education.com/58?video=173725170",
+    "w3-Tue": "https://youtu.be/LPl2AR2rm0g",
+    "w4-Fri": "https://tps-education.com/58?video=173725171",
+  },
+  labels: {
+    game: "The Tractor",
+    game2: "I Can Help",
+    song1: "The Tractor",
+    song2: "I Can Help",
+  },
+};
 const CONTENT_ROUTE = /\/rest\/v1\/content_pages/;
+const COVER_ROUTE = /\/assets\/covers\//;
+const BLANK_PNG_FILE = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 // Answers content_pages with `rows` (or an HTTP status) and counts requests.
-async function mockContent(page, rows = [MARCH_ROW], status = 200) {
+// Covers 404 unless `covers` is true (the placeholder then stays).
+async function mockContent(page, rows = [MARCH_ROW], status = 200, covers) {
   const calls = [];
   await page.route(CONTENT_ROUTE, (route) => {
     calls.push(route.request().url());
@@ -386,6 +418,11 @@ async function mockContent(page, rows = [MARCH_ROW], status = 200) {
       ? route.fulfill({ status, json: rows })
       : route.fulfill({ status, json: { message: "restricted" } });
   });
+  await page.route(COVER_ROUTE, (route) =>
+    covers
+      ? route.fulfill({ contentType: "image/png", body: BLANK_PNG_FILE })
+      : route.fulfill({ status: 404, body: "" }),
+  );
   await page.route(/^https:\/\/(www\.)?tps-education\.com\//, (route) =>
     route.fulfill({ contentType: "text/html", body: "<p>publisher</p>" }),
   );
@@ -395,70 +432,215 @@ async function mockContent(page, rows = [MARCH_ROW], status = 200) {
   return calls;
 }
 
-test("play: weekday route shows title and tap-to-play", async ({ page }) => {
+// A board tap (toolbar or weekday button) — the user gesture that opens the
+// overlay and mounts the player.
+async function tapSlot(page, slot) {
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "board");
+  await page.locator(`#contentScreen [data-slot="${slot}"]`).click();
+}
+
+async function closeOverlay(page) {
+  await page.locator("#playClose").click();
+  await expect(page.locator("#playOverlay")).toBeHidden();
+}
+
+test("play board: a Beginner book is the whole month, shaped like 페이지2", async ({
+  page,
+}) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
-
-  const play = page.locator("#play");
-  await expect(play).toHaveAttribute("data-state", "ready");
-  await expect(page.locator("#playLevel")).toHaveText("Beginner");
-  await expect(page.locator("#playMonth")).toHaveText("3");
-  await expect(page.locator("#playTitle")).toHaveText(
-    "Week 1 · Mon · Opening Song",
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "board");
+  await expect(page).toHaveTitle(
+    "Beginner 3 · Book 1 · Cambridge Reading Adventures",
   );
-  await expect(page.locator("#playStart")).toBeVisible();
-  await expect(page.locator("#playFrame iframe")).toHaveCount(0);
 
-  await page.locator("#playStart").click();
-  await expect(page.locator("#playFrame iframe")).toHaveCount(1);
-  await expect(page.locator("#playFrame iframe")).toHaveAttribute(
-    "src",
-    PUBLISHER_58,
+  const screen = page.locator("#contentScreen");
+  await expect(screen).toHaveClass(/level-theme-1/);
+  await expect(screen).toHaveAttribute("data-month", "March");
+  await expect(page.locator("#contentLevelName")).toHaveText("Beginner");
+  await expect(page.locator("#contentBannerMonthNumber")).toHaveText("3");
+  await expect(page.locator("#contentMainMonthNumber")).toHaveText("3");
+  await expect(page.locator("#contentTitle")).toHaveText("March Reading Plan");
+  await expect(page.locator("#contentPathTag")).toHaveText("Beginner");
+
+  const toolbar = page.locator("#contentScreen .content-type");
+  await expect(toolbar).toHaveCount(4);
+  expect(
+    await toolbar.evaluateAll((els) => els.map((e) => e.dataset.slot)),
+  ).toEqual(["opening", "ending", "game", "unit"]);
+  await expect(toolbar.locator(".content-type-label")).toHaveText([
+    "Good Morning Song",
+    "Good Bye Song",
+    "Game",
+    "Unit Song",
+  ]);
+  await expect(toolbar.first()).toHaveClass(/active/);
+  await expect(page.locator(".content-toolbar--wide")).toHaveCount(0);
+
+  await expect(page.locator("#lessonGrid .book-title-card")).toHaveCount(1);
+  await expect(
+    page.locator("#lessonGrid .book-title-card.book-1"),
+  ).toHaveAttribute("aria-label", "Beginner Book 1 cover placeholder");
+  await expect(page.locator("#lessonGrid .week-label .wk-num")).toHaveText([
+    "1",
+    "2",
+    "3",
+    "4",
+  ]);
+  const days = page.locator("#lessonGrid .lesson-button");
+  await expect(days).toHaveCount(20);
+  await expect(days.first()).toHaveAttribute("data-slot", "w1-Mon");
+  await expect(days.last()).toHaveAttribute("data-slot", "w4-Fri");
+
+  // No way out: no links, no level/month navigation, no login, no list.
+  await expect(page.locator("a[href]")).toHaveCount(0);
+  await expect(
+    page.locator("button[data-level], button[data-view]"),
+  ).toHaveCount(0);
+  await expect(
+    page.locator(".content-nav-prev, .content-nav-next, .back-button"),
+  ).toHaveCount(0);
+  await expect(page.locator("#playList, .top-nav, .login-button")).toHaveCount(
+    0,
   );
-  await expect(play).toHaveAttribute("data-state", "playing");
+  await expect(page.locator(".play-brand")).toHaveText(/Cambridge\s+Reading/);
+  await expect(page.locator(".play-footer")).toContainText("TPS EDUCATION");
+  await expect(page.locator("#playOverlay")).toBeHidden();
 });
 
-test("play: page is hidden from search engines", async ({ page }) => {
-  await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
-  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
-    "content",
-    "noindex, nofollow",
+test("play board: a Level 1 book 2 shows only its half of the month", async ({
+  page,
+}) => {
+  await mockContent(page, [LEVEL2_ROW]);
+  await page.goto("/play.html?l=l1&m=3&b=2");
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "board");
+  await expect(page.locator("#contentScreen")).toHaveClass(/level-theme-2/);
+  await expect(page.locator("#contentLevelName")).toHaveText("Level 1");
+
+  const toolbar = page.locator("#contentScreen .content-type");
+  expect(
+    await toolbar.evaluateAll((els) => els.map((e) => e.dataset.slot)),
+  ).toEqual(["opening", "ending", "game2", "song2"]);
+  await expect(toolbar.locator(".content-type-label")).toHaveText([
+    "Good Morning Song",
+    "Good Bye Song",
+    "I Can Help",
+    "I Can Help",
+  ]);
+  await expect(toolbar.locator(".content-type-tag")).toHaveText([
+    "GAME",
+    "SONG",
+  ]);
+
+  await expect(page.locator("#lessonGrid .book-title-card")).toHaveCount(1);
+  await expect(
+    page.locator("#lessonGrid .book-title-card.book-2"),
+  ).toHaveAttribute("aria-label", "I Can Help cover placeholder");
+  await expect(page.locator("#lessonGrid .book-title-card.book-1")).toHaveCount(
+    0,
+  );
+  await expect(page.locator("#lessonGrid .week-label .wk-num")).toHaveText([
+    "3",
+    "4",
+  ]);
+  const days = page.locator("#lessonGrid .lesson-button");
+  await expect(days).toHaveCount(10);
+  await expect(days.first()).toHaveAttribute("data-slot", "w3-Mon");
+  await expect(days.first()).toHaveAttribute(
+    "aria-label",
+    "I Can Help, 3 week, Opening Song",
+  );
+  await expect(days.last()).toHaveAttribute("data-slot", "w4-Fri");
+  await expect(page.locator('#contentScreen [data-slot="w1-Mon"]')).toHaveCount(
+    0,
+  );
+  await expect(page.locator('#contentScreen [data-slot="game"]')).toHaveCount(
+    0,
+  );
+});
+
+test("play board: the cover paints from the static asset, placeholder on 404", async ({
+  page,
+}) => {
+  const covers = [];
+  page.on("request", (request) => {
+    if (COVER_ROUTE.test(request.url())) covers.push(request.url());
+  });
+  await mockContent(page, [LEVEL2_ROW], 200, true);
+  await page.goto("/play.html?l=l1&m=3&b=2");
+  const card = page.locator("#lessonGrid .book-title-card");
+  await expect(card).toHaveClass(/has-cover/);
+  await expect(card).toHaveCSS(
+    "background-image",
+    /\/assets\/covers\/level-2\/march\/book-2.jpg/,
+  );
+  expect(covers).toEqual([
+    "http://127.0.0.1:5173/assets/covers/level-2/march/book-2.jpg",
+  ]);
+
+  await page.unroute(COVER_ROUTE);
+  await page.route(COVER_ROUTE, (route) =>
+    route.fulfill({ status: 404, body: "" }),
+  );
+  await page.goto("/play.html?l=l1&m=3&b=2");
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "board");
+  await expect(page.locator("#lessonGrid .book-title-card")).not.toHaveClass(
+    /has-cover/,
+  );
+  await expect(page.locator("#lessonGrid .book-title-card")).toHaveCSS(
+    "background-image",
+    "none",
   );
 });
 
 test("play: route variants", async ({ page }) => {
-  await mockContent(page);
-  await page.goto("/play.html?l=B&m=03&s=W1-MON");
-  await expect(page.locator("#playTitle")).toHaveText(
-    "Week 1 · Mon · Opening Song",
-  );
-
-  const parsed = await page.evaluate(() => ({
-    path: window.craPlay.parsePlayRoute("/q/b/3/w1-mon/", ""),
-    upper: window.craPlay.parsePlayRoute("/q/B/03/W1-MON", ""),
-    solo: window.craPlay.parsePlayRoute("/q/b/12/opening", "?solo=1"),
-    toolbarLevel: window.craPlay.parsePlayRoute("/q/l1/4/song1", ""),
-  }));
-  expect(parsed).toEqual({
-    path: { level: "Level 1", month: "March", slot: "w1-Mon", solo: false },
-    upper: { level: "Level 1", month: "March", slot: "w1-Mon", solo: false },
-    solo: { level: "Level 1", month: "December", slot: "opening", solo: true },
-    toolbarLevel: {
-      level: "Level 2",
-      month: "April",
-      slot: "song1",
-      solo: false,
-    },
+  await mockContent(page, [LEVEL2_ROW]);
+  for (const query of [
+    "?l=L1&m=03&b=2",
+    "?l=1&m=3&b=2",
+    "?l=l1&m=3&b=2&host=x",
+  ]) {
+    await page.goto(`/play.html${query}`);
+    await expect(page.locator("#play")).toHaveAttribute("data-state", "board");
+    await expect(page.locator("#contentLevelName")).toHaveText("Level 1");
+    await expect(page.locator("#lessonGrid .week-label .wk-num")).toHaveText([
+      "3",
+      "4",
+    ]);
+  }
+  const result = await page.evaluate(() => {
+    const parse = window.craPlay.parsePlayRoute;
+    return {
+      path: parse("/q/l2/3/2", ""),
+      pathSlash: parse("/q/B/12/1/", ""),
+      alias: parse("/q/3/5/1", ""),
+      query: parse("/play.html", "?l=b&m=3&b=1"),
+      queryWins: parse(
+        "/play.html",
+        "?l=b&m=4&b=1&host=play.tps-education.com",
+      ),
+    };
+  });
+  expect(result).toEqual({
+    path: { level: "Level 3", month: "March", book: 2 },
+    pathSlash: { level: "Level 1", month: "December", book: 1 },
+    alias: { level: "Level 4", month: "May", book: 1 },
+    query: { level: "Level 1", month: "March", book: 1 },
+    queryWins: { level: "Level 1", month: "April", book: 1 },
   });
 });
 
-test("play: invalid route", async ({ page }) => {
-  const calls = await mockContent(page);
+test("play: invalid route shows the notice and no board", async ({ page }) => {
+  await mockContent(page);
   for (const query of [
-    "?l=x&m=3&s=w1-mon",
-    "?l=b&m=2&s=w1-mon",
-    "?l=b&m=3&s=w5-mon",
+    "?l=b&m=3&b=2", // Beginner has one book
+    "?l=b&m=3&b=0",
+    "?l=l1&m=3&b=3",
+    "?l=b&m=3&b=w1-mon",
+    "?l=b&m=3&s=w1-mon", // first-generation weekday token: no book
+    "?l=x&m=3&b=1",
+    "?l=b&m=13&b=1",
+    "?l=4&m=3&b=1",
     "",
   ]) {
     await page.goto(`/play.html${query}`);
@@ -467,28 +649,51 @@ test("play: invalid route", async ({ page }) => {
       "invalid",
     );
     await expect(page.getByText("Oops! This code doesn't work.")).toBeVisible();
+    await expect(page.locator("#contentScreen")).toBeHidden();
     await expect(page.locator("a[href]")).toHaveCount(0);
   }
-  expect(calls).toHaveLength(0);
+  const result = await page.evaluate(() => {
+    const parse = window.craPlay.parsePlayRoute;
+    return [
+      parse("/q/b/3/w1-mon", ""),
+      parse("/q/b/3/2", ""),
+      parse("/q/b/3", ""),
+      parse("/q/b/3/1/extra", ""),
+      parse("/q/b/3/%E2", ""),
+    ];
+  });
+  expect(result).toEqual([null, null, null, null, null]);
 });
 
-test("play: empty, whitespace and missing row are coming soon", async ({
+test("play: empty slot and missing row open coming soon, nothing leaves", async ({
   page,
 }) => {
   await mockContent(page);
-  for (const slot of ["unit", "w2-tue"]) {
-    await page.goto(`/play.html?l=b&m=3&s=${slot}`);
-    await expect(page.locator("#play")).toHaveAttribute("data-state", "empty");
-    await expect(page.getByText("Coming soon!")).toBeVisible();
-    await expect(
-      page.getByText("This video isn't ready yet. Check back soon!"),
-    ).toBeVisible();
-  }
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w2-Tue"); // whitespace only
+  const overlay = page.locator("#playOverlay");
+  await expect(overlay).toBeVisible();
+  await expect(overlay).toHaveAttribute("data-state", "empty");
+  await expect(page.getByText("Coming soon!")).toBeVisible();
+  await expect(
+    page.getByText("This video isn't ready yet. Check back soon!"),
+  ).toBeVisible();
+  await expect(page.locator("#playTitle")).toHaveText("Week 2 · Tue · Story");
+  await expect(page.locator("#playFrame iframe")).toHaveCount(0);
+  await closeOverlay(page);
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "board");
 
+  await tapSlot(page, "unit"); // not in the row at all
+  await expect(overlay).toHaveAttribute("data-state", "empty");
+  await closeOverlay(page);
+
+  // A month with no row yet: the board is there, every tap is coming soon.
   await page.unroute(CONTENT_ROUTE);
   await page.route(CONTENT_ROUTE, (route) => route.fulfill({ json: [] }));
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "empty");
+  await page.goto("/play.html?l=b&m=5&b=1");
+  await expect(page.locator("#lessonGrid .lesson-button")).toHaveCount(20);
+  await tapSlot(page, "w1-Mon");
+  await expect(overlay).toHaveAttribute("data-state", "empty");
   await expect(page.getByText("Coming soon!")).toBeVisible();
 });
 
@@ -501,13 +706,18 @@ test("play: REST failure shows retry", async ({ page }) => {
       ? route.fulfill({ json: [MARCH_ROW] })
       : route.fulfill({ status, json: { message: "restricted" } });
   });
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
+  await page.route(COVER_ROUTE, (route) =>
+    route.fulfill({ status: 404, body: "" }),
+  );
+  await page.goto("/play.html?l=b&m=3&b=1");
   await expect(page.locator("#play")).toHaveAttribute("data-state", "error");
   await expect(page.getByText("Can't load right now.")).toBeVisible();
+  await expect(page.locator("#contentScreen")).toBeHidden();
 
   status = 200;
   await page.getByRole("button", { name: "Try again" }).click();
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "ready");
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "board");
+  await expect(page.locator("#playNotice")).toBeHidden();
   expect(calls).toHaveLength(2);
 });
 
@@ -518,7 +728,7 @@ test("play: a REST read that never answers times out to retry", async ({
   await page.route(CONTENT_ROUTE, () => {
     /* never answered — a hung network */
   });
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
+  await page.goto("/play.html?l=b&m=3&b=1");
   const play = page.locator("#play");
   await expect(play).toHaveAttribute("data-state", "loading");
 
@@ -531,41 +741,40 @@ test("play: a REST read that never answers times out to retry", async ({
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 });
 
-test("play: game slot navigates on tap", async ({ page }) => {
+test("play: the toolbar game slot offers the game, tap navigates", async ({
+  page,
+}) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=game");
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "game");
+  await expect(page.locator('#contentScreen [data-slot="game"]')).toHaveClass(
+    /active/,
+  );
+  await expect(page.locator("#playOverlay")).toHaveAttribute(
+    "data-state",
+    "ready",
+  );
   await expect(page.locator("#playTitle")).toHaveText("Game");
   await expect(page.locator("#playGame")).toHaveText("Let's play!");
   await expect(page.locator("#playStart")).toBeHidden();
+  await expect(page.locator("#playFrame iframe")).toHaveCount(0);
   await page.locator("#playGame").click();
   await page.waitForURL(GAME_URL);
   expect(page.url()).toBe(GAME_URL);
 });
 
-test("play: weekday game URL offers the game like the toolbar slot", async ({
+test("play: a weekday game URL offers the game like the toolbar slot", async ({
   page,
 }) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-thu");
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w1-Thu");
   await expect(page.locator("#playTitle")).toHaveText(
     "Week 1 · Thu · Sentence Chant",
   );
   await expect(page.locator("#playGame")).toHaveText("Let's play!");
   await expect(page.locator("#playStart")).toBeHidden();
   await expect(page.locator("#playFrame iframe")).toHaveCount(0);
-
-  // The month list marks game slots (toolbar and weekday) the same way.
-  const thu = page.locator('.play-item[data-slot="w1-Thu"]');
-  const game = page.locator('.play-item[data-slot="game"]');
-  const mon = page.locator('.play-item[data-slot="w1-Mon"]');
-  await expect(thu).toHaveClass(/is-game/);
-  await expect(game).toHaveClass(/is-game/);
-  await expect(mon).not.toHaveClass(/is-game/);
-  await expect(thu.locator(".play-game-mark")).toHaveCount(1);
-  await expect(game.locator(".play-game-mark")).toHaveCount(1);
-  await expect(mon.locator(".play-game-mark")).toHaveCount(0);
-  await expect(thu).not.toHaveClass(/is-empty/);
-
   await page.locator("#playGame").click();
   await page.waitForURL(GAME_URL);
   expect(page.url()).toBe(GAME_URL);
@@ -573,7 +782,7 @@ test("play: weekday game URL offers the game like the toolbar slot", async ({
 
 test("play: resolvePlayback strategies", async ({ page }) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
+  await page.goto("/play.html?l=b&m=3&b=1");
   const result = await page.evaluate(
     ({ publisher, game }) => {
       const resolve = window.craPlay.resolvePlayback;
@@ -648,7 +857,7 @@ async function mockVimeo(page) {
 
 test("play: publisher strategy follows the host", async ({ page }) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
+  await page.goto("/play.html?l=b&m=3&b=1");
   const result = await page.evaluate(() => {
     const { publisherStrategy, playHost } = window.craPlay;
     return {
@@ -695,7 +904,8 @@ test("play direct: a publisher slot embeds player.vimeo.com", async ({
     "console",
     (msg) => msg.type() === "error" && errors.push(msg.text()),
   );
-  await mockContent(page);
+  // Covers served, so the only console errors could be the player's own.
+  await mockContent(page, [MARCH_ROW], 200, true);
   await mockVimeo(page);
   const publisher = [];
   page.on("request", (request) => {
@@ -704,10 +914,10 @@ test("play direct: a publisher slot embeds player.vimeo.com", async ({
     }
   });
 
-  await page.goto("/play.html?l=b&m=3&s=w1-mon&host=play.tps-education.com");
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "ready");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1&host=play.tps-education.com");
+  await tapSlot(page, "w1-Mon");
 
+  const overlay = page.locator("#playOverlay");
   const frame = page.locator("#playFrame iframe");
   await expect(frame).toHaveCount(1);
   await expect(frame).toHaveAttribute(
@@ -720,8 +930,11 @@ test("play direct: a publisher slot embeds player.vimeo.com", async ({
     "allow",
     "autoplay; fullscreen; picture-in-picture",
   );
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "playing");
-  await expect(page.locator("#play")).toHaveAttribute("data-player", "vimeo");
+  await expect(overlay).toHaveAttribute("data-state", "playing");
+  await expect(overlay).toHaveAttribute("data-player", "vimeo");
+  await expect(page.locator("#playTitle")).toHaveText(
+    "Week 1 · Mon · Opening Song",
+  );
   // The SDK wraps our own iframe (no oEmbed lookup) and captions go off.
   await expect
     .poll(() => page.evaluate(() => window.__vimeo?.players ?? []))
@@ -740,19 +953,25 @@ test("play direct: Vimeo ended shows Watch again and Next", async ({
 }) => {
   await mockContent(page);
   await mockVimeo(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon&host=play.tps-education.com");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1&host=play.tps-education.com");
+  await tapSlot(page, "w1-Mon");
   await expect
     .poll(() => page.evaluate(() => window.__vimeo?.players.length ?? 0))
     .toBe(1);
 
   await page.evaluate(() => window.__vimeo.fire("ended"));
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "ended");
+  await expect(page.locator("#playOverlay")).toHaveAttribute(
+    "data-state",
+    "ended",
+  );
   await expect(page.locator("#playAgain")).toBeVisible();
   await expect(page.locator("#playNext")).toBeVisible();
 
   await page.locator("#playAgain").click();
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "playing");
+  await expect(page.locator("#playOverlay")).toHaveAttribute(
+    "data-state",
+    "playing",
+  );
   await expect(page.locator("#playFrame iframe")).toHaveAttribute(
     "src",
     /^https:\/\/player\.vimeo\.com\/video\/173725167\?/,
@@ -793,7 +1012,7 @@ test("play: Vimeo links become an id (and private-link hash)", async ({
   page,
 }) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
+  await page.goto("/play.html?l=b&m=3&b=1");
   const result = await page.evaluate((id) => {
     const resolve = (url, strategy = "page") =>
       window.craPlay.resolvePlayback(url, "video", strategy);
@@ -821,25 +1040,46 @@ test("play: Vimeo links become an id (and private-link hash)", async ({
   });
 });
 
+/* ---- Full screen (⛶) ---------------------------------------------------
+   Phones with the element Fullscreen API put #playStage itself into full
+   screen; iPhone Safari has none, so the page falls back to a CSS "pseudo
+   full screen" (body.play-fullscreen). The pseudo specs switch the API off
+   (prefixed too, like iPhone Safari). */
+async function withoutFullscreenApi(page) {
+  await page.addInitScript(() => {
+    for (const name of ["fullscreenEnabled", "webkitFullscreenEnabled"]) {
+      Object.defineProperty(Document.prototype, name, {
+        configurable: true,
+        get: () => false,
+      });
+    }
+  });
+}
+
 test("play iPhone: Vimeo plays in iOS full screen, our ⛶ is hidden", async ({
   page,
 }) => {
   await withoutFullscreenApi(page);
   await mockContent(page);
   await mockVimeo(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon&host=play.tps-education.com");
-  await expect(page.locator("#playStart")).toBeVisible();
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1&host=play.tps-education.com");
+  await tapSlot(page, "w1-Mon");
 
   expect(await vimeoParams(page)).toEqual({
     path: "https://player.vimeo.com/video/173725167",
     params: { title: "0", byline: "0", portrait: "0", playsinline: "0" },
   });
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "playing");
+  await expect(page.locator("#playOverlay")).toHaveAttribute(
+    "data-state",
+    "playing",
+  );
   await expect(page.locator("#playFullscreen")).toBeHidden();
 
   await page.evaluate(() => window.__vimeo.fire("ended"));
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "ended");
+  await expect(page.locator("#playOverlay")).toHaveAttribute(
+    "data-state",
+    "ended",
+  );
   await expect(page.locator("#playFullscreen")).toBeHidden();
 });
 
@@ -849,8 +1089,8 @@ test("play iPhone: leaving iOS full screen pauses, our ▶ resumes", async ({
   await withoutFullscreenApi(page);
   await mockContent(page);
   await mockVimeo(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon&host=play.tps-education.com");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1&host=play.tps-education.com");
+  await tapSlot(page, "w1-Mon");
   await expect
     .poll(() => page.evaluate(() => window.__vimeo?.plays ?? 0))
     .toBe(1);
@@ -872,8 +1112,8 @@ test("play iPhone: Vimeo ended in iOS full screen offers Watch again", async ({
   await withoutFullscreenApi(page);
   await mockContent(page);
   await mockVimeo(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon&host=play.tps-education.com");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1&host=play.tps-education.com");
+  await tapSlot(page, "w1-Mon");
   await expect
     .poll(() => page.evaluate(() => window.__vimeo?.players.length ?? 0))
     .toBe(1);
@@ -882,7 +1122,10 @@ test("play iPhone: Vimeo ended in iOS full screen offers Watch again", async ({
   await expect(page.locator("#playAgain")).toBeVisible();
   await expect(page.locator("#playNext")).toBeVisible();
   await page.locator("#playAgain").click();
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "playing");
+  await expect(page.locator("#playOverlay")).toHaveAttribute(
+    "data-state",
+    "playing",
+  );
   expect((await vimeoParams(page)).params.playsinline).toBe("0");
 });
 
@@ -893,8 +1136,8 @@ test("play iPhone: a vimeo.com private link keeps its hash", async ({
   await mockContent(page, [VIMEO_ROW]);
   await mockVimeo(page);
   // No host override: TPS's own Vimeo plays on every host.
-  await page.goto("/play.html?l=b&m=3&s=ending");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "ending");
   expect(await vimeoParams(page)).toEqual({
     path: `https://player.vimeo.com/video/${VIMEO_ID}`,
     params: {
@@ -908,10 +1151,11 @@ test("play iPhone: a vimeo.com private link keeps its hash", async ({
   await expect(page.locator("#playFullscreen")).toBeHidden();
 
   // A Vimeo URL we can't read: the SDK builds the player, still not inline.
-  await page.goto("/play.html?l=b&m=3&s=w1-tue");
-  await page.locator("#playStart").click();
+  // (The fake SDK keeps every player it built; the last one is this tap's.)
+  await closeOverlay(page);
+  await tapSlot(page, "w1-Tue");
   await expect
-    .poll(() => page.evaluate(() => window.__vimeo?.players ?? []))
+    .poll(() => page.evaluate(() => (window.__vimeo?.players ?? []).slice(-1)))
     .toEqual([
       {
         tag: "DIV",
@@ -932,16 +1176,16 @@ test("play: with a Fullscreen API, Vimeo stays inline with our ⛶", async ({
 }) => {
   await mockContent(page, [VIMEO_ROW]);
   await mockVimeo(page);
-  await page.goto("/play.html?l=b&m=3&s=opening");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "opening");
   expect(await vimeoParams(page)).toEqual({
     path: `https://player.vimeo.com/video/${VIMEO_ID}`,
     params: { title: "0", byline: "0", portrait: "0", playsinline: "1" },
   });
   await expect(page.locator("#playFullscreen")).toBeVisible();
 
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
-  await page.locator("#playStart").click();
+  await closeOverlay(page);
+  await tapSlot(page, "w1-Mon");
   expect(await vimeoParams(page)).toEqual({
     path: `https://player.vimeo.com/video/${VIMEO_ID}`,
     params: {
@@ -974,8 +1218,8 @@ test("play iPhone: YouTube is unchanged (inline, our ⛶)", async ({ page }) => 
         window.onYouTubeIframeAPIReady();`,
     }),
   );
-  await page.goto("/play.html?l=b&m=3&s=w1-wed");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w1-Wed");
   await expect
     .poll(() => page.evaluate(() => window.__ytVars ?? null))
     .toEqual({
@@ -1012,8 +1256,8 @@ test("play layer: a paused Vimeo stays covered, a tap resumes", async ({
 }) => {
   await mockContent(page, [VIMEO_ROW]);
   await mockVimeo(page);
-  await page.goto("/play.html?l=b&m=3&s=opening");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "opening");
   await expect
     .poll(() => page.evaluate(() => window.__vimeo?.players.length ?? 0))
     .toBe(1);
@@ -1061,8 +1305,8 @@ test("play layer: a paused YouTube stays covered, a tap resumes", async ({
         window.onYouTubeIframeAPIReady();`,
     }),
   );
-  await page.goto("/play.html?l=b&m=3&s=w1-tue");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w1-Tue");
   await page.waitForFunction(() => window.__yt?.state);
   await expect(page.locator("#playClickLayer")).toBeHidden();
 
@@ -1079,22 +1323,26 @@ test("play layer: a paused YouTube stays covered, a tap resumes", async ({
   expect(await page.evaluate(() => window.__yt.pauses)).toBe(1);
 });
 
-test("play: cost guard — no Storage, one content read", async ({ page }) => {
-  const storage = [];
+test("play: cost guard — no Storage, one content read, covers are static", async ({
+  page,
+}) => {
+  const supabase = [];
   page.on("request", (request) => {
-    if (/\.supabase\.co\/storage\//.test(request.url())) {
-      storage.push(request.url());
-    }
+    if (/\.supabase\.co\//.test(request.url())) supabase.push(request.url());
   });
-  const calls = await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "ready");
-  await page.locator("#playStart").click();
+  const calls = await mockContent(page, [LEVEL2_ROW], 200, true);
+  await page.goto("/play.html?l=l1&m=3&b=1");
+  await tapSlot(page, "w1-Mon");
   await expect(page.locator("#playFrame iframe")).toHaveCount(1);
-  expect(storage).toEqual([]);
+  await closeOverlay(page);
+  await tapSlot(page, "w2-Mon");
+  await expect(page.locator("#playFrame iframe")).toHaveCount(1);
+  expect(supabase.filter((url) => /\/storage\//.test(url))).toEqual([]);
   expect(calls).toHaveLength(1);
-  expect(calls[0]).toContain("level=eq.Level%201");
+  expect(calls[0]).toContain("level=eq.Level%202");
   expect(calls[0]).toContain("month=eq.March");
+  expect(calls[0]).toContain("select=videos,labels");
+  expect(supabase).toEqual(calls);
 });
 
 test("play: offline by default on localhost", async ({ page }) => {
@@ -1104,128 +1352,80 @@ test("play: offline by default on localhost", async ({ page }) => {
   page.on("request", (request) => {
     if (/\.supabase\.co\//.test(request.url())) supabase.push(request.url());
   });
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
+  await page.route(COVER_ROUTE, (route) =>
+    route.fulfill({ status: 404, body: "" }),
+  );
+  await page.goto("/play.html?l=b&m=3&b=1");
   await expect(page.locator("#play")).toHaveAttribute("data-state", "error");
   expect(supabase).toEqual([]);
 });
 
-/* ---- (B) month list, (A) solo mode, end-of-video ------------------------ */
+/* ---- Overlay: open / switch / close ------------------------------------- */
 
-test("play list: 24 items for Beginner, current highlighted", async ({
+test("play overlay: a board tap plays at once, another tap switches, row reused", async ({
   page,
 }) => {
-  await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-tue");
-  const items = page.locator("#playList .play-item");
-  await expect(items).toHaveCount(24);
-  await expect(page.locator('#playList [aria-current="true"]')).toHaveCount(1);
-  await expect(
-    page.locator('#playList .play-item[data-slot="w1-Tue"]'),
-  ).toHaveAttribute("aria-current", "true");
-  await expect(
-    page.locator('#playList .play-item[data-slot="unit"]'),
-  ).toHaveClass(/is-empty/);
-  await expect(
-    page.locator('#playList .play-item[data-slot="w2-Tue"]'),
-  ).toHaveClass(/is-empty/);
-  await expect(
-    page.locator('#playList .play-item[data-slot="w1-Mon"]'),
-  ).not.toHaveClass(/is-empty/);
-  // No way out of the month: the list has buttons, never links.
-  await expect(page.locator("a[href]")).toHaveCount(0);
-});
-
-test("play list: 26 items for Level 1-3 code", async ({ page }) => {
-  await mockContent(page);
-  await page.goto("/play.html?l=l1&m=3&s=w1-mon");
-  await expect(page.locator("#playLevel")).toHaveText("Level 1");
-  await expect(page.locator("#playList .play-item")).toHaveCount(26);
-});
-
-test("play list: a month with no row lists every slot as Soon", async ({
-  page,
-}) => {
-  await page.route(CONTENT_ROUTE, (route) => route.fulfill({ json: [] }));
-  await page.goto("/play.html?l=b&m=5&s=w1-mon");
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "empty");
-  await expect(page.locator("#playList .play-item.is-empty")).toHaveCount(24);
-});
-
-test("play list: switching reuses the row", async ({ page }) => {
   const calls = await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
-  await page.locator('#playList .play-item[data-slot="w2-Mon"]').click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w2-Mon");
+  const overlay = page.locator("#playOverlay");
+  await expect(overlay).toBeVisible();
+  await expect(overlay).toHaveAttribute("data-state", "playing");
   await expect(page.locator("#playTitle")).toHaveText(
     "Week 2 · Mon · Opening Song",
   );
-  await expect(page).toHaveURL(/[?&]s=w2-mon(&|$)/);
-  // The tap is the user gesture, so the video mounts right away.
-  await expect(page.locator("#playFrame iframe")).toHaveCount(1);
-  await expect(
-    page.locator('#playList .play-item[data-slot="w2-Mon"]'),
-  ).toHaveAttribute("aria-current", "true");
+  await expect(page.locator("#playFrame iframe")).toHaveAttribute(
+    "src",
+    "https://tps-education.com/58?video=173725165",
+  );
+  await expect(page.locator("body")).toHaveClass(/play-overlay-open/);
+  // The address does not change: the QR code is the book, not the slot.
+  await expect(page).toHaveURL(/\/play\.html\?l=b&m=3&b=1$/);
+
+  await closeOverlay(page);
+  await expect(page.locator("#playFrame iframe")).toHaveCount(0);
+  await expect(page.locator("body")).not.toHaveClass(/play-overlay-open/);
+  await tapSlot(page, "w1-Mon");
+  await expect(page.locator("#playTitle")).toHaveText(
+    "Week 1 · Mon · Opening Song",
+  );
+  await expect(page.locator("#playFrame iframe")).toHaveAttribute(
+    "src",
+    PUBLISHER_58,
+  );
   expect(calls).toHaveLength(1);
 });
 
-test("play list: empty item shows coming soon without leaving", async ({
+test("play overlay: closes by ✕, Esc and the phone's back button", async ({
   page,
 }) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
-  await page.locator('#playList .play-item[data-slot="w3-Fri"]').click();
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "empty");
-  await expect(page.getByText("Coming soon!")).toBeVisible();
-  await expect(page.locator("#playList")).toBeVisible();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  const overlay = page.locator("#playOverlay");
+
+  await tapSlot(page, "w2-Mon");
+  await expect(overlay).toBeVisible();
+  await page.locator("#playClose").click();
+  await expect(overlay).toBeHidden();
   await expect(page.locator("#playFrame iframe")).toHaveCount(0);
-});
+  await expect(page.locator("#playTitle")).toHaveText("");
 
-test("play solo mode hides the list", async ({ page }) => {
-  await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon&solo=1");
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "ready");
-  // Rendered (24 items) but hidden — not merely absent.
-  await expect(page.locator("#playList .play-item")).toHaveCount(24);
-  await expect(page.locator("#playList")).toBeHidden();
-  await expect(page.locator("#playNextInline")).toHaveCount(1);
-  await expect(page.locator("#playNextInline")).toBeHidden();
-});
+  await tapSlot(page, "w2-Mon");
+  await expect(overlay).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(overlay).toBeHidden();
 
-test("play solo mode centers the player block vertically", async ({ page }) => {
-  await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon&solo=1");
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "ready");
-  const { blockMid, viewportMid } = await page.evaluate(() => {
-    const box = document.querySelector(".play-player").getBoundingClientRect();
-    return {
-      blockMid: box.top + box.height / 2,
-      viewportMid: window.innerHeight / 2,
-    };
-  });
-  expect(Math.abs(blockMid - viewportMid)).toBeLessThan(12);
-});
-
-test("play list: current mark is a corner badge, label stays one line", async ({
-  page,
-}) => {
-  await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
-  const result = await page.evaluate(() => {
-    const current = document.querySelector('.play-item[aria-current="true"]');
-    const other = document.querySelector('.play-item[data-slot="w1-Tue"]');
-    const label = (el) => el.querySelector(".play-item-label");
-    const badge = getComputedStyle(current, "::after");
-    return {
-      labelBefore: getComputedStyle(label(current), "::before").content,
-      badge: badge.content,
-      badgePosition: badge.position,
-      currentLabelHeight: label(current).getBoundingClientRect().height,
-      otherLabelHeight: label(other).getBoundingClientRect().height,
-    };
-  });
-  expect(result.labelBefore).toBe("none");
-  expect(result.badge).toContain("▶");
-  expect(result.badgePosition).toBe("absolute");
-  expect(result.currentLabelHeight).toBe(result.otherLabelHeight);
+  await tapSlot(page, "w2-Mon");
+  await expect(overlay).toBeVisible();
+  await page.goBack();
+  await expect(overlay).toBeHidden();
+  await expect(page).toHaveURL(/\/play\.html\?l=b&m=3&b=1$/);
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "board");
+  // Opening again after a back-close pushes a fresh entry (back still works).
+  await tapSlot(page, "w2-Mon");
+  await expect(overlay).toBeVisible();
+  await page.goBack();
+  await expect(overlay).toBeHidden();
 });
 
 test("play: a second tap while YouTube loads mounts one player", async ({
@@ -1252,57 +1452,68 @@ test("play: a second tap while YouTube loads mounts one player", async ({
         window.onYouTubeIframeAPIReady();`,
     });
   });
-  await page.goto("/play.html?l=b&m=3&s=w1-tue", {
-    waitUntil: "domcontentloaded",
-  });
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "ready");
-  await page.locator("#playStart").click();
-  // The child taps the same video again in the list before the API is in.
-  await page.locator('#playList .play-item[data-slot="w1-Tue"]').click();
+  await page.goto("/play.html?l=b&m=3&b=1", { waitUntil: "domcontentloaded" });
+  await tapSlot(page, "w1-Tue");
+  // The child taps the same video again (✕, then the board) before the API
+  // is in.
+  await closeOverlay(page);
+  await tapSlot(page, "w1-Tue");
   await page.waitForFunction(() => window.__ytLive !== undefined);
   await page.waitForTimeout(200);
   expect(await page.evaluate(() => window.__ytLive)).toBe(1);
 });
 
-test("play end overlay: next only when a filled slot follows", async ({
+test("play end overlay: next only when a filled slot follows in this book", async ({
   page,
 }) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w1-mon");
-  const next = await page.evaluate((row) => {
-    const find = window.craPlay.nextFilledSlot;
-    return {
-      afterW1Mon: find(row, "Level 1", "w1-Mon"),
-      // "game" is skipped, empty "unit" is skipped.
-      afterEnding: find(row, "Level 1", "ending"),
-      // w2-Tue is whitespace only.
-      afterW2Mon: find(row, "Level 1", "w2-Mon"),
-      afterLast: find(row, "Level 1", "w4-Mon"),
-      noRow: find(null, "Level 1", "w1-Mon"),
-    };
-  }, MARCH_ROW);
+  await page.goto("/play.html?l=b&m=3&b=1");
+  const next = await page.evaluate(
+    ({ march, level2 }) => {
+      const find = window.craPlay.nextFilledSlot;
+      return {
+        afterW1Mon: find(march, "Level 1", 1, "w1-Mon"),
+        // "game" is skipped, empty "unit" is skipped.
+        afterEnding: find(march, "Level 1", 1, "ending"),
+        // w2-Tue is whitespace only.
+        afterW2Mon: find(march, "Level 1", 1, "w2-Mon"),
+        afterLast: find(march, "Level 1", 1, "w4-Mon"),
+        noRow: find(null, "Level 1", 1, "w1-Mon"),
+        // Book 1 ends at w2-Fri: w3-Mon belongs to book 2, never offered.
+        book1AfterW2Mon: find(level2, "Level 2", 1, "w2-Mon"),
+        book1AfterSong1: find(level2, "Level 2", 1, "song1"),
+        // Book 2 starts at its toolbar: game2 (game, skipped) → song2 (empty) → w3-Mon.
+        book2AfterEnding: find(level2, "Level 2", 2, "ending"),
+        book2AfterW3Tue: find(level2, "Level 2", 2, "w3-Tue"),
+        book2AfterLast: find(level2, "Level 2", 2, "w4-Fri"),
+      };
+    },
+    { march: MARCH_ROW, level2: LEVEL2_ROW },
+  );
   expect(next).toEqual({
     afterW1Mon: "w1-Tue",
     afterEnding: "w1-Mon",
     afterW2Mon: "w3-Mon",
     afterLast: null,
     noRow: null,
+    book1AfterW2Mon: null,
+    book1AfterSong1: "w1-Mon",
+    book2AfterEnding: "w3-Mon",
+    book2AfterW3Tue: "w4-Fri",
+    book2AfterLast: null,
   });
 
-  await page.locator("#playStart").click();
+  await tapSlot(page, "w1-Mon");
   await page.evaluate(() => window.craPlay.showEnded());
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "ended");
+  await expect(page.locator("#playOverlay")).toHaveAttribute(
+    "data-state",
+    "ended",
+  );
   await expect(page.locator("#playAgain")).toHaveText("Watch again");
   await expect(page.locator("#playNext")).toBeVisible();
 
-  await page.goto("/play.html?l=b&m=3&s=w4-mon");
-  await page.locator("#playStart").click();
-  await page.evaluate(() => window.craPlay.showEnded());
-  await expect(page.locator("#playAgain")).toBeVisible();
-  await expect(page.locator("#playNext")).toBeHidden();
-
-  await page.goto("/play.html?l=b&m=3&s=w1-mon&solo=1");
-  await page.locator("#playStart").click();
+  await closeOverlay(page);
+  await tapSlot(page, "w4-Mon");
   await page.evaluate(() => window.craPlay.showEnded());
   await expect(page.locator("#playAgain")).toBeVisible();
   await expect(page.locator("#playNext")).toBeHidden();
@@ -1312,11 +1523,14 @@ test("play end overlay: watch again and next restart playback", async ({
   page,
 }) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w2-mon");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w2-Mon");
   await page.evaluate(() => window.craPlay.showEnded());
   await page.locator("#playAgain").click();
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "playing");
+  await expect(page.locator("#playOverlay")).toHaveAttribute(
+    "data-state",
+    "playing",
+  );
   await expect(page.locator("#playEnd")).toBeHidden();
 
   await page.evaluate(() => window.craPlay.showEnded());
@@ -1324,7 +1538,10 @@ test("play end overlay: watch again and next restart playback", async ({
   await expect(page.locator("#playTitle")).toHaveText(
     "Week 3 · Mon · Opening Song",
   );
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "playing");
+  await expect(page.locator("#playOverlay")).toHaveAttribute(
+    "data-state",
+    "playing",
+  );
   await expect(page.locator("#playFrame iframe")).toHaveCount(1);
 });
 
@@ -1332,8 +1549,9 @@ test("play inline next: shown under a publisher page only", async ({
   page,
 }) => {
   await mockContent(page);
+  await page.goto("/play.html?l=b&m=3&b=1");
   // Publisher page (framed): no end event, so Next sits under the player.
-  await page.goto("/play.html?l=b&m=3&s=w2-mon");
+  await tapSlot(page, "w2-Mon");
   await expect(page.locator("#playNextInline")).toBeVisible();
   await page.locator("#playNextInline").click();
   await expect(page.locator("#playTitle")).toHaveText(
@@ -1345,39 +1563,22 @@ test("play inline next: shown under a publisher page only", async ({
   );
 
   // YouTube slot: Next only arrives with the end overlay.
-  await page.goto("/play.html?l=b&m=3&s=w1-tue");
+  await closeOverlay(page);
+  await tapSlot(page, "w1-Tue");
   await expect(page.locator("#playNextInline")).toBeHidden();
 
   // Last filled slot: nothing to go to.
-  await page.goto("/play.html?l=b&m=3&s=w4-mon");
+  await closeOverlay(page);
+  await tapSlot(page, "w4-Mon");
   await expect(page.locator("#playNextInline")).toBeHidden();
 });
-
-/* ---- Full screen (⛶) ---------------------------------------------------
-   Phones with the element Fullscreen API put #playStage itself into full
-   screen; iPhone Safari has none, so the page falls back to a CSS "pseudo
-   full screen" (body.play-fullscreen). The pseudo specs switch the API off
-   (prefixed too, like iPhone Safari). */
-async function withoutFullscreenApi(page) {
-  await page.addInitScript(() => {
-    for (const name of ["fullscreenEnabled", "webkitFullscreenEnabled"]) {
-      Object.defineProperty(Document.prototype, name, {
-        configurable: true,
-        get: () => false,
-      });
-    }
-  });
-}
 
 test("play fullscreen: button shows only while playing or ended", async ({
   page,
 }) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w2-mon");
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "ready");
-  await expect(page.locator("#playFullscreen")).toBeHidden();
-
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w2-Mon");
   await expect(page.locator("#playFullscreen")).toBeVisible();
   const box = await page.locator("#playFullscreen").boundingBox();
   expect(box.width).toBeGreaterThanOrEqual(56);
@@ -1392,8 +1593,12 @@ test("play fullscreen: button shows only while playing or ended", async ({
   await expect(page.locator("#playFullscreen")).toBeVisible();
 
   // Coming soon card: nothing to blow up.
-  await page.goto("/play.html?l=b&m=3&s=w2-tue");
-  await expect(page.locator("#play")).toHaveAttribute("data-state", "empty");
+  await closeOverlay(page);
+  await tapSlot(page, "w2-Tue");
+  await expect(page.locator("#playOverlay")).toHaveAttribute(
+    "data-state",
+    "empty",
+  );
   await expect(page.locator("#playFullscreen")).toBeHidden();
 });
 
@@ -1401,8 +1606,8 @@ test("play fullscreen: Fullscreen API puts the stage in full screen", async ({
   page,
 }) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w2-mon");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w2-Mon");
   await page.locator("#playFullscreen").click();
   await expect
     .poll(() => page.evaluate(() => document.fullscreenElement?.id || ""))
@@ -1410,6 +1615,7 @@ test("play fullscreen: Fullscreen API puts the stage in full screen", async ({
   await expect(page.locator("body")).not.toHaveClass(/play-fullscreen/);
   await expect(page.locator("#playFullscreenExit")).toBeVisible();
   await expect(page.locator("#playFullscreen")).toBeHidden();
+  await expect(page.locator("#playClose")).toBeHidden();
 
   await page.locator("#playFullscreenExit").click();
   await expect
@@ -1417,6 +1623,7 @@ test("play fullscreen: Fullscreen API puts the stage in full screen", async ({
     .toBe("");
   await expect(page.locator("#playFullscreenExit")).toBeHidden();
   await expect(page.locator("#playFullscreen")).toBeVisible();
+  await expect(page.locator("#playClose")).toBeVisible();
 });
 
 test("play fullscreen: pseudo full screen without the API, exit by ✕ or Esc", async ({
@@ -1424,14 +1631,15 @@ test("play fullscreen: pseudo full screen without the API, exit by ✕ or Esc", 
 }) => {
   await withoutFullscreenApi(page);
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w2-mon");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w2-Mon");
   await page.locator("#playFullscreen").click();
 
   await expect(page.locator("body")).toHaveClass(/play-fullscreen/);
-  await expect(page.locator("#playList")).toBeHidden();
-  await expect(page.locator(".play-header")).toBeHidden();
+  await expect(page.locator("#contentScreen")).toBeHidden();
+  await expect(page.locator(".play-brand")).toBeHidden();
   await expect(page.locator("#playTitle")).toBeHidden();
+  await expect(page.locator("#playClose")).toBeHidden();
   await expect(page.locator("#playFullscreen")).toBeHidden();
   const layout = await page.evaluate(() => {
     const stage = document.querySelector("#playStage");
@@ -1464,14 +1672,19 @@ test("play fullscreen: pseudo full screen without the API, exit by ✕ or Esc", 
 
   await page.locator("#playFullscreenExit").click();
   await expect(page.locator("body")).not.toHaveClass(/play-fullscreen/);
-  await expect(page.locator("#playList")).toBeVisible();
+  await expect(page.locator("#playOverlay")).toBeVisible();
   await expect(page.locator("#playFullscreen")).toBeVisible();
+  await expect(page.locator("#playClose")).toBeVisible();
 
+  // Esc leaves full screen first and only a second Esc closes the overlay.
   await page.locator("#playFullscreen").click();
   await expect(page.locator("body")).toHaveClass(/play-fullscreen/);
   await page.keyboard.press("Escape");
   await expect(page.locator("body")).not.toHaveClass(/play-fullscreen/);
   await expect(page.locator("#playFullscreenExit")).toBeHidden();
+  await expect(page.locator("#playOverlay")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#playOverlay")).toBeHidden();
 });
 
 test("play fullscreen: sideways phone, the 16:9 picture fills the screen", async ({
@@ -1480,8 +1693,8 @@ test("play fullscreen: sideways phone, the 16:9 picture fills the screen", async
   await withoutFullscreenApi(page);
   await mockContent(page);
   await page.setViewportSize({ width: 812, height: 375 });
-  await page.goto("/play.html?l=b&m=3&s=w2-mon");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w2-Mon");
   await page.locator("#playFullscreen").click();
   await expect(page.locator("body")).toHaveClass(/play-fullscreen/);
   const { stage, frame } = await page.evaluate(() => {
@@ -1506,8 +1719,8 @@ test("play fullscreen: framed page keeps fullscreen permissions", async ({
   page,
 }) => {
   await mockContent(page);
-  await page.goto("/play.html?l=b&m=3&s=w2-mon");
-  await page.locator("#playStart").click();
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await tapSlot(page, "w2-Mon");
   const frame = page.locator("#playFrame iframe");
   await expect(frame).toHaveAttribute(
     "allow",

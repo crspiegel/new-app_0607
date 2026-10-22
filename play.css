@@ -1,21 +1,39 @@
 /* ---- QR student page (play.html) ------------------------------------------
-   Self-contained on purpose: styles.css (163 KB) is the teacher site and is
-   NOT loaded here. Tokens below mirror styles.css :root and the per-level
-   table in DESIGN.md — keep the values in sync if those change. */
+   The board itself is styled by board.css (shared with the teacher site, the
+   same classes and ids). This file adds the tokens board.css expects, the
+   page frame (brand line, notice, footer) and the player overlay.
+   Tokens mirror styles.css :root and the per-level table in DESIGN.md — keep
+   the values in sync if those change. */
 
 :root {
+  --owl-green: #58cc02;
   --macaw-blue: #1cb0f6;
   --macaw-blue-shadow: #1899d6;
+  --sunny-yellow: #ffc800;
+  --sunny-yellow-shadow: #d49a00;
+  --alert-red: #ff4b4b;
+  --alert-red-shadow: #d83434;
+  --purple-accent: #ce82ff;
+  --purple-shadow: #9f55d8;
   --deep-blue: #2b70c9;
   --canvas: #ffffff;
   --ink: #3c3c3c;
+  --muted-ink: #777777;
   --radius-control: 16px;
   --radius-card: 18px;
+  --site-max-width: 1600px;
+  --content-width: min(80%, var(--site-max-width));
   --font-display: "Fredoka", "Nunito", "Segoe UI", sans-serif;
   --font-ui: "Nunito", "Segoe UI", "Noto Sans", Arial, sans-serif;
+  --font-nav: "Inter", "Segoe UI", "Noto Sans", Arial, sans-serif;
+  --font-google-sans: "Google Sans", "Google Sans Text", var(--font-nav);
+  --font-sniglet: "Sniglet", var(--font-nav);
+  --tag-game: #ff9600;
+  --tag-song: var(--macaw-blue);
 }
 
-/* Per-level colors (DESIGN.md "Per-level theme system"). Beginner = L1. */
+/* Per-level colors for the page frame (the board gets them from board.css
+   .level-theme-N). Beginner = Level 1. */
 body {
   --level-accent: #ffc800;
   --level-accent-shadow: #d49a00;
@@ -81,77 +99,191 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+body.play-overlay-open {
+  overflow: hidden; /* scroll lock under the overlay */
+}
+
 button {
   font: inherit;
   -webkit-tap-highlight-color: transparent;
 }
 
 .play {
-  min-height: 100vh;
-  min-height: 100dvh;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 16px 16px 32px;
-}
-
-/* (A) solo mode: the player + title block sits in the vertical middle of the
-   screen; the header stays on top. */
-.play[data-solo] {
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
 
-.play[data-solo] .play-player {
-  margin: auto 0;
+.play main {
+  flex: 1 0 auto;
 }
 
-/* Spacer that mirrors what is above the block (padding-top 16 + header 52 +
-   its margin 14 = 82 = padding-bottom 32 + 50), so the block is centered on
-   the whole screen rather than on the space under the header. */
-.play[data-solo]::after {
-  content: "";
-  flex: none;
-  height: 50px;
-}
-
-/* ---- Header: level name + month badge (like the content page banner) --- */
-.play-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  min-height: 52px;
-  margin-bottom: 14px;
-}
-
-.play-level {
-  font-family: "Sniglet", var(--font-display);
-  font-weight: 800;
-  font-size: 32px;
-  line-height: 1;
-  color: var(--level-accent-shadow);
-}
-
-.play-month:empty,
-.play-level:empty {
+/* Until the row is in (or when it never comes) there is no board. */
+.play[data-state="loading"] main,
+.play[data-state="error"] main,
+.play[data-state="invalid"] main {
   display: none;
 }
 
-.play-month {
-  display: inline-grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: var(--level-accent);
-  color: var(--canvas);
-  font-family: "Manrope", var(--font-display);
-  font-weight: 800;
-  font-size: 26px;
+/* ---- Brand line (the teacher header's wordmark, nothing else) ----------- */
+.play-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 64px;
+  padding: 10px 16px;
+  background: var(--canvas);
+}
+
+.brand-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--deep-blue);
+  font-family: var(--font-display);
+  font-size: 29px;
+  font-weight: 700;
   line-height: 1;
 }
 
-/* ---- Player stage -------------------------------------------------------- */
+.brand-accent {
+  color: #16b8ad;
+  font-family: "Cherry Bomb One", var(--font-display);
+  font-size: 33px;
+  font-weight: 400;
+}
+
+/* ---- Footer: one line, no links --------------------------------------- */
+.play-footer {
+  flex: 0 0 auto;
+  padding: 44px clamp(24px, 5vw, 72px);
+  background: var(--level-accent-soft);
+  color: var(--level-accent-shadow);
+  text-align: center;
+}
+
+/* 11px like the teacher site's level pages (one notch under its 13px default). */
+.play-footer p {
+  margin: 0;
+  font-family: var(--font-nav);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+/* ---- Page notice (invalid code / can't load) ----------------------------- */
+.play-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 560px;
+  min-height: 260px;
+  margin: 24px auto;
+  padding: 24px 20px;
+  border-radius: var(--radius-card);
+  background: var(--canvas);
+  box-shadow: 0 7px 0 var(--content-day-shadow);
+  text-align: center;
+}
+
+.play-card-emoji {
+  font-size: 52px;
+  line-height: 1;
+}
+
+.play-card-title {
+  margin: 0;
+  font-family: "Sniglet", var(--font-display);
+  font-weight: 800;
+  font-size: 26px;
+  line-height: 1.15;
+  color: var(--macaw-blue);
+}
+
+.play-card-text {
+  margin: 0;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--ink);
+}
+
+.play-card-title:empty,
+.play-card-text:empty {
+  display: none;
+}
+
+.play-btn {
+  min-width: 160px;
+  min-height: 56px;
+  margin-top: 6px;
+  padding: 12px 28px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--macaw-blue);
+  color: var(--canvas);
+  font-weight: 800;
+  font-size: 19px;
+  box-shadow: 0 5px 0 var(--macaw-blue-shadow);
+  cursor: pointer;
+}
+
+.play-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 var(--macaw-blue-shadow);
+}
+
+.play-start:focus-visible,
+.play-btn:focus-visible,
+.play-close:focus-visible {
+  outline: 3px solid var(--deep-blue);
+  outline-offset: 3px;
+}
+
+/* ---- Player overlay -------------------------------------------------------- */
+.play-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 72px 12px 24px;
+  overflow: auto;
+  background: rgba(20, 20, 20, 0.92);
+}
+
+.play-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--canvas);
+  cursor: pointer;
+}
+
+.play-close svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* The picture: as wide as the overlay allows, never taller than the screen
+   leaves room for (title under it, ✕ above). */
+.play-player {
+  width: min(100%, 960px, calc((100dvh - 170px) * 16 / 9));
+}
+
 .play-stage {
   position: relative;
   width: 100%;
@@ -169,8 +301,8 @@ button {
   transform: translateZ(0);
 }
 
-.play[data-state="playing"] .play-stage,
-.play[data-state="ended"] .play-stage {
+.play-overlay[data-state="playing"] .play-stage,
+.play-overlay[data-state="ended"] .play-stage {
   background: #000;
 }
 
@@ -233,16 +365,10 @@ button {
   fill: currentColor;
 }
 
-.play-start:focus-visible,
-.play-btn:focus-visible {
-  outline: 3px solid var(--deep-blue);
-  outline-offset: 3px;
-}
-
-/* ---- Message card (empty / error / invalid / game) ----------------------
-   Shown in place of the 16:9 stage, which is too short for an emoji + title
-   + text + 56px button on a phone, so the stage grows to fit it. */
-.play[data-card] .play-stage {
+/* ---- Card in the stage (coming soon / game) ------------------------------
+   The 16:9 stage is too short for an emoji + title + text + 56px button on a
+   phone, so the stage grows to fit it. */
+.play-overlay[data-card] .play-stage {
   aspect-ratio: auto;
   min-height: 220px;
   background: var(--canvas);
@@ -250,7 +376,7 @@ button {
 
 /* The (empty) absolute frame would otherwise sit over the in-flow card and
    swallow taps on its buttons. */
-.play[data-card] .play-frame {
+.play-overlay[data-card] .play-frame {
   display: none;
 }
 
@@ -265,52 +391,6 @@ button {
   text-align: center;
 }
 
-.play-card-emoji {
-  font-size: 52px;
-  line-height: 1;
-}
-
-.play-card-title {
-  margin: 0;
-  font-family: "Sniglet", var(--font-display);
-  font-weight: 800;
-  font-size: 26px;
-  line-height: 1.15;
-  color: var(--macaw-blue);
-}
-
-.play-card-text {
-  margin: 0;
-  font-weight: 700;
-  font-size: 17px;
-  color: var(--ink);
-}
-
-.play-card-title:empty,
-.play-card-text:empty {
-  display: none;
-}
-
-.play-btn {
-  min-width: 160px;
-  min-height: 56px;
-  margin-top: 6px;
-  padding: 12px 28px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--macaw-blue);
-  color: var(--canvas);
-  font-weight: 800;
-  font-size: 19px;
-  box-shadow: 0 5px 0 var(--macaw-blue-shadow);
-  cursor: pointer;
-}
-
-.play-btn:active {
-  transform: translateY(3px);
-  box-shadow: 0 2px 0 var(--macaw-blue-shadow);
-}
-
 .play-title {
   margin: 16px 0 0;
   font-family: var(--font-display);
@@ -318,7 +398,7 @@ button {
   font-size: 21px;
   line-height: 1.25;
   text-align: center;
-  color: var(--content-day-text);
+  color: var(--canvas);
 }
 
 .play-title:empty {
@@ -383,158 +463,11 @@ button {
   box-shadow: 0 2px 0 var(--content-day-shadow);
 }
 
-/* ---- (B) This month's list ---------------------------------------------- */
-.play-list {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 2px dashed var(--content-week-tint);
-}
-
-.play-list-tools {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.play-week-row {
-  display: grid;
-  grid-template-columns: 34px repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.play-week {
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  background: var(--content-week-tint);
-  color: var(--content-day-text);
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 18px;
-}
-
-.play-week-word {
-  display: none;
-}
-
-.play-item {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 0;
-  min-height: 56px;
-  padding: 6px 4px;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: var(--content-day-bg);
-  color: var(--content-day-text);
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 17px;
-  line-height: 1.1;
-  box-shadow: 0 5px 0 var(--content-day-shadow);
-  cursor: pointer;
-}
-
-.play-item-tool {
-  padding: 8px 10px;
-  background: var(--canvas);
-  font-size: 16px;
-  box-shadow: 0 4px 0 #dadada;
-}
-
-.play-item:active {
-  transform: translateY(3px);
-}
-
-.play-item:focus-visible,
-.play-next-inline:focus-visible {
-  outline: 3px solid var(--deep-blue);
-  outline-offset: 3px;
-}
-
-/* Not ready yet: flat and faded, still tappable (shows Coming soon). */
-.play-item.is-empty {
-  background: var(--content-week-tint);
-  color: var(--content-day-text);
-  box-shadow: none;
-  opacity: 0.6;
-}
-
-.play-soon {
-  margin-top: 2px;
-  font-family: var(--font-ui);
-  font-weight: 800;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-/* A game (toolbar slot or weekday game URL): the Let's play! emoji under
-   the label, same meaning as the game card. */
-.play-game-mark {
-  margin-top: 1px;
-  font-size: 13px;
-  line-height: 1;
-}
-
-/* What is on the player right now: thick ring + play mark. */
-.play-item[aria-current="true"] {
-  opacity: 1;
-  outline: 4px solid var(--content-day-text);
-  outline-offset: 2px;
-}
-
-/* Corner badge, so the label ("Mon") keeps its single line. */
-.play-item[aria-current="true"]::after {
-  content: "▶";
-  position: absolute;
-  top: -9px;
-  right: -9px;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  padding-left: 2px;
-  border-radius: 50%;
-  background: var(--content-day-text);
-  color: var(--canvas);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  line-height: 1;
-}
-
-@media (min-width: 480px) {
-  .play-week-row {
-    grid-template-columns: 64px repeat(5, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .play-week-word {
-    display: inline;
-    font-size: 14px;
-  }
-
-  .play-item {
-    min-height: 64px;
-    font-size: 20px;
-  }
-
-  .play-item-tool {
-    font-size: 18px;
-  }
-}
-
 /* ---- Full screen (⛶ enter / ✕ exit) --------------------------------------
-   play.js sets .play[data-fullscreen] = "native" (Fullscreen API on the
-   stage) or "pseudo" (+ body.play-fullscreen; iPhone Safari has no element
-   Fullscreen API). Keyed on attributes, not :fullscreen, so one rule serves
-   both and an old browser can't drop it as an unknown selector. */
+   play.js sets .play-overlay[data-fullscreen] = "native" (Fullscreen API on
+   the stage) or "pseudo" (+ body.play-fullscreen; iPhone Safari has no
+   element Fullscreen API). Keyed on attributes, not :fullscreen, so one rule
+   serves both and an old browser can't drop it as an unknown selector. */
 .play-fs {
   position: absolute;
   z-index: 5; /* over the tap layer (2) and the end overlay (4) */
@@ -572,13 +505,13 @@ button {
 
 /* The stage is the whole screen, black; the picture is the largest 16:9 box
    in its middle (bars at the sides sideways, above/below upright). */
-.play[data-fullscreen] .play-stage {
+.play-overlay[data-fullscreen] .play-stage {
   border-radius: 0;
   box-shadow: none;
   background: #000;
 }
 
-.play[data-fullscreen] .play-frame {
+.play-overlay[data-fullscreen] .play-frame {
   inset: auto;
   top: 50%;
   left: 50%;
@@ -601,46 +534,38 @@ body.play-fullscreen .play-stage {
   aspect-ratio: auto;
 }
 
-body.play-fullscreen .play-header,
+body.play-fullscreen .play-brand,
+body.play-fullscreen .play main,
+body.play-fullscreen .play-footer,
 body.play-fullscreen .play-title,
-body.play-fullscreen .play-next-row,
-body.play-fullscreen .play-list {
+body.play-fullscreen .play-next-row {
   display: none;
 }
 
 /* ---- Phone turned sideways: the video fills the screen ------------------
    Rotating alone already gives a big picture (no ⛶ tap needed). Only while
-   a video is on screen. */
+   a video is on the overlay. */
 @media (orientation: landscape) and (max-height: 500px) {
-  .play[data-state="playing"],
-  .play[data-state="ended"] {
-    max-width: none;
-    min-height: 100vh;
-    min-height: 100dvh;
+  .play-overlay[data-state="playing"],
+  .play-overlay[data-state="ended"] {
     padding: 0;
-    display: grid;
-    place-items: center;
     background: #000;
   }
 
-  .play[data-state="playing"] .play-header,
-  .play[data-state="playing"] .play-title,
-  .play[data-state="playing"] .play-next-row,
-  .play[data-state="playing"] .play-list,
-  .play[data-state="ended"] .play-header,
-  .play[data-state="ended"] .play-title,
-  .play[data-state="ended"] .play-next-row,
-  .play[data-state="ended"] .play-list {
+  .play-overlay[data-state="playing"] .play-title,
+  .play-overlay[data-state="playing"] .play-next-row,
+  .play-overlay[data-state="ended"] .play-title,
+  .play-overlay[data-state="ended"] .play-next-row {
     display: none;
   }
 
-  .play[data-state="playing"] .play-player,
-  .play[data-state="ended"] .play-player {
+  .play-overlay[data-state="playing"] .play-player,
+  .play-overlay[data-state="ended"] .play-player {
     width: min(100vw, calc(100dvh * 16 / 9));
   }
 
-  .play[data-state="playing"] .play-stage,
-  .play[data-state="ended"] .play-stage {
+  .play-overlay[data-state="playing"] .play-stage,
+  .play-overlay[data-state="ended"] .play-stage {
     border-radius: 0;
     box-shadow: none;
   }

@@ -12,21 +12,121 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- The families the shared board (board.css) and the brand line use —
+         the same ones the teacher site loads. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Manrope:wght@800&family=Nunito:wght@700;800;900&family=Sniglet:wght@800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&family=Cherry+Bomb+One&family=Fredoka:wght@600;700&family=Inter:wght@400;600;700;800&family=Manrope:wght@800&family=Nunito:wght@500;700;800;900&family=Sniglet:wght@400;800&family=Google+Sans:wght@700;800;900&display=swap"
       rel="stylesheet"
     />
     <!-- Every asset path is ABSOLUTE: this page is also served at
-         /q/<level>/<month>/<slot> (vercel.json rewrite), where a relative
-         "play.css" would resolve under /q/b/3/. -->
+         /q/<level>/<month>/<book> (vercel.json rewrite), where a relative
+         "play.css" would resolve under /q/b/3/. board.css is the teacher
+         site's 페이지2 board (shared); play.css adds the page frame, the
+         player overlay and the tokens board.css expects. -->
+    <link rel="stylesheet" href="/board.css" />
     <link rel="stylesheet" href="/play.css" />
   </head>
   <body>
-    <main id="play" class="play" data-state="loading">
-      <header class="play-header">
-        <span class="play-level" id="playLevel"></span>
-        <span class="play-month" id="playMonth" aria-label="Month"></span>
+    <div class="play" id="play" data-state="loading">
+      <!-- Brand line only: no level buttons, no login, no links out. -->
+      <header class="play-brand" aria-label="Cambridge Reading">
+        <span class="brand-name">
+          <span class="brand-accent">Cambridge</span>
+          <span class="brand-adventures">Reading</span>
+        </span>
       </header>
+
+      <!-- A code that does not resolve, or a row that could not be read. -->
+      <section class="play-notice" id="playNotice" hidden>
+        <div
+          class="play-card-emoji"
+          id="playNoticeEmoji"
+          aria-hidden="true"
+        ></div>
+        <h1 class="play-card-title" id="playNoticeTitle"></h1>
+        <p class="play-card-text" id="playNoticeText"></p>
+        <button type="button" class="play-btn" id="playRetry" hidden>
+          Try again
+        </button>
+      </section>
+
+      <main>
+        <!-- The teacher 페이지2 board for ONE book: same ids and classes as
+             index.html's #contentScreen so board.css styles it identically.
+             No Back / Next, no month or level navigation. Filled by
+             play.js renderBoard() with board-view.js builders. -->
+        <section
+          class="screen screen-active"
+          id="contentScreen"
+          aria-labelledby="contentTitle"
+        >
+          <div class="section-box section-blue">
+            <div class="section-inner">
+              <div class="content-level-banner">
+                <strong id="contentLevelName"></strong>
+                <span class="content-v2-month-pill content-banner-month"
+                  >Month <strong id="contentBannerMonthNumber"></strong
+                ></span>
+              </div>
+              <div class="content-v2-header content-main-header">
+                <div class="content-v2-title-block">
+                  <span class="content-v2-month-pill"
+                    >Month <strong id="contentMainMonthNumber"></strong
+                  ></span>
+                  <h2 id="contentTitle"></h2>
+                  <span class="content-v2-level" id="contentPathTag"></span>
+                </div>
+              </div>
+
+              <div
+                class="content-toolbar"
+                aria-label="Lesson content types"
+              ></div>
+
+              <div class="lesson-board" aria-label="Book lesson board">
+                <div class="lesson-grid" id="lessonGrid"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="play-footer" aria-label="Copyright">
+        <p>
+          Copyright 2026 <strong>TPS EDUCATION</strong>. All Rights Reserved.
+        </p>
+      </footer>
+    </div>
+
+    <!-- Player overlay: opens on a board tap (the tap is the user gesture,
+         so the video mounts at once). Closed by ✕, Esc or the phone's back
+         button. Holds the stage from the first student page unchanged:
+         YouTube / Vimeo SDK / framed publisher page, tap layer, end overlay,
+         full screen (iPhone: Vimeo in iOS's own full screen). -->
+    <div
+      class="play-overlay"
+      id="playOverlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="playTitle"
+      hidden
+    >
+      <button
+        type="button"
+        class="play-close"
+        id="playClose"
+        aria-label="Close"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path
+            d="M6 6l12 12M18 6L6 18"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.8"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
 
       <section class="play-player" aria-live="polite">
         <div class="play-stage" id="playStage">
@@ -39,8 +139,8 @@
             id="playClickLayer"
             aria-label="Pause"
           ></button>
-          <!-- Mobile browsers block autoplay with sound, so nothing plays
-               until this tap (a user gesture). Also the resume button. -->
+          <!-- Resume button (a paused player shows links out, so the layer
+               stays and this big ▶ resumes). -->
           <button
             type="button"
             class="play-start"
@@ -57,17 +157,14 @@
               id="playCardEmoji"
               aria-hidden="true"
             ></div>
-            <h1 class="play-card-title" id="playCardTitle"></h1>
+            <h2 class="play-card-title" id="playCardTitle"></h2>
             <p class="play-card-text" id="playCardText"></p>
-            <button type="button" class="play-btn" id="playRetry" hidden>
-              Try again
-            </button>
             <button type="button" class="play-btn" id="playGame" hidden>
               Let's play!
             </button>
           </div>
           <!-- End of a YouTube/Vimeo video (covers the related-videos
-               screen). Next = the next filled video slot, list mode only. -->
+               screen). Next = the next filled video slot of THIS book. -->
           <div class="play-end" id="playEnd" hidden>
             <button
               type="button"
@@ -138,14 +235,10 @@
           </button>
         </div>
       </section>
-
-      <!-- (B) This month only: toolbar slots, then Mon-Fri for weeks 1-4.
-           Buttons, never links — no way out to other months, levels or the
-           teacher site. Hidden in solo mode (?solo=1). -->
-      <nav class="play-list" id="playList" aria-label="This month" hidden></nav>
-    </main>
+    </div>
 
     <script src="/video-source.js"></script>
+    <script src="/board-view.js"></script>
     <script src="/supabase-config.js"></script>
     <script src="/play.js"></script>
   </body>
