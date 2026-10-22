@@ -625,7 +625,7 @@ function labelsOf() {
   return (playState.row && playState.row.labels) || {};
 }
 
-// Paint the static cover (assets/covers/…) only once it has loaded, so a
+// Paint the static cover (coverAssetPath) only once it has loaded, so a
 // missing file leaves the white placeholder like the teacher site does.
 function applyCover(card, level, month, book) {
   const src = coverAssetPath(level, month, book);
