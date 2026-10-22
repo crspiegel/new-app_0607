@@ -39,7 +39,12 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
   → 4 header). **Phase 1 (R1) done locally `2026-10-22`, not committed:** a game URL
   (`GAME_HOSTS` = `book-english-games.vercel.app`, + optional `site_settings.game_hosts` on the
   teacher site) in any weekday slot opens the game modal / "Let's play!" like the toolbar Game
-  button. Gotchas: `NOTES.md` "요일 슬롯 게임 URL".
+  button. Gotchas: `NOTES.md` "요일 슬롯 게임 URL". Pushed `b6bb29e` (`2026-10-22`).
+  **Phase 2A done locally (`2026-10-22`, 5 commits `1167b85`..`5fe8fa1`, not pushed):** `BOOK_LAYOUT`
+  - book QR helpers, page2 pixel baseline (19 shots, exact match, deterministic text flags),
+    `board-view.js` (shared DOM builders) and `board.css` (128 rules moved out of `styles.css`, loaded
+    before it). Teacher site pixel-identical. Next: Phase 2B (routes/CSV 70, student board + overlay,
+    static covers, integration) — waiting for the PM's 2A review + "푸시".
 - **Home hero cast** — stage 1 (CSS 3D character cycle) **rejected by PM on real devices**
   (`2026-10-21`: monotonous enter/leave loop, blurred back lane looked low-res). Not deployed; kept
   only on the local branch `hero-cast-v1` (`1e7f059`, `dc27a21` — not on origin). Stage 2 will be
