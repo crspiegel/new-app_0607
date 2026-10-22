@@ -36,6 +36,15 @@ const videoSourceGlobals = {
   disableYouTubeCaptions: "readonly",
 };
 
+// Top-level names declared by board-view.js (shared DOM builders, loaded
+// after video-source.js and before app.js / play.js).
+const boardViewGlobals = {
+  ICON_SVGS: "readonly",
+  buildToolbarButton: "readonly",
+  buildCoverCard: "readonly",
+  buildWeekRow: "readonly",
+};
+
 export default [
   // video-source.js is the shared data/parser file; its declarations are
   // consumed by other scripts (listed in its /* exported */ comment).
@@ -46,6 +55,24 @@ export default [
       sourceType: "script",
       globals: {
         URL: "readonly",
+      },
+    },
+    rules: {
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "no-undef": "error",
+    },
+  },
+  // board-view.js builds the board markup for both pages; it reads the
+  // video-source.js data (weekdays, lessonTypes) and touches the DOM only
+  // inside its functions.
+  {
+    files: ["board-view.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "script",
+      globals: {
+        document: "readonly",
+        ...videoSourceGlobals,
       },
     },
     rules: {
@@ -65,6 +92,7 @@ export default [
         window: "readonly",
         URLSearchParams: "readonly",
         ...videoSourceGlobals,
+        ...boardViewGlobals,
       },
     },
     rules: {
@@ -115,6 +143,7 @@ export default [
         process: "readonly",
         URL: "readonly",
         ...videoSourceGlobals,
+        ...boardViewGlobals,
       },
     },
     rules: {

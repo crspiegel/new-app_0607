@@ -53,6 +53,13 @@ test("video-source.js loads before app.js without redeclaration", async ({
     monthPadded: monthFromNumber("03"),
     monthOutOfRange: monthFromNumber(13),
     sameParser: window.craVideo.parseVideoSource === parseVideoSource,
+    // board-view.js (shared DOM builders) loads between the two as well.
+    builders: [
+      typeof buildToolbarButton,
+      typeof buildCoverCard,
+      typeof buildWeekRow,
+    ],
+    icons: Object.keys(ICON_SVGS),
   }));
 
   expect(result).toEqual({
@@ -69,8 +76,74 @@ test("video-source.js loads before app.js without redeclaration", async ({
     monthPadded: "March",
     monthOutOfRange: null,
     sameParser: true,
+    builders: ["function", "function", "function"],
+    icons: ["video", "game", "music"],
   });
   expect(pageErrors).toEqual([]);
+});
+
+test("board-view builders produce the teacher board markup", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#homeTitle")).toBeVisible();
+  const html = await page.evaluate(() => {
+    const song = buildToolbarButton(
+      {
+        slot: "song1",
+        kind: "video",
+        label: "I Sit",
+        icon: "music",
+        tag: "song",
+      },
+      "The Tractor",
+      { active: true },
+    );
+    const plain = buildToolbarButton(
+      {
+        slot: "opening",
+        kind: "video",
+        label: "Good Morning Song",
+        icon: "video",
+      },
+      "Good Morning Song",
+    );
+    const cover = buildCoverCard(2, "Title B");
+    const row = buildWeekRow(3, "Title B");
+    return {
+      song: song.outerHTML.replace(/<svg[\s\S]*?<\/svg>/, "<svg/>"),
+      plain: plain.outerHTML.replace(/<svg[\s\S]*?<\/svg>/, "<svg/>"),
+      songSvg: song.querySelector("svg") !== null,
+      cover: cover.outerHTML,
+      label: row.label.outerHTML,
+      buttons: row.buttons.map((b) => b.outerHTML),
+    };
+  });
+  expect(html.song).toBe(
+    '<button type="button" class="content-type active" data-slot="song1" data-kind="video">' +
+      '<span class="content-type-icon content-type-icon--music" aria-hidden="true"><svg/></span>' +
+      '<span class="content-type-label">The Tractor</span>' +
+      '<span class="content-type-tag content-type-tag--song">SONG</span></button>',
+  );
+  expect(html.plain).toBe(
+    '<button type="button" class="content-type" data-slot="opening" data-kind="video">' +
+      '<span class="content-type-icon content-type-icon--video" aria-hidden="true"><svg/></span>' +
+      '<span class="content-type-label">Good Morning Song</span></button>',
+  );
+  expect(html.songSvg).toBe(true);
+  expect(html.cover).toBe(
+    '<div class="book-title-card book-2" role="img" aria-label="Title B cover placeholder"></div>',
+  );
+  expect(html.label).toBe(
+    '<div class="week-label"><span class="wk-text"><span class="wk-num">3</span> <span class="wk-word">week</span></span></div>',
+  );
+  expect(html.buttons).toHaveLength(5);
+  expect(html.buttons[0]).toBe(
+    '<button class="lesson-button day-1" type="button" aria-label="Title B, 3 week, Opening Song" data-vp-title="Opening Song · Week 3 · Mon" data-slot="w3-Mon"><strong>Mon</strong></button>',
+  );
+  expect(html.buttons[4]).toBe(
+    '<button class="lesson-button day-5" type="button" aria-label="Title B, 3 week, Ending Song" data-vp-title="Ending Song · Week 3 · Fri" data-slot="w3-Fri"><strong>Fri</strong></button>',
+  );
 });
 
 test("book layout: fixed book↔week mapping and book-level QR tokens", async ({

@@ -6,6 +6,7 @@ const scannedFiles = [
   "index.html",
   "styles.css",
   "app.js",
+  "board-view.js",
   "play.html",
   "play.css",
   "play.js",
