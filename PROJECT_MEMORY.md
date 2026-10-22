@@ -28,6 +28,10 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
   (`vimeo.com/<id>`); TPS talks (A/B, game QR, printing); register 240 Naver QR codes with
   `qr/beginner-qr-list.csv` (`play.tps-education.com`). Docs:
   `docs/superpowers/specs|plans/2026-10-19-qr-student-play-page-*`.
+- **Home hero cast** — stage 1 (CSS 3D character cycle) **rejected by PM on real devices**
+  (`2026-10-21`: monotonous enter/leave loop, blurred back lane looked low-res). Not deployed; kept
+  only on the local branch `hero-cast-v1` (`1e7f059`, `dc27a21` — not on origin). Stage 2 will be
+  based on AI-generated video — waiting for the PM brief. Detail: `.claude/WORKLOG.md`.
 
 ## Recent state (newest first)
 
