@@ -73,6 +73,85 @@ test("video-source.js loads before app.js without redeclaration", async ({
   expect(pageErrors).toEqual([]);
 });
 
+test("book layout: fixed book↔week mapping and book-level QR tokens", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#homeTitle")).toBeVisible();
+
+  const result = await page.evaluate(() => ({
+    beginnerBooks: bookLayout("Level 1").map((b) => b.book),
+    levelBooks: bookLayout("Level 3").map((b) => b.book),
+    beginnerWeeks: bookEntry("Level 1", 1).weeks,
+    book1Weeks: bookEntry("Level 2", 1).weeks,
+    book2Weeks: bookEntry("Level 2", 2).weeks,
+    beginnerBook2: bookEntry("Level 1", 2),
+    book3: bookEntry("Level 2", 3),
+    book0: bookEntry("Level 2", 0),
+    bookString: bookEntry("Level 2", "2").book,
+    beginnerKeys: bookSlotKeys("Level 1", 1),
+    book1Keys: bookSlotKeys("Level 2", 1),
+    book2Keys: bookSlotKeys("Level 2", 2),
+    book2Toolbar: bookToolbarButtons("Level 4", 2).map((b) => b.slot),
+    book1ToolbarTags: bookToolbarButtons("Level 4", 1).map((b) => b.tag || ""),
+    beginnerToolbar: bookToolbarButtons("Level 1", 1).map((b) => b.slot),
+    covers: bookLayout("Level 2").map((b) => b.cover),
+    path: bookQrPath("Level 3", "March", 2),
+    pathBeginner: bookQrPath("Level 1", "December", 1),
+    name: bookQrName("Level 1", "March", 1),
+    name2: bookQrName("Level 4", "December", 2),
+    aliasOne: levelFromQrCode("1"),
+    aliasThree: levelFromQrCode("3"),
+    aliasB: levelFromQrCode("B"),
+    aliasZero: levelFromQrCode("0"),
+    aliasFour: levelFromQrCode("4"),
+    legacy: levelFromQrCode("l3"),
+    // Unchanged for now (removed in Task 2.5 with the route switch).
+    legacyPath: qrPath("Level 1", "March", "w1-Mon"),
+  }));
+
+  const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+  const weekKeys = (weeks) =>
+    weeks.flatMap((w) => weekdays.map((d) => `w${w}-${d}`));
+  expect(result).toEqual({
+    beginnerBooks: [1],
+    levelBooks: [1, 2],
+    beginnerWeeks: [1, 2, 3, 4],
+    book1Weeks: [1, 2],
+    book2Weeks: [3, 4],
+    beginnerBook2: null,
+    book3: null,
+    book0: null,
+    bookString: 2,
+    beginnerKeys: [
+      "opening",
+      "ending",
+      "game",
+      "unit",
+      ...weekKeys([1, 2, 3, 4]),
+    ],
+    book1Keys: ["opening", "ending", "game", "song1", ...weekKeys([1, 2])],
+    book2Keys: ["opening", "ending", "game2", "song2", ...weekKeys([3, 4])],
+    book2Toolbar: ["opening", "ending", "game2", "song2"],
+    book1ToolbarTags: ["", "", "game", "song"],
+    beginnerToolbar: ["opening", "ending", "game", "unit"],
+    covers: ["book-1", "book-2"],
+    path: "/q/l2/3/2",
+    pathBeginner: "/q/b/12/1",
+    name: "B-03-1",
+    name2: "L3-12-2",
+    aliasOne: "Level 2",
+    aliasThree: "Level 4",
+    aliasB: "Level 1",
+    aliasZero: null,
+    aliasFour: null,
+    legacy: "Level 4",
+    legacyPath: "/q/b/3/w1-mon",
+  });
+  expect(result.beginnerKeys).toHaveLength(24);
+  expect(result.book2Keys).toHaveLength(14);
+});
+
 test("isGameUrl / parseVideoSource: game hosts become kind game", async ({
   page,
 }) => {

@@ -8,9 +8,10 @@
 
 /* exported months, lessonTypes, weekdays, levelLabel, toolbarButtons,
    allSlotKeys, qrLevelCode, levelFromQrCode, monthNumber, monthFromNumber,
-   slotToQr, slotFromQr, slotTitle, qrPath, YT_ID_RE, GAME_HOSTS, isGameUrl,
-   setExtraGameHosts, parseVideoSource, publisherVimeoId,
-   disableYouTubeCaptions */
+   slotToQr, slotFromQr, slotTitle, qrPath, BOOK_LAYOUT, bookLayout, bookEntry,
+   bookSlotKeys, bookToolbarButtons, bookQrPath, bookQrName, YT_ID_RE,
+   GAME_HOSTS, isGameUrl, setExtraGameHosts, parseVideoSource,
+   publisherVimeoId, disableYouTubeCaptions */
 
 const months = [
   "March",
@@ -127,16 +128,85 @@ function allSlotKeys(level) {
     .concat(weekdaySlotKeys());
 }
 
-/* ---- QR route tokens (/q/<lv>/<month>/<slot>) ---------------------------
+/* ---- Books (fixed in code, decision D1 2026-10-22) -------------------------
+   A month's content page is one book for Beginner and two books for Level
+   1-3; each book owns a fixed set of weeks (continuous numbering, book 2 =
+   weeks 3-4) and the toolbar slots shown with it. The student QR page is one
+   BOOK (one printed QR per book, 70 in all), never a single slot. Slot keys
+   and TOOLBAR_BUTTONS are unchanged — this only groups them. The admin's
+   book titles live in content_pages.labels (game/song1 = book 1, game2/song2
+   = book 2 by convention), covers in content_pages.covers[cover]. */
+const BOOK_LAYOUT = {
+  "Level 1": [
+    {
+      book: 1,
+      weeks: [1, 2, 3, 4],
+      toolbar: ["opening", "ending", "game", "unit"],
+      cover: "book-1",
+    },
+  ],
+  default: [
+    {
+      book: 1,
+      weeks: [1, 2],
+      toolbar: ["opening", "ending", "game", "song1"],
+      cover: "book-1",
+    },
+    {
+      book: 2,
+      weeks: [3, 4],
+      toolbar: ["opening", "ending", "game2", "song2"],
+      cover: "book-2",
+    },
+  ],
+};
+
+function bookLayout(level) {
+  return BOOK_LAYOUT[level] || BOOK_LAYOUT.default;
+}
+
+// The layout entry for book `book` (1 or 2; "2" is fine), null when the level
+// has no such book (Beginner book 2, book 0, book 3 ...).
+function bookEntry(level, book) {
+  const n = Number(book);
+  return bookLayout(level).find((entry) => entry.book === n) || null;
+}
+
+// That book's slot keys in board order: its toolbar slots, then its weeks'
+// Mon..Fri (24 for Beginner, 14 for a Level 1-3 book). [] for no such book.
+function bookSlotKeys(level, book) {
+  const entry = bookEntry(level, book);
+  if (!entry) return [];
+  const days = [];
+  entry.weeks.forEach((week) => {
+    weekdays.forEach((day) => days.push(`w${week}-${day}`));
+  });
+  return entry.toolbar.concat(days);
+}
+
+// The TOOLBAR_BUTTONS items shown with that book, in the book's order.
+function bookToolbarButtons(level, book) {
+  const entry = bookEntry(level, book);
+  if (!entry) return [];
+  const buttons = toolbarButtons(level);
+  return entry.toolbar
+    .map((slot) => buttons.find((item) => item.slot === slot))
+    .filter(Boolean);
+}
+
+/* ---- QR route tokens (/q/<lv>/<month>/<book>) ---------------------------
    Level codes follow the ON-SCREEN names (what the books and teachers see):
    b = Beginner, l1..l3 = Level 1..3. Months are the on-screen numbers 3..12.
-   Slot tokens are the slot keys lowercased. */
+   The parser also accepts the bare digits 1..3 for Level 1..3 (PM's example
+   form); generated paths always use l1..l3. The last token is the book (1|2).
+   ⚠ These tokens are a PRINT CONTRACT once the Naver QR codes are registered. */
 const QR_LEVEL_CODES = {
   "Level 1": "b",
   "Level 2": "l1",
   "Level 3": "l2",
   "Level 4": "l3",
 };
+const QR_LEVEL_ALIASES = { 1: "Level 2", 2: "Level 3", 3: "Level 4" };
 
 function qrLevelCode(level) {
   return QR_LEVEL_CODES[level] || null;
@@ -147,8 +217,29 @@ function levelFromQrCode(code) {
   return (
     Object.keys(QR_LEVEL_CODES).find(
       (level) => QR_LEVEL_CODES[level] === wanted,
-    ) || null
+    ) ||
+    QR_LEVEL_ALIASES[wanted] ||
+    null
   );
+}
+
+// "/q/l2/3/2" — the student page for Level 2 (internal "Level 3") · March ·
+// book 2. null when the level has no such book.
+function bookQrPath(level, month, book) {
+  const entry = bookEntry(level, book);
+  const lv = qrLevelCode(level);
+  const n = monthNumber(month);
+  return entry && lv && n ? `/q/${lv}/${n}/${entry.book}` : null;
+}
+
+// The Naver QR management name: level code · 2-digit month · book, e.g.
+// "B-03-1", "L3-12-2" (sorts in book order).
+function bookQrName(level, month, book) {
+  const entry = bookEntry(level, book);
+  const lv = qrLevelCode(level);
+  const n = monthNumber(month);
+  if (!entry || !lv || !n) return null;
+  return `${lv.toUpperCase()}-${String(n).padStart(2, "0")}-${entry.book}`;
 }
 
 function monthNumber(month) {
