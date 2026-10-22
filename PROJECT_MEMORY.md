@@ -18,48 +18,31 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
 
 ## ⏳ In-progress work
 
-- **Beginner QR codes + student page (`play.html`)** — **option ① live in production** (`2026-10-21`).
-  Student host `play.tps-education.com` on this Vercel project, publisher Vimeo embedded directly
-  there (strategy by host; `www.cambridgereading.com/q/…` keeps framing the publisher page). C1–C7
-  checked (`2026-10-20`). iPhone full screen: Vimeo plays with `playsinline=0` where there is no
-  Fullscreen API, tap layer stays while paused — pushed (`acc4af7`), iPhone C8 passed (`2026-10-21`).
-  Test project `vimeo-domain-test` + `qrtest` domain deleted (`2026-10-21`).
-  **Remaining:** TPS uploads its songs to its own Vimeo and the DB URLs are swapped
-  (`vimeo.com/<id>`); TPS talks (A/B, game QR, printing). **Naver QR registration is on hold** — the
-  QR unit changes to one per book (70 codes, see the TPS requests item). Docs:
-  `docs/superpowers/specs|plans/2026-10-19-qr-student-play-page-*`.
-- **TPS requests (10/20 meeting), 5 items — stage 1 design review done** (`2026-10-22`, no code
-  change, not committed). R1 weekday game URLs, R2 one QR per book (70), R3 student page = 페이지2,
-  R4 teacher-resources header button, R5 LMS (HQ → branch → teacher → student). Review + plan:
-  `docs/superpowers/specs/2026-10-22-tps-requests-review.md` (errata, recommendations, 7 open
-  questions in §6 — **all 7 answered by the PM `2026-10-22`, recorded there**: level tokens stay
-  `b/l1-l3`, 4-button student toolbar, brand-only header, old grade 3 "blocked" meaning dropped,
-  role buttons Admin / My Branch / My Class, branch auto-detected at login, cover download approved),
-  `docs/superpowers/plans/2026-10-22-tps-requests-plan.md` (Phase 1 R1 → 2 student page/QR → 3 LMS
-  → 4 header). **Phase 1 (R1) done locally `2026-10-22`, not committed:** a game URL
-  (`GAME_HOSTS` = `book-english-games.vercel.app`, + optional `site_settings.game_hosts` on the
-  teacher site) in any weekday slot opens the game modal / "Let's play!" like the toolbar Game
-  button. Gotchas: `NOTES.md` "요일 슬롯 게임 URL". Pushed `b6bb29e` (`2026-10-22`).
-  **Phase 2A done locally (`2026-10-22`, 5 commits `1167b85`..`5fe8fa1`, not pushed):** `BOOK_LAYOUT`
-  - book QR helpers, page2 pixel baseline (19 shots, exact match, deterministic text flags),
-    `board-view.js` (shared DOM builders) and `board.css` (128 rules moved out of `styles.css`, loaded
-    before it). Teacher site pixel-identical. Next: Phase 2B (routes/CSV 70, student board + overlay,
-    static covers, integration) — waiting for the PM's 2A review + "푸시".
-- **Home hero cast** — stage 1 (CSS 3D character cycle) **rejected by PM on real devices**
-  (`2026-10-21`: monotonous enter/leave loop, blurred back lane looked low-res). Not deployed; kept
-  only on the local branch `hero-cast-v1` (`1e7f059`, `dc27a21` — not on origin). Stage 2 will be
-  based on AI-generated video — waiting for the PM brief. Detail: `.claude/WORKLOG.md`.
+- **TPS requests (10/20 meeting), 5 items** — review + plan:
+  `docs/superpowers/specs/2026-10-22-tps-requests-review.md` (errata, recommendations, PM's 7
+  decisions in §6) and `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`.
+  - **Phase 1 R1 (weekday game URLs) — live** (`b6bb29e`, `2026-10-22`): a `GAME_HOSTS` URL in any
+    weekday slot opens the game modal / "Let's play!" like the toolbar Game button.
+  - **Phase 2A — live** (`1167b85`..`efeaf10`, `2026-10-22`): `BOOK_LAYOUT` + book QR helpers,
+    `board-view.js` (shared DOM builders), `board.css` (board rules moved out of `styles.css`, loaded
+    before it), page2 pixel baseline (`tests/board-visual.spec.js`, exact match).
+  - **Phase 2B — done locally `2026-10-22`, not pushed:** student page = one book of the teacher
+    board (`/q/<lv>/<month>/<book>`, 70 QR, overlay player, static covers `assets/covers` 70 files
+    5.25 MB via `npm run covers:sync`), `qr/qr-list.csv` 70 rows. Waiting for the PM's review +
+    "푸시", then real-device check. Gotchas: `NOTES.md` "학생 QR 페이지 2세대", "페이지2 보드 공유 파일".
+  - **Next:** Phase 3 R5 LMS (HQ → branch → teacher → student; design in the review §4, decisions
+    §6) → Phase 4 R4 teacher-resources header button. Both need a PM brief.
+- **Naver QR registration:** 70 codes from `qr/qr-list.csv` (`play.tps-education.com`), after 2B
+  is live. TPS still to move its songs to its own Vimeo (`vimeo.com/<id>` in the admin screen).
+- **Home hero cast** — stage 1 rejected by the PM on real devices (`2026-10-21`); kept only on the
+  local branch `hero-cast-v1` (`1e7f059`, `dc27a21`, not on origin). Stage 2 = AI-generated video,
+  waiting for the PM brief. Detail: `.claude/WORKLOG.md`.
 
 ## Recent state (newest first)
 
-- `2026-10-19` (**deployed**) — QR student page: `/q/<lv>/<month>/<slot>` → `play.html`, one REST
-  read, 0 Storage, tap-to-play, (B) month list + `?solo=1`; shared data in `video-source.js`.
-  Beginner fill 102/240. Live-checked (200 + noindex, no teacher markup under `/q/`, `/docs/` 404).
-  `trailingSlash: false` so `/q/.../` 308s to the no-slash URL (`16be3c5`, live-checked). Gotchas: `NOTES.md` "QR 학생 페이지".
-  Full screen (⛶, `0670666`, live): Fullscreen API on `#playStage` where supported, else CSS pseudo
-  full screen (`body.play-fullscreen`, iPhone); ✕/Esc exits. Real devices not checked yet.
-- Older entries (captions OFF, harness setup, publisher pages, egress fixes) →
-  `docs/PROJECT_MEMORY-archive.md` (top).
+- `2026-10-19`..`2026-10-22` — QR student page v1 (`/q/<lv>/<month>/<slot>`, option ① host
+  `play.tps-education.com`, iPhone full screen) shipped and then superseded by the book-level v2
+  (above). Older entries → `docs/PROJECT_MEMORY-archive.md`.
 
 ## Standing rules
 
@@ -98,18 +81,13 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
 
 ## Backlog
 
-1. Decide whether V3 (Mon-Fri calendar) should replace the default `#content/...` route.
-2. Responsive + accessibility QA pass.
-3. 1366×768-and-below no-scroll on 페이지2 (footer/weekday spacing) — only if requested.
-4. Font-loading FOUT improvement (last).
-5. (확인 필요) `tests/smoke.spec.js:1419` "editor: 영상 URL input…" intermittent fail — tablet only,
-   `#bgEditorPanel` stayed hidden after the FAB click; passed on rerun (`2026-10-19`). Not fixed.
+1. V3 (Mon-Fri calendar) as the default `#content/...` route? 2. Responsive + a11y QA pass.
+2. 1366×768-and-below no-scroll on 페이지2 (only if asked). 4. Font FOUT (last).
+3. (확인 필요) `tests/smoke.spec.js` "editor: 영상 URL input…" intermittent (tablet) — not fixed.
 
-## Open questions (확인 필요 — carried over, may be stale)
+## Open questions (확인 필요, may be stale)
 
-- Delete `contentScreenV2`, or keep it as reference?
-- `2026-08-05` admin background re-placement (Beginner/March band 7px overlap; Level 1/2 April
-  frame elements) — done by the user?
+- Delete `contentScreenV2`, or keep it? `2026-08-05` admin background re-placement — done?
 
 ## Resume checklist
 

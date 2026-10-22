@@ -212,6 +212,20 @@ Menu button requirements:
 - Active: pressed/down state
 - Use icon plus text where possible
 
+## Student QR Page (`play.html`, 2026-10-22)
+
+- One printed QR per **book**: Beginner 1 book/month (10 codes), Level 1-3 2 books/month
+  (book 1 = weeks 1-2, book 2 = weeks 3-4; 60 codes) — 70 codes, `/q/<lv>/<month>/<book>`
+  (`b`, `l1`-`l3` / `3`-`12` / `1`|`2`). List for Naver QR: `npm run qr:list` → `qr/qr-list.csv`.
+- The page is the monthly calendar page's board for that book only, with the same markup and
+  stylesheet (`board.css`, `board-view.js`): the shared Good Morning / Good Bye buttons, that
+  book's Game and Song, its cover and its weeks. No header navigation, no Back/Next, no links out,
+  no login (public). A tap opens the player overlay (video) or the game (same tab).
+- Covers are committed static files (`assets/covers/...`), never Supabase Storage; one REST read
+  per visit. Replacing a cover in the admin screen needs `npm run covers:sync` + deploy.
+- Host `play.tps-education.com` (publisher Vimeo embedded directly); `www.cambridgereading.com/q/…`
+  also works (publisher page framed).
+
 ## Data Model Direction
 
 Future implementation should separate content data from rendering logic.

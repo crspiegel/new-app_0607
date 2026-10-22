@@ -879,6 +879,30 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   커밋한다. 다른 스펙에는 이 플래그가 없으니 거기서 스크린샷을 비교하지 말 것.
 - 기준선 생성 절차(추출 전 상태에서 찍어야 증거가 된다): `git stash` → 기준선 생성·커밋 → `git stash pop` → 비교.
 
+## 학생 QR 페이지 2세대 — 교재 단위 (`2026-10-22`, Phase 2B)
+
+- **QR 단위는 교재 1권: `/q/<lv>/<month>/<book>`** (`b`,`l1`~`l3` / `3`~`12` / `1`|`2`), 쿼리 폴백 `play.html?l=&m=&b=`.
+  파서는 레벨 `1`~`3`도 별칭으로 받지만 생성(`bookQrPath`·CSV)은 `l1`~`l3`. **교재 토큰이 새 인쇄물 계약이다** —
+  `BOOK_LAYOUT`(교재↔주차·툴바 슬롯, `video-source.js`, D1 코드 고정)을 바꾸면 인쇄된 QR이 다른 내용을 연다. 1세대 요일
+  경로(`/q/b/3/w1-mon`, `?s=`, `?solo=`)는 **제거**(미등록·미인쇄) → invalid 카드. `qr/qr-list.csv` 70행(`npm run qr:list`).
+- **학생 페이지 = 선생님 페이지2 보드 그대로.** `play.html`은 `#contentScreen … #lessonGrid`를 **같은 id·클래스**로 두고
+  `board.css` + `board-view.js` 빌더로 그린다(`renderBoard`). 다른 점: 상단 플레이어 없음, Back/Next 없음, 헤더는 브랜드
+  문구만, 푸터 저작권 1줄(링크 0 — 테스트가 `a[href]` 0개를 단언). 교재당 툴바 4버튼이라 `--wide` 없이 Beginner형 한 줄.
+  주차 번호는 연속(교재 2 = 3·4 week). 빈 슬롯은 선생님처럼 표시 차이 없음 — 탭해야 Coming soon.
+- **재생은 오버레이(`#playOverlay`)**: 보드 탭 = 제스처라 즉시 마운트. ✕·Esc·**뒤로가기**(열 때 `history.pushState` 1회,
+  popstate로 닫음 — ✕/Esc도 `history.back()`을 거쳐 닫혀 히스토리가 쌓이지 않는다)로 닫힌다. 아이폰 전체화면·탭 레이어·
+  종료 오버레이·⛶는 1세대 스테이지 그대로(`#playStage`가 오버레이 안으로). 상태는 `#play[data-state]`
+  = loading|error|invalid|board, `#playOverlay[data-state]` = ready|playing|ended|empty. Next는 **같은 교재 안**(`nextFilledSlot(row,
+level, book, slot)`)에서만.
+- **표지는 정적 파일 `assets/covers/<level-slug>/<month-slug>/book-<n>.jpg`**(`coverAssetPath`, Storage 경로와 1:1,
+  `COVER_EXT = "jpg"` — 업로드가 WebP 재인코딩이라고 적혀 있지만 실제 70개 전부 `image/jpeg`였다). 학생 페이지는 `new Image()`
+  로 미리 읽어 성공할 때만 `.has-cover`(404면 흰 자리표시자, 요청 1회). **Storage는 절대 읽지 않는다.**
+  관리자가 표지를 바꾸면 선생님 사이트는 즉시(Storage), 학생 페이지는 `npm run covers:sync -- --only "Level 3"` → 커밋 →
+  푸시 후 반영(관리자 표지 카드 밑 힌트). `--dry-run`은 REST 1회 + HEAD 70회(용량·타입만). `tests/covers.spec.js`가 70개
+  존재·소문자·크기를 고정한다. `check-assets-case`는 리터럴 경로만 보므로 동적 경로는 이 테스트가 대신한다.
+- **1세대의 🎮 목록 표시(`.play-game-mark`)는 목록과 함께 사라졌다**(보드는 선생님과 동일해야 하므로). 게임 슬롯은 탭하면
+  "Let's play!" 카드. `tests/board-visual.spec.js`에 학생 페이지 4장(Beginner·Level 1 교재2 × 2 뷰포트) 기준선이 있다.
+
 ## 요일 슬롯 게임 URL (`2026-10-22`, R1)
 
 - **비-Vimeo http(s) 호스트는 기본이 `kind:"page"`(출판사 페이지 iframe)이고, 게임은 `GAME_HOSTS`에 있는
