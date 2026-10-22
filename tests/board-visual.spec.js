@@ -51,6 +51,20 @@ const ROWS = ["Level 1", "Level 2", "Level 3", "Level 4"].map((level, i) => ({
         },
 }));
 
+// Headless Chromium on Windows rasterises glyph edges slightly differently
+// from run to run (LCD/subpixel text): a handful of pixels then cross the
+// comparison threshold on an otherwise identical page. These flags make text
+// rendering deterministic, so the comparison can be exact (threshold 0).
+test.use({
+  launchOptions: {
+    args: [
+      "--disable-lcd-text",
+      "--disable-font-subpixel-positioning",
+      "--font-render-hinting=none",
+    ],
+  },
+});
+
 const VIEWPORTS = [
   [375, 812],
   [812, 375],
@@ -107,7 +121,12 @@ async function settle(page) {
   await page.evaluate(() => window.scrollTo(0, 0));
 }
 
-const SHOT = { fullPage: true, animations: "disabled", caret: "hide" };
+const SHOT = {
+  fullPage: true,
+  animations: "disabled",
+  caret: "hide",
+  threshold: 0, // exact colour match per pixel (default 0.2 hides AA noise)
+};
 
 for (const [w, h] of VIEWPORTS) {
   for (const level of [1, 2, 3, 4]) {
