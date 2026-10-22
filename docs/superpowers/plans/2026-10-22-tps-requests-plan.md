@@ -1,0 +1,264 @@
+# TPS 요청 5건 구현 플랜
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 요일 슬롯 게임 URL(R1) → 교재 단위 QR 70개 + 페이지2와 동일한 학생 페이지(R2·R3) → LMS 4등급(R5)
+→ 역할별 헤더 버튼(R4)을 네 Phase로 나눠, 각 Phase가 끝날 때마다 운영 배포 가능한 상태로 둔다.
+
+**Architecture:** 정적 SPA 유지. 공유 classic script(`video-source.js` + 신규 `board-view.js`)와 물리 추출한
+`board.css`를 선생님 페이지2와 학생 페이지가 함께 쓴다. 학생 페이지는 (level, month) 1행만 읽고 교재 슬롯만
+그리며 표지는 저장소 정적 자산. LMS는 자체 `members` + 세션 토큰 테이블 + 헤더 기반 RLS(SQL만, 새 도구 없음).
+
+**Tech Stack:** Vanilla HTML/CSS/JS, Vite(dev), Playwright, Supabase(Postgres RPC/RLS, Storage는 관리자만), Vercel 정적 배포.
+
+**Spec:** `docs/superpowers/specs/2026-10-22-tps-requests-review.md` (정오표·권고·결정 질문 포함).
+확정 결정 D1~D7은 지시서(`docs/worker-briefs/2026-10-22-tps-requests-brief-v2.md`, 로컬).
+
+## Global Constraints
+
+- 코드 작업 전 `PROJECT_MEMORY.md`·`NOTES.md`를 읽는다. 공유 classic script의 최상위 이름을 `app.js`에
+  재선언하면 사이트 전체가 멈춘다(`SyntaxError`) — 새 공유 이름은 `/* exported */`와
+  `eslint.config.mjs` `videoSourceGlobals`에도 추가.
+- Supabase: 학생 페이지에서 Storage 요청 0건, REST 1회. 테스트는 REST 픽스처 + Storage 스텁. 라이브 Storage
+  다운로드(표지 sync)는 **사용자 승인 후 1회**.
+- 슬롯 키(`opening`, `w1-Mon` …)·`TOOLBAR_BUTTONS`·DB 값 형태는 바꾸지 않는다. 교재 토큰은 새 인쇄물 계약.
+- 영어 UI(학생·선생님 화면), 이탤릭 금지, 아이 친화. 관리자 화면은 한글.
+- `npm.cmd run check`(Stop 훅) 통과, 커밋 전 `npm.cmd run qa`(Vite 종료 후). **커밋·푸시는 사용자 요청 시에만**
+  (push = 운영 배포). 아래 "커밋" 단계는 "사용자 승인 후 커밋"으로 읽는다.
+- 기존 승인 화면(페이지2 등)은 픽셀 단위로 변하지 않아야 한다.
+
+## Review Focus
+
+1. **요일 슬롯에 게임 URL + 등급 3 세션** — 차단 팝업이 먼저 떠야 한다(`openSlot` 게이트 순서). Task 1.2 테스트.
+2. **`/q/b/3/2`(Beginner 교재 2)** — invalid 카드, 빈 페이지·예외 없음. Task 2.3 테스트.
+3. **표지 파일이 없는 교재** — 흰 자리표시자, 콘솔 에러·재시도 없음, Storage로 폴백하지 않음. Task 2.7 테스트.
+4. **`board.css` 추출 후 관리자 화면·페이지1·홈** — 페이지2 외 화면이 보드 규칙 이동으로 바뀌지 않는지(픽셀
+   비교에 홈·월그리드·관리자 보드 1장씩 추가). Task 2.4.
+5. **아이폰 오버레이에서 Vimeo iOS 전체화면 종료** — 종료 후 오버레이가 남고 ▶로 재개(기존 동작 유지). Task 2.6
+   기존 iPhone 테스트 3개 유지.
+
+---
+
+## Phase 1 — R1 요일 슬롯 게임 URL (배포 가능: 예, 단독)
+
+의존: 없음. 추정 3~4h. 배포 후 관리자가 요일 슬롯에 게임 URL을 넣으면 즉시 동작.
+
+### Task 1.1: `isGameUrl` + `parseVideoSource` 게임 분류
+
+**Files:**
+
+- Modify: `video-source.js` (`/* exported */` 주석, `parseVideoSource`, 신규 `GAME_HOSTS`·`isGameUrl`)
+- Modify: `eslint.config.mjs` (`videoSourceGlobals`에 `isGameUrl`)
+- Test: `tests/smoke.spec.js` "slot video classifier sends non-Vimeo pages to the page viewer" 확장, `tests/play.spec.js` "video-source.js loads before app.js without redeclaration" 확장
+
+**Interfaces:**
+
+- Produces: `isGameUrl(str) → boolean`, `parseVideoSource(str, opts) → { kind: "game", url }` (게임 호스트일 때).
+  `GAME_HOSTS = ["book-english-games.vercel.app"]`.
+
+- [ ] **Step 1:** smoke 분류 테스트의 입력에 `https://book-english-games.vercel.app/play/the-tractor`를 추가하고 기대 배열에 `"game"`을 추가. play.spec 재선언 테스트의 `evaluate`에 `isGame: isGameUrl("https://book-english-games.vercel.app/play/x")`, `isGameSub: isGameUrl("https://a.book-english-games.vercel.app/")`, `notGame: isGameUrl("https://example.com/play")`를 추가(기대 true/true/false).
+- [ ] **Step 2:** `npx.cmd playwright test tests/smoke.spec.js -g "classifier" --project=desktop` → FAIL(`"page"` ≠ `"game"`).
+- [ ] **Step 3:** `video-source.js`에 `GAME_HOSTS`, `isGameUrl`(URL 파싱 실패 → false, 호스트 정확히 일치 또는 `.`+호스트로 끝남), `parseVideoSource`에서 YouTube 분기 다음에 게임 분기. `/* exported */`·eslint globals 갱신.
+- [ ] **Step 4:** 두 테스트 PASS, `npm.cmd run check` 통과.
+- [ ] **Step 5:** 커밋 `feat: classify game URLs in parseVideoSource`.
+
+### Task 1.2: 선생님 사이트 — 요일 게임 슬롯은 게임 모달
+
+**Files:**
+
+- Modify: `app.js` `openSlot()` (843행 부근), `openSlotEditor()` 라벨·placeholder (2439행 부근)
+- Modify: `index.html` `#adminSlotLabel` 기본 문구가 있으면 함께
+- Test: `tests/smoke.spec.js` 신규 2개
+
+**Interfaces:**
+
+- Consumes: `parseVideoSource`, `openGameModal(url)`, `isBlockedByGrade()`.
+
+- [ ] **Step 1:** 테스트 "weekday slot with a game URL opens the game modal": `craContent.settled` 대기 → `contentCache["Level 1||March"].videos["w1-Mon"]`에 게임 URL 시드 → `#content/Level%201/March`로 이동(`page.reload()`) → `.lesson-button[data-slot="w1-Mon"]` 클릭 → `#gameModal` visible, `#gameFrame` src = 게임 URL, `#videoModal` hidden. 테스트 "grade 3 still sees no-access before a weekday game": `localStorage.cra_member = {"id":"x","grade":3}` 시드 → 같은 클릭 → `#noAccessModal` visible, `#gameModal` hidden.
+- [ ] **Step 2:** 실행 → FAIL(`#videoModal`이 열림).
+- [ ] **Step 3:** `openSlot`에서 URL 획득 후 `parseVideoSource(url)?.kind === "game"`이면 `openGameModal(url)`로 분기. 편집기 요일 슬롯 라벨 "영상 URL (Vimeo·YouTube) 또는 게임 URL", placeholder에 게임 예시.
+- [ ] **Step 4:** 신규 2개 + 기존 게임 모달 테스트 2개 PASS. `npm.cmd run check`.
+- [ ] **Step 5:** 커밋 `feat: weekday slots open game URLs in the game modal`.
+
+### Task 1.3: 학생 페이지 — 요일 게임 슬롯은 "Let's play!"
+
+**Files:**
+
+- Modify: `play.js` `resolvePlayback()`
+- Test: `tests/play.spec.js` "play: resolvePlayback strategies" 확장 + "play: game slot navigates on tap"와 같은 형태의 요일 케이스 1개
+
+- [ ] **Step 1:** `resolvePlayback("https://book-english-games.vercel.app/play/x", "video")` → `{ type: "game", url }` 기대. 픽스처 `videos["w1-Mon"]`을 게임 URL로 두고 `/play.html?l=b&m=3&s=w1-mon` 진입 → `#playGame` visible, 탭 → `page.url()`이 게임 URL(기존 게임 테스트와 같은 route 스텁).
+- [ ] **Step 2:** 실행 → FAIL(`type: "frame"`).
+- [ ] **Step 3:** `resolvePlayback`에서 `parsed.kind === "game"` → `{ type: "game", url: parsed.url }`.
+- [ ] **Step 4:** PASS. `npm.cmd run qa` 전체(Vite 종료 후) 통과 확인 → Phase 1 배포 가능.
+- [ ] **Step 5:** 커밋 `feat: student page offers game for weekday game URLs`. `PROJECT_MEMORY.md` In-progress 갱신.
+
+**Phase 1 수용 기준:** 관리자가 요일 슬롯에 `book-english-games.vercel.app` URL 저장 → 선생님 사이트 클릭 시
+툴바 Game과 같은 모달 / 학생 페이지에서는 "Let's play!" → 직접 이동. 영상 URL 동작 무변경. `qa` 전부 통과.
+
+---
+
+## Phase 2 — 교재 상수 · 표지 정적화 · 학생 페이지 재구축 · CSV 70행 (배포 가능: Task 2.8 끝에서)
+
+의존: Phase 1(게임 분류). 추정 3~4일. **Task 2.1~2.4는 선생님 사이트만 건드리므로 각각 단독 배포 가능**(페이지2
+무변경 증명 포함). 2.5~2.8은 학생 페이지를 새 스킴으로 바꾸므로 **한 번에 배포**(기존 요일 QR은 미등록이라
+전환 비용 없음).
+
+### Task 2.1: `BOOK_LAYOUT` 상수와 교재 헬퍼 (1~2h)
+
+**Files:**
+
+- Modify: `video-source.js` (`BOOK_LAYOUT`, `bookLayout`, `bookEntry`, `bookSlotKeys`, `bookToolbarButtons`, `levelFromQrCode` 별칭 `1~3`, `qrPath(level, month, book)`로 시그니처 변경, `bookQrName`)
+- Modify: `eslint.config.mjs`
+- Test: `tests/play.spec.js` 재선언 테스트 확장(순수 함수 단언)
+
+**Interfaces:**
+
+- Produces: `bookLayout(level) → [{book, weeks, toolbar, cover}]`, `bookEntry(level, book) → entry|null`,
+  `bookSlotKeys(level, book) → string[]`(툴바 순서 + `w<n>-<Day>`), `bookToolbarButtons(level, book) → TOOLBAR_BUTTONS 항목[]`,
+  `qrPath(level, month, book) → "/q/<lv>/<n>/<book>"`, `bookQrName(level, month, book) → "L1-03-2"`,
+  `levelFromQrCode("1") → "Level 2"`.
+
+- [ ] **Step 1:** 단언 추가: `bookSlotKeys("Level 2", 2)` 길이 14·첫 4개 `["opening","ending","game2","song2"]`·5번째 `"w3-Mon"`; `bookSlotKeys("Level 1", 1)` 24; `bookEntry("Level 1", 2) === null`; `qrPath("Level 3","March",2) === "/q/l2/3/2"`; `levelFromQrCode("l1") === levelFromQrCode("1")`; `bookQrName("Level 1","March",1) === "B-03-1"`.
+- [ ] **Step 2:** FAIL(미정의).
+- [ ] **Step 3:** 구현(스펙 §2.1 상수 그대로). 기존 `qrPath(level, month, slot)`는 `play.js slotAddress`·`make-qr-list.mjs`가 아직 쓰므로 **남겨 두고**, 교재용은 새 이름 `bookQrPath(level, month, book)`로 추가한다. Task 2.5에서 호출처를 바꾼 뒤 `qrPath`·`slotToQr`·`slotFromQr`를 제거한다(이 플랜의 `qrPath(level, month, book)` 표기는 `bookQrPath`로 읽는다).
+- [ ] **Step 4:** PASS, `npm.cmd run check`.
+- [ ] **Step 5:** 커밋 `feat: book layout constants and book-level QR path`.
+
+### Task 2.2: 페이지2 픽셀 기준선 (1h) — 추출 **전** 커밋에서
+
+**Files:**
+
+- Create: `tests/board-visual.spec.js`
+- Create: `tests/board-visual.spec.js-snapshots/*.png` (Playwright가 생성)
+
+- [ ] **Step 1:** `test.describe("페이지2 visual")`: 4 레벨 × 뷰포트 {375×812, 812×375, 768×1024, 1366×900} = 16장 + 홈·월그리드·관리자 보드(로그인 없이 `renderAdminBoard`는 불가 → 관리자 보드는 제외, 대신 `#monthScreen` 1장·홈 1장). REST 픽스처(표지 = Storage 스텁 URL, labels 교재 제목), Storage 스텁, `document.fonts.ready` 대기, `animations: "disabled"`, `toHaveScreenshot({ maxDiffPixels: 0 })`. 데스크톱 프로젝트에서만.
+- [ ] **Step 2:** `--update-snapshots`로 기준선 생성, 두 번째 실행 PASS(안정성 확인, 3회 반복).
+- [ ] **Step 3:** 커밋 `test: page2 visual baseline before board extraction`.
+
+### Task 2.3: `board-view.js` DOM 빌더 추출 (2h)
+
+**Files:**
+
+- Create: `board-view.js` (classic script; `ICON_SVGS`, `buildToolbarButton(item, label, { active })`, `buildCoverCard(bookIndex, title)`, `buildWeekRow(weekNumber, bookTitle)` → `{ label, buttons }`)
+- Modify: `app.js` (`ICON_SVGS` 삭제, `renderContentToolbar`·`renderLessons`가 빌더 호출), `index.html`(스크립트 태그 `video-source.js` 다음), `package.json`(lint·format 대상), `scripts/check-assets-case.mjs`(scannedFiles), `eslint.config.mjs`(새 파일 블록 + `app.js` globals)
+- Test: `tests/play.spec.js` 재선언 테스트에 `typeof buildToolbarButton === "function"` 추가
+
+**Interfaces:**
+
+- Produces: 위 세 빌더. 마크업은 현행 `renderContentToolbar`(`button.content-type[data-slot][data-kind] > span.content-type-icon + span.content-type-label (+ span.content-type-tag)`)·`renderLessons`(`div.book-title-card.book-N[role=img]`, `div.week-label > span.wk-text`, `button.lesson-button.day-N[data-slot][data-vp-title] > strong`)과 **문자 단위로 동일**.
+
+- [ ] **Step 1:** 재선언 테스트 단언 추가 → FAIL.
+- [ ] **Step 2:** 빌더 작성, `app.js` 두 함수를 빌더 호출로 교체(이벤트 위임은 그대로 `lessonGrid`·`contentToolbar`).
+- [ ] **Step 3:** `tests/board-visual.spec.js` 16장 PASS(마크업 동일 증명) + smoke 툴바 테스트 7개 PASS + `check`.
+- [ ] **Step 4:** 커밋 `refactor: share page2 board DOM builders (board-view.js)`.
+
+### Task 2.4: `board.css` 물리 추출 (3~4h)
+
+**Files:**
+
+- Create: `board.css`
+- Modify: `styles.css`(규칙 **이동**, 복사 금지), `index.html`(`board.css`를 `styles.css` 앞에), `package.json`·`check-assets-case.mjs`(대상 추가)
+
+- [ ] **Step 1:** 이동 대상 목록을 먼저 적는다: `:root` 폰트·반경 토큰 중 보드가 쓰는 것, `.level-theme-1..4` 변수 블록, `.section-box/.section-inner/.section-blue`, `.content-level-banner*`, `.content-v2-month-pill`, `.content-main-header`·`.content-v2-title-block`·`.content-v2-level`(Back/Next 버튼 규칙은 남김), `#contentScreen .content-toolbar*`, `.content-type*`, `.content-toolbar--wide`, `.lesson-board`, `.lesson-grid`, `.book-title-card*`, `.week-label*`, `.lesson-button*`, 이들이 들어 있는 모든 `@media` 블록의 해당 부분, `font-style: normal` 전역 규칙. 원본 순서를 유지한 채 잘라 붙인다.
+- [ ] **Step 2:** `tests/board-visual.spec.js` 실행 → 차이가 있으면 **순서 문제**로 보고 이동 단위를 되돌리며 범인을 찾는다(NOTES에 기록). 16장 + 홈·월그리드 PASS가 완료 조건. `maxDiffPixels` 완화 금지.
+- [ ] **Step 3:** `npm.cmd run qa` 전체 PASS.
+- [ ] **Step 4:** 커밋 `refactor: extract page2 board styles into board.css`. NOTES에 "board.css는 styles.css보다 먼저 로드, 보드 규칙은 board.css에만" 추가.
+
+### Task 2.5: 라우트·CSV·테스트를 교재 단위로 (2h)
+
+**Files:**
+
+- Modify: `play.js` `parsePlayRoute`(3번째 토큰 = book, `?b=`), `slotAddress` 제거(주소 고정), `?solo` 제거
+- Modify: `scripts/make-qr-list.mjs`(전 레벨 70행, 열 `qr_name, level, month, book, title, student_url, cover_file, filled_slots`, 기본 `--out qr/qr-list.csv`, `--host` 기본값 `https://play.tps-education.com`)
+- Modify: `tests/qr-list.spec.js`(70행, 첫 행 `B-03-1,Beginner,3,1,…,https://play.tps-education.com/q/b/3/1,…`, 마지막 `L3-12-2`), `tests/play.spec.js` "route variants"·"invalid route"(요일 토큰·Beginner book 2·`b=0` → invalid)
+
+**Interfaces:**
+
+- Produces: `parsePlayRoute(pathname, search) → { level, month, book } | null`.
+
+- [ ] **Step 1:** 테스트 수정 → FAIL.
+- [ ] **Step 2:** 구현. `qr/README-naver-qr.txt` 메모를 70개·교재 기준으로 갱신(스크립트가 생성).
+- [ ] **Step 3:** `node scripts/make-qr-list.mjs --offline --out <scratch>` 70행 확인, 테스트 PASS.
+- [ ] **Step 4:** 커밋 `feat: book-level QR routes and 70-row Naver list`.
+
+### Task 2.6: 학생 페이지 보드 + 재생 오버레이 (6~8h, 2 커밋)
+
+**Files:**
+
+- Modify: `play.html`(브랜드 헤더 + `#contentScreen` 동일 마크업 + 저작권 푸터 + `#playOverlay`(기존 `#playStage`·카드·종료 오버레이 포함)), `play.css`(보드 토큰은 `board.css`로 → `play.css`는 헤더·푸터·오버레이만), `play.js`(교재 렌더 `renderBook()`, `openOverlay(slot)`/`closeOverlay()`, `nextFilledSlot`을 `bookSlotKeys` 범위로, `history.pushState`로 뒤로가기 닫기), `eslint.config.mjs`(play.js globals에 board-view 이름)
+- Test: `tests/play.spec.js` 전면 갱신(§5), `tests/board-visual.spec.js`에 학생 페이지 4장(Beginner 1권·Level 2 교재1·교재2, 375×812·1366×900)
+
+**Interfaces:**
+
+- Consumes: `bookEntry`, `bookSlotKeys`, `bookToolbarButtons`, `buildToolbarButton`, `buildCoverCard`, `buildWeekRow`, `coverAssetPath`(Task 2.7 — 이 Task에서는 빈 문자열 반환 스텁으로 시작).
+
+- [ ] **Step 1 (보드):** 테스트 "book page renders only that book": `/play.html?l=l1&m=3&b=2` → 툴바 4버튼 순서 `opening ending game2 song2`, `.lesson-button` 10개(`w3-Mon`…`w4-Fri`), `.week-label` 텍스트 `3`·`4`, `.book-title-card` 1개, `w1-Mon` 버튼 없음, 링크(`a[href]`) 0개, 레벨 내비 없음. Beginner `b=1` → 4버튼 + 20개. 라벨은 픽스처 `labels.game2`.
+- [ ] **Step 2:** FAIL → `renderBook()` 구현(마크업은 빌더로, id·클래스 선생님과 동일) → PASS.
+- [ ] **Step 3 (오버레이):** 기존 플레이어 테스트를 "요일 버튼 탭 → `#playOverlay` visible → 즉시 마운트" 흐름으로 바꾼다. 추가: ✕·Esc·`history.back()`으로 닫힘·플레이어 teardown, Next는 같은 교재 안에서만(교재1 마지막 `w2-Fri` 다음은 Next 없음), 빈 슬롯 탭 → Coming soon 카드가 오버레이 안에, 게임 → "Let's play!" 카드. iPhone 3개·레이어 2개·전체화면 5개 테스트 유지.
+- [ ] **Step 4:** PASS, 학생 페이지 스냅샷 4장 생성. `check` 통과.
+- [ ] **Step 5:** 커밋 2개 `feat: student page renders one book like page2`, `feat: student player becomes an overlay`.
+
+### Task 2.7: 표지 정적 자산 (2h + 승인 대기)
+
+**Files:**
+
+- Create: `scripts/sync-covers.mjs`(REST 1회 → 다운로드 → `assets/covers/<level-slug>/<month-slug>/book-<n>.<ext>` + `qr/covers-manifest.json`, `--only`, `--dry-run`)
+- Modify: `video-source.js` `coverAssetPath(level, month, book)`(`slugify`를 `app.js`에서 이동), `play.js`(표지 적용, 없으면 자리표시자), `package.json`(`covers:sync`), `app.js` 관리자 표지 카드 힌트 1줄
+- Test: `tests/covers.spec.js`(Node: `BOOK_LAYOUT` 전 조합 70개 파일 존재·소문자·≤300 KB), `tests/play.spec.js` 가드 "no Storage request"에 표지 포함 확인
+
+- [ ] **Step 1:** `tests/covers.spec.js` 작성 → FAIL(파일 없음). `coverAssetPath("Level 3","March",2) === "assets/covers/level-3/march/book-2.jpg"` 단언.
+- [ ] **Step 2:** 스크립트 작성, `--dry-run`으로 목록·바이트 합계 출력(REST만). **사용자에게 다운로드 승인 요청**(예상 5~8 MB, Storage 1회).
+- [ ] **Step 3:** 승인 후 실행 → 70개 파일. 확장자가 JPEG가 아니면 `coverAssetPath` 규칙을 실제 타입으로 고정하고 테스트 갱신.
+- [ ] **Step 4:** `covers.spec` PASS, `check:assets` PASS, 학생 페이지 스냅샷 4장 갱신(표지 있는 버전).
+- [ ] **Step 5:** 커밋 `feat: static book covers for the student page` (+ 자산). NOTES에 교체 절차 기록.
+
+### Task 2.8: 통합 검증·문서·배포 준비 (2h)
+
+- [ ] **Step 1:** `npm.cmd run qa` 전체 PASS(Vite 종료 후). 실패 시 수정 후 재실행.
+- [ ] **Step 2:** 로컬 Vite에서 수동 확인: `/play.html?l=b&m=3&b=1`, `?l=l2&m=3&b=2`, 375×812·812×375(DevTools), 요일 탭 → 오버레이 → 재생(YouTube 픽스처 아님, `craDevLive(true)`는 사용자 승인 시에만).
+- [ ] **Step 3:** 문서: `NOTES.md`("교재 토큰 = 인쇄물 계약", board.css 순서, 표지 sync), `PROJECT_MEMORY.md`(상태·QR 70), `PRODUCT_SPEC.md`(학생 페이지 항목), `qr/README-naver-qr.txt`.
+- [ ] **Step 4:** 사용자 요청 시 커밋·푸시 → 배포 후 curl: `/q/b/3/1` 200·noindex, `/q/b/3/w1-mon` 200(invalid 카드), `/q/l2/3/2` 200, `/assets/covers/level-3/march/book-2.jpg` 200, play 호스트 `/` → 307 `/q`. 아이폰·안드로이드 실기기 1회(교재1 요일 → Vimeo iOS 전체화면).
+
+**Phase 2 수용 기준:** 70개 CSV, 학생 페이지가 교재 1권만 보여 주고 페이지2 스냅샷과 같은 CSS/마크업, Storage 0,
+REST 1, 다른 교재·월·레벨로 가는 UI 없음, 페이지2·홈·월그리드 픽셀 무변경, `qa` 전부 통과.
+
+---
+
+## Phase 3 — R5 LMS (상위 단계만, 설계 승인 후 세부화)
+
+의존: 없음(Phase 2와 독립, 단 같은 `app.js`를 고치므로 Phase 2 뒤에 착수). 추정 5~7일. 배포 가능: 3.2까지는
+기존 로그인이 그대로 동작하므로 중간 배포 가능, 3.5 이후 구 RPC 제거.
+
+| 단계 | 내용                                                                                                                                                               | 수용 기준                                                    | 검증                                                                   |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| 3.1  | SQL 1차(추가만): `branches`·본사 행, `members` 확장, `classes`·`class_members`·`lms_sessions`·`login_attempts`, `lms_member()`, `lms_login/logout`, 시도 제한, RLS | migration.sql 재실행 idempotent, 기존 로그인 RPC 그대로 동작 | SQL Editor에서 역할 4종 계정으로 RPC·RLS 거부 확인(비밀번호 출력 금지) |
+| 3.2  | 로그인 폼(지사 선택) + 세션 토큰 클라이언트 + `role`로 `updateAdminUI`                                                                                             | 기존 회원 본사로 로그인, 관리자 `@` 경로 무변경, 잠금 메시지 | Playwright REST 픽스처                                                 |
+| 3.3  | 역할별 관리자 메뉴·가드(지사·반·회원 뷰), 동명이인 접미사 제안                                                                                                     | §4.6 표대로 노출, 학생 `#admin` 차단                         | Playwright + RLS 스크립트(승인 후)                                     |
+| 3.4  | 엑셀 업로드(SheetJS, 미리보기, 1트랜잭션 RPC, 결과표), 템플릿 2종 파일                                                                                             | 500행 한도, 전체 롤백, 결과표                                | 픽스처 xlsx 3종(정상·중복·오류)                                        |
+| 3.5  | SQL 2차(구 RPC 제거, pk 교체), 문서(`NOTES`, `SUPABASE_SETUP`), 보안 체크리스트(§4.8)                                                                              | 구 RPC 호출 0, 토큰 해시 저장 여부 결정                      | `qa` + 실계정 4종                                                      |
+
+Phase 3 착수 전 결정 필요: 스펙 §6의 4·5·6번, `x-forwarded-for`·API 로그 헤더 노출 확인.
+
+---
+
+## Phase 4 — R4 '선생님자료실' 헤더 버튼 (상위 단계만)
+
+의존: Phase 3(역할 세션). 추정 1일. 배포 가능: 단독.
+
+| 단계 | 내용                                                                                           | 수용 기준                                                   | 검증                     |
+| ---- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------ |
+| 4.1  | `site_settings.header_buttons` 읽기 + `renderHeaderButtons()`(Admin 왼쪽 알약, `minRole` 비교) | 익명·학생 DOM 미생성, 선생님 이상 표시, 새창 `rel=noopener` | Playwright 역할별 픽스처 |
+| 4.2  | 관리자 "버튼" 탭(최고관리자): 라벨·URL·새창·표시·노출 등급·순서 편집, upsert 1회               | 저장 후 헤더 즉시 반영(관리자 미러)                         | Playwright + `check`     |
+| 4.3  | 문서(NOTES 영어 UI 예외, PRODUCT_SPEC)                                                         |                                                             | `qa`                     |
+
+---
+
+## 전체 일정·배포 요약
+
+| Phase | 추정  | 배포 단위                      | 선행                    |
+| ----- | ----- | ------------------------------ | ----------------------- |
+| 1     | 3~4h  | 단독                           | —                       |
+| 2     | 3~4일 | 2.1~2.4 각각 / 2.5~2.8 한 번에 | Phase 1                 |
+| 3     | 5~7일 | 3.1~3.2 / 3.3~3.4 / 3.5        | Phase 2(코드 충돌 회피) |
+| 4     | 1일   | 단독                           | Phase 3                 |

@@ -195,6 +195,8 @@ function resolvePlayback(url, kind, strategy = PUBLISHER_STRATEGY) {
   if (kind === "game") return { type: "game", url: str };
   const parsed = parseVideoSource(str, { publisher: strategy });
   if (!parsed) return null;
+  // A game URL in a video (weekday) slot: same as the toolbar game slot.
+  if (parsed.kind === "game") return { type: "game", url: parsed.url };
   if (parsed.kind === "youtube") return { type: "youtube", id: parsed.id };
   if (parsed.kind === "vimeo") {
     if (parsed.id != null) return { type: "vimeo", id: parsed.id };
@@ -593,15 +595,29 @@ function listItem(level, slot, text) {
   button.type = "button";
   button.className = "play-item";
   button.dataset.slot = slot;
-  button.setAttribute(
-    "aria-label",
-    slotTitle(level, slot, playState.row && playState.row.labels),
-  );
+  const title = slotTitle(level, slot, playState.row && playState.row.labels);
   const label = document.createElement("span");
   label.className = "play-item-label";
   label.textContent = text;
   button.append(label);
-  if (!resolvePlayback(slotUrl(playState.row, slot), slotKind(level, slot))) {
+  const playback = resolvePlayback(
+    slotUrl(playState.row, slot),
+    slotKind(level, slot),
+  );
+  if (playback && playback.type === "game") {
+    // Games (toolbar slot or a weekday game URL) carry the same mark as the
+    // "Let's play!" card, so the child knows which buttons are games.
+    button.classList.add("is-game");
+    button.setAttribute("aria-label", `${title} · Game`);
+    const mark = document.createElement("span");
+    mark.className = "play-game-mark";
+    mark.setAttribute("aria-hidden", "true");
+    mark.textContent = CARDS.game.emoji;
+    button.append(mark);
+  } else {
+    button.setAttribute("aria-label", title);
+  }
+  if (!playback) {
     // Still tappable — it shows the Coming soon card.
     button.classList.add("is-empty");
     const soon = document.createElement("span");

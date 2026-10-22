@@ -73,6 +73,87 @@ test("video-source.js loads before app.js without redeclaration", async ({
   expect(pageErrors).toEqual([]);
 });
 
+test("isGameUrl / parseVideoSource: game hosts become kind game", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#homeTitle")).toBeVisible();
+
+  const result = await page.evaluate(() => {
+    const game = "https://book-english-games.vercel.app/play/the-tractor";
+    const before = {
+      game: isGameUrl(game),
+      www: isGameUrl("https://www.book-english-games.vercel.app/play/x"),
+      query: isGameUrl("https://book-english-games.vercel.app/?game=1"),
+      upper: isGameUrl("HTTPS://BOOK-ENGLISH-GAMES.VERCEL.APP/play/x"),
+      root: isGameUrl("https://book-english-games.vercel.app"),
+      // Only that host and its subdomains — not a look-alike.
+      lookAlike: isGameUrl("https://book-english-games.vercel.app.evil.com/"),
+      other: isGameUrl("https://example.com/play/the-tractor"),
+      publisher: isGameUrl("https://tps-education.com/58?video=173725167"),
+      notUrl: isGameUrl("the-tractor"),
+      empty: isGameUrl(""),
+      extraBefore: isGameUrl("https://games.example.org/x"),
+      parsedGame: parseVideoSource(game),
+      // Existing kinds are untouched.
+      parsedPage: parseVideoSource(
+        "https://tps-education.com/58?video=173725167",
+      ),
+      parsedDirect: parseVideoSource(
+        "https://tps-education.com/58?video=173725167",
+        { publisher: "direct" },
+      ),
+      parsedYoutube: parseVideoSource("https://youtu.be/LPl2AR2rm0g"),
+      parsedVimeo: parseVideoSource("https://vimeo.com/76979871"),
+      parsedId: parseVideoSource("76979871"),
+      hosts: GAME_HOSTS.slice(),
+    };
+    // Extra hosts (site_settings.game_hosts) merge with the constant.
+    setExtraGameHosts(["games.example.org", " BAD HOST ", 42, ""]);
+    const extra = {
+      extraAfter: isGameUrl("https://games.example.org/x"),
+      extraParsed: parseVideoSource("https://games.example.org/x").kind,
+      stillGame: isGameUrl(game),
+      hostsUnchanged: GAME_HOSTS.slice(),
+    };
+    setExtraGameHosts(null);
+    const reset = { extraReset: isGameUrl("https://games.example.org/x") };
+    return { ...before, ...extra, ...reset };
+  });
+
+  expect(result).toEqual({
+    game: true,
+    www: true,
+    query: true,
+    upper: true,
+    root: true,
+    lookAlike: false,
+    other: false,
+    publisher: false,
+    notUrl: false,
+    empty: false,
+    extraBefore: false,
+    parsedGame: {
+      kind: "game",
+      url: "https://book-english-games.vercel.app/play/the-tractor",
+    },
+    parsedPage: {
+      kind: "page",
+      url: "https://tps-education.com/58?video=173725167",
+    },
+    parsedDirect: { kind: "vimeo", id: 173725167 },
+    parsedYoutube: { kind: "youtube", id: "LPl2AR2rm0g" },
+    parsedVimeo: { kind: "vimeo", url: "https://vimeo.com/76979871" },
+    parsedId: { kind: "vimeo", id: 76979871 },
+    hosts: ["book-english-games.vercel.app"],
+    extraAfter: true,
+    extraParsed: "game",
+    stillGame: true,
+    hostsUnchanged: ["book-english-games.vercel.app"],
+    extraReset: false,
+  });
+});
+
 test("parseVideoSource: publisher option turns a TPS page into its Vimeo id", async ({
   page,
 }) => {
@@ -133,6 +214,8 @@ const MARCH_ROW = {
     "w1-Mon": PUBLISHER_58,
     "w1-Tue": "https://youtu.be/LPl2AR2rm0g",
     "w1-Wed": PUBLISHER_58,
+    // A game URL in a weekday slot (R1): behaves like the toolbar game slot.
+    "w1-Thu": GAME_URL,
     "w2-Mon": "https://tps-education.com/58?video=173725165",
     "w2-Tue": "  ",
     "w3-Mon": "https://tps-education.com/58?video=173725170",
@@ -307,6 +390,35 @@ test("play: game slot navigates on tap", async ({ page }) => {
   expect(page.url()).toBe(GAME_URL);
 });
 
+test("play: weekday game URL offers the game like the toolbar slot", async ({
+  page,
+}) => {
+  await mockContent(page);
+  await page.goto("/play.html?l=b&m=3&s=w1-thu");
+  await expect(page.locator("#playTitle")).toHaveText(
+    "Week 1 · Thu · Sentence Chant",
+  );
+  await expect(page.locator("#playGame")).toHaveText("Let's play!");
+  await expect(page.locator("#playStart")).toBeHidden();
+  await expect(page.locator("#playFrame iframe")).toHaveCount(0);
+
+  // The month list marks game slots (toolbar and weekday) the same way.
+  const thu = page.locator('.play-item[data-slot="w1-Thu"]');
+  const game = page.locator('.play-item[data-slot="game"]');
+  const mon = page.locator('.play-item[data-slot="w1-Mon"]');
+  await expect(thu).toHaveClass(/is-game/);
+  await expect(game).toHaveClass(/is-game/);
+  await expect(mon).not.toHaveClass(/is-game/);
+  await expect(thu.locator(".play-game-mark")).toHaveCount(1);
+  await expect(game.locator(".play-game-mark")).toHaveCount(1);
+  await expect(mon.locator(".play-game-mark")).toHaveCount(0);
+  await expect(thu).not.toHaveClass(/is-empty/);
+
+  await page.locator("#playGame").click();
+  await page.waitForURL(GAME_URL);
+  expect(page.url()).toBe(GAME_URL);
+});
+
 test("play: resolvePlayback strategies", async ({ page }) => {
   await mockContent(page);
   await page.goto("/play.html?l=b&m=3&s=w1-mon");
@@ -320,6 +432,9 @@ test("play: resolvePlayback strategies", async ({ page }) => {
         youtube: resolve("https://youtu.be/LPl2AR2rm0g", "video", "page"),
         vimeoId: resolve("12345", "video", "page"),
         game: resolve(game, "game", "page"),
+        // A game URL stored in a VIDEO slot (weekday) is still a game.
+        weekdayGame: resolve(game, "video", "page"),
+        weekdayGameDirect: resolve(game, "video", "direct"),
         empty: resolve("", "video", "page"),
         blank: resolve("   ", "video", "page"),
       };
@@ -333,6 +448,8 @@ test("play: resolvePlayback strategies", async ({ page }) => {
     youtube: { type: "youtube", id: "LPl2AR2rm0g" },
     vimeoId: { type: "vimeo", id: 12345 },
     game: { type: "game", url: GAME_URL },
+    weekdayGame: { type: "game", url: GAME_URL },
+    weekdayGameDirect: { type: "game", url: GAME_URL },
     empty: null,
     blank: null,
   });

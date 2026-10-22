@@ -25,9 +25,21 @@ Full history, old session logs and design-change log → `docs/PROJECT_MEMORY-ar
   Fullscreen API, tap layer stays while paused — pushed (`acc4af7`), iPhone C8 passed (`2026-10-21`).
   Test project `vimeo-domain-test` + `qrtest` domain deleted (`2026-10-21`).
   **Remaining:** TPS uploads its songs to its own Vimeo and the DB URLs are swapped
-  (`vimeo.com/<id>`); TPS talks (A/B, game QR, printing); register 240 Naver QR codes with
-  `qr/beginner-qr-list.csv` (`play.tps-education.com`). Docs:
+  (`vimeo.com/<id>`); TPS talks (A/B, game QR, printing). **Naver QR registration is on hold** — the
+  QR unit changes to one per book (70 codes, see the TPS requests item). Docs:
   `docs/superpowers/specs|plans/2026-10-19-qr-student-play-page-*`.
+- **TPS requests (10/20 meeting), 5 items — stage 1 design review done** (`2026-10-22`, no code
+  change, not committed). R1 weekday game URLs, R2 one QR per book (70), R3 student page = 페이지2,
+  R4 teacher-resources header button, R5 LMS (HQ → branch → teacher → student). Review + plan:
+  `docs/superpowers/specs/2026-10-22-tps-requests-review.md` (errata, recommendations, 7 open
+  questions in §6 — **all 7 answered by the PM `2026-10-22`, recorded there**: level tokens stay
+  `b/l1-l3`, 4-button student toolbar, brand-only header, old grade 3 "blocked" meaning dropped,
+  role buttons Admin / My Branch / My Class, branch auto-detected at login, cover download approved),
+  `docs/superpowers/plans/2026-10-22-tps-requests-plan.md` (Phase 1 R1 → 2 student page/QR → 3 LMS
+  → 4 header). **Phase 1 (R1) done locally `2026-10-22`, not committed:** a game URL
+  (`GAME_HOSTS` = `book-english-games.vercel.app`, + optional `site_settings.game_hosts` on the
+  teacher site) in any weekday slot opens the game modal / "Let's play!" like the toolbar Game
+  button. Gotchas: `NOTES.md` "요일 슬롯 게임 URL".
 - **Home hero cast** — stage 1 (CSS 3D character cycle) **rejected by PM on real devices**
   (`2026-10-21`: monotonous enter/leave loop, blurred back lane looked low-res). Not deployed; kept
   only on the local branch `hero-cast-v1` (`1e7f059`, `dc27a21` — not on origin). Stage 2 will be

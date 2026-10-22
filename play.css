@@ -474,6 +474,14 @@ button {
   text-transform: uppercase;
 }
 
+/* A game (toolbar slot or weekday game URL): the Let's play! emoji under
+   the label, same meaning as the game card. */
+.play-game-mark {
+  margin-top: 1px;
+  font-size: 13px;
+  line-height: 1;
+}
+
 /* What is on the player right now: thick ring + play mark. */
 .play-item[aria-current="true"] {
   opacity: 1;

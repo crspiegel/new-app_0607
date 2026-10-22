@@ -8,8 +8,9 @@
 
 /* exported months, lessonTypes, weekdays, levelLabel, toolbarButtons,
    allSlotKeys, qrLevelCode, levelFromQrCode, monthNumber, monthFromNumber,
-   slotToQr, slotFromQr, slotTitle, qrPath, YT_ID_RE, parseVideoSource,
-   publisherVimeoId, disableYouTubeCaptions */
+   slotToQr, slotFromQr, slotTitle, qrPath, YT_ID_RE, GAME_HOSTS, isGameUrl,
+   setExtraGameHosts, parseVideoSource, publisherVimeoId,
+   disableYouTubeCaptions */
 
 const months = [
   "March",
@@ -194,6 +195,41 @@ function qrPath(level, month, slot) {
   return `/q/${qrLevelCode(level)}/${monthNumber(month)}/${slotToQr(slot)}`;
 }
 
+/* ---- Game hosts ------------------------------------------------------------
+   A URL on one of these hosts (or a subdomain) is a GAME, whatever slot it
+   sits in: a weekday button then behaves like the toolbar Game button (game
+   modal on the teacher site, same-tab navigation on the student page) instead
+   of framing the page in the video window. Every other non-Vimeo http(s) host
+   is still a video page (kind "page", e.g. the TPS publisher pages). The admin
+   never picks a type — the host decides — so the stored value stays a plain
+   URL string. Add a host here when a new game provider appears; the teacher
+   site also merges site_settings.game_hosts (setExtraGameHosts). */
+const GAME_HOSTS = ["book-english-games.vercel.app"];
+let extraGameHosts = [];
+
+// Replace the merged-in hosts (site_settings.game_hosts). Anything that is
+// not a plain hostname string is dropped; null/undefined clears the list.
+function setExtraGameHosts(hosts) {
+  extraGameHosts = (Array.isArray(hosts) ? hosts : [])
+    .filter((host) => typeof host === "string")
+    .map((host) => host.trim().toLowerCase())
+    .filter((host) => /^[a-z0-9.-]+$/.test(host));
+}
+
+function isGameUrl(str) {
+  let url;
+  try {
+    url = new URL(String(str || "").trim());
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return false;
+  const host = url.hostname.toLowerCase();
+  return GAME_HOSTS.concat(extraGameHosts).some(
+    (game) => host === game || host.endsWith(`.${game}`),
+  );
+}
+
 /* ---- Video URL parsing ---------------------------------------------------*/
 
 // Matches the 11-char video id in any common YouTube URL shape
@@ -203,7 +239,8 @@ const YT_ID_RE =
 
 // Classify a stored video value. Returns null for an empty slot (no sample
 // fallback — empty means "not ready yet", handled in openSlot). YouTube URLs
-// resolve to { kind: "youtube", id }; a web page on any other host resolves to
+// resolve to { kind: "youtube", id }; a game host (GAME_HOSTS) to
+// { kind: "game", url }; a web page on any other host resolves to
 // { kind: "page", url }; everything else stays Vimeo (a numeric id or a full
 // Vimeo URL).
 // `publisher: "direct"` (student page on a tps-education.com host only) turns
@@ -216,6 +253,7 @@ function parseVideoSource(source, { publisher } = {}) {
   const yt = str.match(YT_ID_RE);
   if (yt) return { kind: "youtube", id: yt[1] };
   if (/^\d+$/.test(str)) return { kind: "vimeo", id: Number(str) };
+  if (isGameUrl(str)) return { kind: "game", url: str };
   if (publisher === "direct") {
     const id = publisherVimeoId(str);
     if (id != null) return { kind: "vimeo", id };

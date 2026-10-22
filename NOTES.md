@@ -858,6 +858,23 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   - 편집기 셸은 이제 두 부모(레이어/프레임)에 나뉘어 붙으므로 **NodeList 인덱스로 셸을 찾으면
     안 된다** — `shell.dataset.bgIndex` + `bgShellAt(index)`를 쓸 것.
 
+## 요일 슬롯 게임 URL (`2026-10-22`, R1)
+
+- **비-Vimeo http(s) 호스트는 기본이 `kind:"page"`(출판사 페이지 iframe)이고, 게임은 `GAME_HOSTS`에 있는
+  호스트만 `kind:"game"`이다**(`video-source.js isGameUrl`, YouTube 판정 다음·page 판정 앞). 관리자는 유형을
+  고르지 않는다 — 호스트가 정한다 — 그래서 DB 값은 그대로 문자열이다. 새 게임 제공처가 생기면 상수에 추가하거나
+  `site_settings.game_hosts`(`["host", …]`, 관리자 UI 없음 — SQL Editor)에 넣는다. 선생님 사이트는
+  `getSignupVisible()`이 `signup_visible`과 `game_hosts`를 **한 요청**(`.in("key", …)`)으로 읽어
+  `setExtraGameHosts`로 병합한다. **학생 페이지는 설정을 읽지 않으므로(REST 1회 원칙) 상수만 쓴다** — 설정으로만
+  추가한 호스트는 학생 페이지에서 iframe(영상 창)으로 열린다. 둘 다 필요하면 상수에 넣고 배포.
+- 선생님 사이트: `openSlot`이 등급 게이트 → 빈 슬롯 → **게임이면 `openGameModal`**(툴바 Game과 같은 모달) 순서.
+  `openVideoPlayer`는 `game`을 받으면 `page`처럼 iframe으로 열어 Vimeo 오류를 피한다(도달하지 않는 방어 코드).
+- 학생 페이지: `resolvePlayback`이 `kind:"game"`을 `type:"game"`으로 — 슬롯 종류(`slotKind`)와 무관. 목록 버튼은
+  `.is-game` + `.play-game-mark`(🎮, 카드 이모지 재사용), aria-label 끝에 "· Game".
+- 테스트: `smoke` "weekday slot with a game URL…", "grade 3 sees the no-access…", "site_settings.game_hosts merges…"
+  (이 하나만 `site_settings` 요청을 스텁 — 기존 "REST 스텁 금지"는 타이밍 민감 스펙 얘기라 괜찮다), `play` "isGameUrl /
+  parseVideoSource…", "weekday game URL offers the game…".
+
 ## QR 학생 페이지 (`play.html`, `2026-10-19`)
 
 설계 `docs/superpowers/specs/2026-10-19-qr-student-play-page-design.md`. 도서 QR(네이버 QR) →

@@ -850,6 +850,13 @@ function openSlot(slot, label) {
     showComingSoon();
     return;
   }
+  // A game URL (GAME_HOSTS) in a weekday slot behaves exactly like the
+  // toolbar Game button: the game modal, never the video window.
+  const parsed = parseVideoSource(url);
+  if (parsed && parsed.kind === "game") {
+    openGameModal(parsed.url);
+    return;
+  }
   openVideoPlayer(label, url);
 }
 
@@ -1031,7 +1038,9 @@ function openVideoPlayer(label, source) {
   if (!parsed) return; // empty is handled by openSlot, but stay safe
   if (parsed.kind === "youtube") {
     mountYouTube(parsed.id);
-  } else if (parsed.kind === "page") {
+  } else if (parsed.kind === "page" || parsed.kind === "game") {
+    // "game" never reaches here from openSlot (it opens the game modal);
+    // a direct caller still gets the page framed rather than a Vimeo error.
     mountExternalPage(parsed.url);
   } else {
     mountVimeo(parsed);
@@ -2275,16 +2284,21 @@ if (memberEditSave) {
 
 /* ---- Signup visibility (placeholder) ---------------------------------- */
 
-// Read the public site_settings flag.
+// Read the public site_settings flags in ONE request: the signup toggle and
+// the optional extra game hosts (`game_hosts`: ["host", ...]), which merge
+// into GAME_HOSTS (video-source.js) so a new game provider can be enabled
+// without a deploy. No admin UI for game_hosts yet — set it in the SQL Editor.
+const GAME_HOSTS_KEY = "game_hosts";
 async function getSignupVisible() {
   if (!sb) return false;
   const { data, error } = await sb
     .from("site_settings")
-    .select("value")
-    .eq("key", "signup_visible")
-    .maybeSingle();
+    .select("key,value")
+    .in("key", ["signup_visible", GAME_HOSTS_KEY]);
   if (error || !data) return false;
-  return data.value === true;
+  const byKey = Object.fromEntries(data.map((row) => [row.key, row.value]));
+  setExtraGameHosts(byKey[GAME_HOSTS_KEY]);
+  return byKey.signup_visible === true;
 }
 
 // Sync both the login-page entry point and the admin toggle to the flag.
@@ -2455,7 +2469,7 @@ function openSlotEditor(slot) {
   if (label)
     label.textContent = isGame
       ? "게임 URL (사용자 화면에서 모달창으로 열림)"
-      : "영상 URL (Vimeo 또는 YouTube)";
+      : "영상 URL (Vimeo 또는 YouTube) 또는 게임 URL";
   if (adminSlotInput)
     adminSlotInput.placeholder = isGame
       ? "https://... (게임 페이지 주소)"

@@ -1307,9 +1307,112 @@ test("slot video classifier sends non-Vimeo pages to the page viewer", async ({
       "https://player.vimeo.com/video/76979871",
       "76979871",
       "https://tps-education.com/58?video=173725167",
+      // A game host is its own kind: the weekday button opens the game
+      // modal, never the video window.
+      "https://book-english-games.vercel.app/play/the-tractor",
     ].map((value) => window.craVideo.parseVideoSource(value).kind),
   );
-  expect(kinds).toEqual(["youtube", "vimeo", "vimeo", "vimeo", "page"]);
+  expect(kinds).toEqual(["youtube", "vimeo", "vimeo", "vimeo", "page", "game"]);
+});
+
+test("weekday slot with a game URL opens the game modal, not the video window", async ({
+  page,
+}) => {
+  // Same host as the toolbar Game button; stubbed so the suite never loads
+  // the real game. The video modal must stay shut for the game slot, and a
+  // video slot next to it must still open the video window.
+  const gameUrl = "https://book-english-games.vercel.app/play/the-tractor";
+  await page.route(/^https:\/\/book-english-games\.vercel\.app\//, (route) =>
+    route.fulfill({ contentType: "text/html", body: "<p>game</p>" }),
+  );
+  await page.goto("/#content/Level%201/March");
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  await resetContentLabels(page);
+  await page.evaluate((url) => {
+    const { contentCache, pageKey } = window.craContent;
+    contentCache[pageKey("Level 1", "March")] = {
+      videos: { "w1-Mon": url, "w1-Tue": "https://youtu.be/LPl2AR2rm0g" },
+      covers: {},
+      labels: {},
+    };
+  }, gameUrl);
+
+  await page.locator('#lessonGrid .lesson-button[data-slot="w1-Mon"]').click();
+  await expect(page.locator("#gameModal")).toBeVisible();
+  await expect(page.locator("#gameFrame")).toHaveAttribute("src", gameUrl);
+  await expect(page.locator("#videoModal")).toBeHidden();
+  await expect(page.locator("#vpFrame iframe")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#gameModal")).toBeHidden();
+
+  await page.locator('#lessonGrid .lesson-button[data-slot="w1-Tue"]').click();
+  await expect(page.locator("#videoModal")).toBeVisible();
+  await expect(page.locator("#gameModal")).toBeHidden();
+  await expect(page.locator("#vpTitle")).toHaveText("Story · Week 1 · Tue");
+  await page.locator("#videoModal .vp-close").click();
+  await expect(page.locator("#videoModal")).toBeHidden();
+});
+
+test("site_settings.game_hosts merges into the game hosts in one settings read", async ({
+  page,
+}) => {
+  // The signup flag and game_hosts arrive in the SAME request (no extra REST
+  // call at boot — the student page gets no settings read at all, so it uses
+  // GAME_HOSTS alone). Only this one settings request is stubbed, with a
+  // deliberately dirty list: junk entries must be ignored.
+  const settings = [];
+  await page.route(/\/rest\/v1\/site_settings\?[^ ]*game_hosts/, (route) => {
+    settings.push(route.request().url());
+    return route.fulfill({
+      json: [
+        { key: "signup_visible", value: false },
+        { key: "game_hosts", value: ["games.example.org", 7, " Bad host "] },
+      ],
+    });
+  });
+  await page.goto("/");
+  await expect(page.locator("#homeTitle")).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => isGameUrl("https://games.example.org/x")))
+    .toBe(true);
+  expect(settings).toHaveLength(1);
+  expect(settings[0]).toContain("signup_visible");
+  const kinds = await page.evaluate(() => ({
+    extra: parseVideoSource("https://www.games.example.org/play/1").kind,
+    builtIn: parseVideoSource("https://book-english-games.vercel.app/p").kind,
+    bad: isGameUrl("https://bad host/"),
+    page: parseVideoSource("https://tps-education.com/58?video=1").kind,
+  }));
+  expect(kinds).toEqual({
+    extra: "game",
+    builtIn: "game",
+    bad: false,
+    page: "page",
+  });
+});
+
+test("grade 3 sees the no-access popup before a weekday game", async ({
+  page,
+}) => {
+  const gameUrl = "https://book-english-games.vercel.app/play/the-tractor";
+  await page.addInitScript(() => {
+    localStorage.setItem("cra_member", JSON.stringify({ id: "kid", grade: 3 }));
+  });
+  await page.goto("/#content/Level%201/March");
+  await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
+  await resetContentLabels(page);
+  await page.evaluate((url) => {
+    const { contentCache, pageKey } = window.craContent;
+    contentCache[pageKey("Level 1", "March")] = {
+      videos: { "w1-Mon": url },
+      covers: {},
+      labels: {},
+    };
+  }, gameUrl);
+  await page.locator('#lessonGrid .lesson-button[data-slot="w1-Mon"]').click();
+  await expect(page.locator("#noAccessModal")).toBeVisible();
+  await expect(page.locator("#gameModal")).toBeHidden();
+  await expect(page.locator("#videoModal")).toBeHidden();
 });
 
 test("external video page opens inside the video window", async ({ page }) => {
