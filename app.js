@@ -2327,7 +2327,12 @@ function adminCoverCard(book) {
   hint.textContent = url
     ? "끌어다 놓거나 클릭해 교체"
     : "이미지를 끌어다 놓거나 클릭";
-  card.append(label, hint);
+  // The student QR page shows a committed copy of this cover, not Storage
+  // (decision D4): after a change, run the sync script and deploy.
+  const sync = document.createElement("span");
+  sync.className = "admin-cover-sync";
+  sync.textContent = "학생 QR 페이지 반영: npm run covers:sync 후 배포";
+  card.append(label, hint, sync);
   wireCoverCard(card, book);
   return card;
 }

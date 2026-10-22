@@ -48,13 +48,13 @@ test("qr list: 70 book rows for Naver QR", async ({}, testInfo) => {
   expect(names[11]).toBe("L1-03-2");
 
   expect(rows[0]).toBe(
-    "B-03-1,Beginner,3,1,Beginner Book 1,https://play.tps-education.com/q/b/3/1,assets/covers/level-1/march/book-1.webp,0/24",
+    "B-03-1,Beginner,3,1,Beginner Book 1,https://play.tps-education.com/q/b/3/1,assets/covers/level-1/march/book-1.jpg,0/24",
   );
   expect(rows[11]).toBe(
-    "L1-03-2,Level 1,3,2,Level 1 Book 2,https://play.tps-education.com/q/l1/3/2,assets/covers/level-2/march/book-2.webp,0/14",
+    "L1-03-2,Level 1,3,2,Level 1 Book 2,https://play.tps-education.com/q/l1/3/2,assets/covers/level-2/march/book-2.jpg,0/14",
   );
   expect(rows[69]).toBe(
-    "L3-12-2,Level 3,12,2,Level 3 Book 2,https://play.tps-education.com/q/l3/12/2,assets/covers/level-4/december/book-2.webp,0/14",
+    "L3-12-2,Level 3,12,2,Level 3 Book 2,https://play.tps-education.com/q/l3/12/2,assets/covers/level-4/december/book-2.jpg,0/14",
   );
 });
 

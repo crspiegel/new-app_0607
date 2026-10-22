@@ -213,7 +213,7 @@ function bookTitle(level, book, labels) {
    assets/covers/<level-slug>/<month-slug>/book-<n>.<COVER_EXT>, mirroring the
    Storage path (scripts/sync-covers.mjs copies them). The slug is app.js
    slugify(): lower case, runs of non [a-z0-9] → "-". */
-const COVER_EXT = "webp";
+const COVER_EXT = "jpg";
 
 function coverAssetPath(level, month, book) {
   const entry = bookEntry(level, book);

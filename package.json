@@ -11,7 +11,8 @@
     "check": "npm run check:assets && npm run lint && npm run format:check",
     "test:e2e": "node scripts/run-playwright.mjs",
     "qa": "npm run check && npm run test:e2e",
-    "qr:list": "node scripts/make-qr-list.mjs"
+    "qr:list": "node scripts/make-qr-list.mjs",
+    "covers:sync": "node scripts/sync-covers.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.45.0",
