@@ -900,6 +900,9 @@ level, book, slot)`)에서만.
   관리자가 표지를 바꾸면 선생님 사이트는 즉시(Storage), 학생 페이지는 `npm run covers:sync -- --only "Level 3"` → 커밋 →
   푸시 후 반영(관리자 표지 카드 밑 힌트). `--dry-run`은 REST 1회 + HEAD 70회(용량·타입만). `tests/covers.spec.js`가 70개
   존재·소문자·크기를 고정한다. `check-assets-case`는 리터럴 경로만 보므로 동적 경로는 이 테스트가 대신한다.
+- ⚠ **`scripts/check-assets-case.mjs`는 주석 속 `assets/…` 문자열도 잡는다**(정규식이 리터럴만 봄). `play.js` 주석의
+  `assets/covers/<level>…`가 `assets/covers/`(끝 슬래시)로 매칭돼 `qa`가 한 번 실패했다. 주석에는 `coverAssetPath`처럼 함수 이름으로
+  적을 것. 동적 경로(표지 70개)는 `tests/covers.spec.js`가 대신 검사한다.
 - **1세대의 🎮 목록 표시(`.play-game-mark`)는 목록과 함께 사라졌다**(보드는 선생님과 동일해야 하므로). 게임 슬롯은 탭하면
   "Let's play!" 카드. `tests/board-visual.spec.js`에 학생 페이지 4장(Beginner·Level 1 교재2 × 2 뷰포트) 기준선이 있다.
 
