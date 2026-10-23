@@ -262,6 +262,9 @@ REST 1, 다른 교재·월·레벨로 가는 UI 없음, 페이지2·홈·월그�
       `storage`, Supabase 기본 권한) → 구 스키마 + 구 회원 4명 → precheck → migration **2회**(member_id 불변) →
       D13 매핑 → `verify-3a.sql` 전 행 pass → 흔적 0 → 관리자 직접 쓰기(인덱스 식 권한) → 구·신 로그인.
 - [x] **Step 3:** 블록 작성 → PASS. verify 93행 중 92 pass, 1 skip(로컬에 관리자 행 없음 → 운영에서 실행).
+- [x] **Step 3b:** 독립 보안 검토(읽기 전용 에이전트) 반영 — 구 `verify_member_login` 잠금 공유·본사 한정, 아이디별
+      직렬화, 공유 아이디 카운터 규칙, IPv6 /64, 비밀번호 변경 시 세션 삭제, 깨진 해시. 검증 케이스 먼저 추가(5건 FAIL
+      확인, 수정 전 SQL에서는 깨진 해시가 검증 전체를 멈춤) → 수정 → 115행 중 114 pass, 1 skip, 흔적 0. 스펙 §4.9.
 - [ ] **Step 4 (사용자):** `00-precheck.sql` 실행 → 표를 워커에게. 기대: pgcrypto `extensions`, normalize `true`,
       회원 1명(grade 3), 충돌 `0`. 다르면 멈춤.
 - [ ] **Step 5 (사용자):** `migration.sql` 전체 실행 → `Success. No rows returned`.

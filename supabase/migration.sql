@@ -126,6 +126,8 @@ create policy site_settings_write on public.site_settings
 -- ---------------------------------------------------------------------------
 
 -- Verify a member login. Returns the grade (1-3) on success, NULL otherwise.
+-- Phase 3A: REDEFINED in the "LMS (Phase 3A)" block below (hq accounts only,
+-- shares the lms_login throttle). This first definition is replaced there.
 -- SECURITY DEFINER → the hash is compared server-side and never returned.
 create or replace function public.verify_member_login(p_id text, p_password text)
 returns smallint
@@ -360,7 +362,8 @@ create unique index if not exists members_member_id_key
 
 -- Old-RPC compatibility: rows written by the old admin member tab
 -- (create_member / update_member) get hq + a role (D13 mapping) + a password
--- timestamp. A grade change from the old tab is mirrored into role.
+-- timestamp. A grade change from the old tab is mirrored into role. A new
+-- password also ends every session of that member (a stolen token dies).
 create or replace function public.lms_members_compat()
 returns trigger
 language plpgsql
@@ -381,6 +384,7 @@ begin
     end if;
     if new.password_hash is distinct from old.password_hash then
       new.password_changed_at := now();
+      delete from public.lms_sessions s where s.member_id = old.member_id;
     end if;
   end if;
   return new;
@@ -483,15 +487,33 @@ $$;
 -- cf-connecting-ip (set by Cloudflare in front of Supabase); NULL → the IP
 -- limit is skipped and only the per-ID limit applies. Patch only this
 -- function after the header probe (lms_probe_headers).
+-- The value must parse as an address (else NULL). IPv6 is keyed by its /64:
+-- one client owns a whole /64 and could otherwise rotate past the limit.
 create or replace function public.lms_client_ip()
 returns text
-language sql
+language plpgsql
 stable
 set search_path = ''
 as $$
-  select nullif(left(btrim(
+declare
+  v text := nullif(btrim(
     coalesce(nullif(current_setting('request.headers', true), ''), '{}')::json
-      ->> 'cf-connecting-ip'), 64), '');
+      ->> 'cf-connecting-ip'), '');
+  a inet;
+begin
+  if v is null or length(v) > 64 then
+    return null;
+  end if;
+  begin
+    a := v::inet;
+  exception when others then
+    return null;
+  end;
+  if family(a) = 6 then
+    return network(set_masklen(a, 64))::text;
+  end if;
+  return host(a);
+end;
 $$;
 
 -- Count one failed login for a key; lock it for 10 minutes once `p_limit`
@@ -518,6 +540,30 @@ begin
   update public.login_attempts
      set locked_until = now() + interval '10 minutes'
    where key = p_key and fails >= p_limit;
+end;
+$$;
+
+-- Lock check shared by lms_login and the old verify_member_login. Takes a
+-- per-ID transaction lock first, so parallel guesses at one ID run one after
+-- another and each sees the failures before it (no burst past the limit).
+-- Returns the seconds left on the longer lock (ID or IP), or NULL.
+create or replace function public.lms_throttle_wait(p_id_key text, p_ip_key text)
+returns int
+language plpgsql
+volatile
+security definer
+set search_path = public
+as $$
+declare
+  v_wait int;
+begin
+  perform pg_advisory_xact_lock(7301, hashtext(p_id_key));
+  select ceil(extract(epoch from max(a.locked_until) - now()))::int
+    into v_wait
+    from public.login_attempts a
+   where a.key in (p_id_key, p_ip_key)
+     and a.locked_until > now();
+  return case when v_wait is null then null else greatest(v_wait, 1) end;
 end;
 $$;
 
@@ -601,6 +647,8 @@ declare
   v_ip_key text;
   v_wait   int;
   v_seen   int := 0;
+  v_all    int;
+  v_ok     boolean;
   v_hits   jsonb := '[]'::jsonb;
   v_hit    jsonb;
   v_token  text;
@@ -616,13 +664,9 @@ begin
   v_ip_key := case when v_ip is null then null else 'ip:' || v_ip end;
 
   -- Locked → answer without comparing the password.
-  select ceil(extract(epoch from max(a.locked_until) - now()))::int
-    into v_wait
-    from public.login_attempts a
-   where a.key in (v_id_key, v_ip_key)
-     and a.locked_until > now();
+  v_wait := public.lms_throttle_wait(v_id_key, v_ip_key);
   if v_wait is not null then
-    return jsonb_build_object('status', 'locked', 'retry_after_sec', greatest(v_wait, 1));
+    return jsonb_build_object('status', 'locked', 'retry_after_sec', v_wait);
   end if;
 
   -- Every active member of an active branch with this ID, in any branch.
@@ -637,7 +681,12 @@ begin
      order by b.name
   loop
     v_seen := v_seen + 1;
-    if r.password_hash = crypt(v_pw, r.password_hash) then
+    begin
+      v_ok := r.password_hash = crypt(v_pw, r.password_hash);
+    exception when others then
+      v_ok := false;  -- not a bcrypt hash (e.g. typed in by hand) = no match
+    end;
+    if v_ok then
       v_hits := v_hits || jsonb_build_array(jsonb_build_object(
         'member_id', r.member_id, 'role', r.role, 'display_name', r.display_name,
         'branch_id', r.branch_id, 'branch_name', r.branch_name));
@@ -646,6 +695,7 @@ begin
   if v_seen = 0 then
     perform crypt(v_pw, gen_salt('bf'));  -- same cost as a real check (no ID oracle)
   end if;
+  v_all := jsonb_array_length(v_hits);  -- before narrowing to p_branch_id
 
   if p_branch_id is not null then
     select coalesce(jsonb_agg(h), '[]'::jsonb) into v_hits
@@ -659,8 +709,12 @@ begin
     return jsonb_build_object('status', 'invalid');
   end if;
 
-  -- The password was right: clear this ID's failure count.
-  delete from public.login_attempts where key = v_id_key;
+  -- The password was right. Clear this ID's failure count only when it opened
+  -- EVERY account with this ID — else the owner of one same-ID account could
+  -- wipe the failures aimed at another one and guess forever.
+  if v_all = v_seen then
+    delete from public.login_attempts where key = v_id_key;
+  end if;
 
   if jsonb_array_length(v_hits) > 1 then
     return jsonb_build_object('status', 'choose', 'branches',
@@ -735,6 +789,62 @@ set search_path = public, extensions
 as $$
   delete from public.lms_sessions
    where token_hash = public.lms_token_hash(public.lms_header_token());
+$$;
+
+-- The OLD member login, used by the live client until the 3.2 login ships
+-- (removed in SQL 2 / 3.5). Same signature and result (grade or NULL), but:
+-- legacy hq accounts only, the same throttle as lms_login (a locked ID or IP
+-- gets NULL), and a dummy bcrypt for unknown IDs. Before this it was an
+-- unthrottled password check open to anon for every account.
+create or replace function public.verify_member_login(p_id text, p_password text)
+returns smallint
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_norm   text := coalesce(public.lms_norm_id(p_id), '');
+  v_pw     text := coalesce(p_password, '');
+  v_ip     text := public.lms_client_ip();
+  v_id_key text;
+  v_ip_key text;
+  v_hash   text;
+  v_grade  smallint;
+  v_ok     boolean := false;
+begin
+  v_id_key := 'id:' || left(v_norm, 64);
+  v_ip_key := case when v_ip is null then null else 'ip:' || v_ip end;
+  if public.lms_throttle_wait(v_id_key, v_ip_key) is not null then
+    return null;
+  end if;
+
+  select m.password_hash, m.grade into v_hash, v_grade
+    from public.members m
+    join public.branches b on b.id = m.branch_id
+   where m.id = p_id and m.active and b.active and b.code = 'hq';
+  if v_hash is null then
+    perform crypt(v_pw, gen_salt('bf'));
+  else
+    begin
+      v_ok := v_hash = crypt(v_pw, v_hash);
+    exception when others then
+      v_ok := false;
+    end;
+  end if;
+
+  if not v_ok then
+    perform public.lms_note_failure(v_id_key, 5, interval '1 day');
+    perform public.lms_note_failure(v_ip_key, 30, interval '10 minutes');
+    return null;
+  end if;
+  -- same rule as lms_login: clear only when this is the one account with the ID
+  if (select count(*) from public.members m
+       where public.lms_norm_id(m.id) = v_norm and m.active) = 1 then
+    delete from public.login_attempts where key = v_id_key;
+  end if;
+  return v_grade;
+end;
 $$;
 
 -- TEMPORARY (remove in SQL 2 / Phase 3.5): header probe for lms_client_ip().
@@ -827,6 +937,7 @@ revoke execute on function public.lms_header_token() from public, anon, authenti
 revoke execute on function public.lms_token_hash(text) from public, anon, authenticated;
 revoke execute on function public.lms_client_ip() from public, anon, authenticated;
 revoke execute on function public.lms_note_failure(text, int, interval) from public, anon, authenticated;
+revoke execute on function public.lms_throttle_wait(text, text) from public, anon, authenticated;
 revoke execute on function public.lms_members_compat() from public, anon, authenticated;
 
 -- Public RPCs (D7a/D10c) + the temporary probe.
@@ -834,6 +945,7 @@ grant execute on function public.lms_login(text, text, uuid) to anon, authentica
 grant execute on function public.lms_session() to anon, authenticated;
 grant execute on function public.lms_logout() to anon, authenticated;
 grant execute on function public.lms_probe_headers() to anon, authenticated;
+grant execute on function public.verify_member_login(text, text) to anon, authenticated;  -- old client
 -- Called from RLS policies, so the querying role needs EXECUTE. They only ever
 -- describe the caller's own session.
 grant execute on function public.lms_member() to anon, authenticated;

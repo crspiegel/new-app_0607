@@ -228,6 +228,11 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 - 로그인 실패를 예외로 돌려주지 않는다(`lms_login`은 항상 jsonb) — 예외는 실패 카운터 증가까지 롤백한다.
 - ⚠ **`members.id`가 아직 pk(전역 유일)라 3.5 전에는 같은 아이디를 두 지사에 만들 수 없다** — 동명이인 테스트는
   대소문자 변형(`zz-v-twin`/`ZZ-V-TWIN`)으로 한다. 3.3 전에 pk 교체 여부 결정(스펙 §4.9 위험 1).
+- ⚠ **구 `verify_member_login`은 anon이 무제한 호출할 수 있는 비밀번호 확인 창구였다** — 새 잠금을 만들어도 이 길로
+  우회된다. 3A에서 본사 회원만 + 같은 잠금으로 재정의했다. 새 로그인 경로를 만들 때는 **같은 테이블을 읽는 옛 경로도**
+  잠금에 묶을 것.
+- ⚠ pgcrypto `crypt(pw, hash)`는 깨진 bcrypt(`$2a$06$short`)·빈 값·1글자 값이면 `invalid salt` 예외, 아무 2글자 이상
+  문자열은 옛 DES 솔트로 받아들여 예외가 없다 → "평문 해시" 테스트 픽스처는 `$2a$06$short`처럼 써야 예외 경로를 탄다.
 - PGlite: `db.query()`는 한 문장만 → 여러 문장은 `db.exec()`(결과 배열, 마지막 행 있는 결과 = SQL Editor 표).
   `format('%s', boolean)`은 `t`/`f`를 찍는다(`::text`면 `true`/`false`).
 

@@ -29,7 +29,7 @@ Doc map → `CLAUDE.md`, gotchas → `NOTES.md`, session detail → `.claude/WOR
     5.25 MB via `npm run covers:sync`), `qr/qr-list.csv` 70 rows. **iPhone real-device check is the
     user's** (weekday tap → Vimeo full screen, back closes the overlay). Gotchas: `NOTES.md` "학생 QR
     페이지 2세대", "페이지2 보드 공유 파일".
-  - **Phase 3A — LMS SQL done locally, NOT run on the live DB** (`4356e19`, `2026-10-23`):
+  - **Phase 3A — LMS SQL done locally, NOT run on the live DB** (`4356e19` + security-review fixes, `2026-10-23`):
     `migration.sql` "LMS (Phase 3A)" block + `supabase/lms/` (precheck, verify, run order),
     `npm run test:sql`. Decisions → review §4.9, tasks → plan 3.1/3.2. **At stop 1** (PM review) → user
     runs the SQL → 3.2 login client → push only after the SQL. **Next:** 3.3~3.5, then Phase 4 (R4).

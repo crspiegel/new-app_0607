@@ -133,7 +133,8 @@ begin
     ('zz-v-offbr',     extensions.crypt('off2', extensions.gen_salt('bf')), 3, 3, boff, null, true),
     ('Zz-V.Legacy!',   extensions.crypt('longpassword', extensions.gen_salt('bf')), 3, 3, ba, null, true),
     ('zz-v-teacher-b', extensions.crypt('t5678', extensions.gen_salt('bf')), 2, 2, bb, null, true),
-    ('zz-v-lock',      extensions.crypt('lock', extensions.gen_salt('bf')), 3, 3, ba, null, true);
+    ('zz-v-lock',      extensions.crypt('lock', extensions.gen_salt('bf')), 3, 3, ba, null, true),
+    ('zz-v-badhash',   '$2a$06$short', 3, 3, ba, null, true);
 
   select m.member_id into m_teacher  from public.members m where m.id = 'zz-v-teacher';
   select m.member_id into m_teacherb from public.members m where m.id = 'zz-v-teacher-b';
@@ -226,6 +227,14 @@ begin
   j := public.lms_login(null, null); s := pg_temp.lms_v_sum(j);
   res := pg_temp.lms_v(res, 'login', 'NULL ID/password → jsonb, not an exception', 'invalid', s, s = 'invalid');
 
+  s := pg_temp.lms_v_sum(public.lms_login('zz-v-badhash', 'plaintext-not-bcrypt'));
+  reset role;
+  select s || ' fails=' || coalesce(max(x.fails), 0) into a
+    from public.login_attempts x where x.key = 'id:zz-v-badhash';
+  set local role anon;
+  res := pg_temp.lms_v(res, 'login', 'non-bcrypt hash in the row → invalid (no exception), failure counted',
+                       'invalid fails=1', a, a = 'invalid fails=1');
+
   -- ------------------------------------------------- sessions (D10a-c)
   reset role;
   select format('raw=%s hash=%s',
@@ -296,6 +305,17 @@ begin
   res := pg_temp.lms_v(res, 'session', 'lms_probe_headers() echoes IP headers, not the token',
                        'cf=203.0.113.9 token=true', a, a = 'cf=203.0.113.9 token=true');
 
+  reset role;
+  a := '';
+  foreach q in array array['2001:db8:1:2::5', '2001:db8:1:2:aaaa::6', '203.0.113.7', 'not-an-ip'] loop
+    perform set_config('request.headers', json_build_object('cf-connecting-ip', q)::text, true);
+    a := a || coalesce(public.lms_client_ip(), 'NULL') || ' ';
+  end loop;
+  a := rtrim(a);
+  e := '2001:db8:1:2::/64 2001:db8:1:2::/64 203.0.113.7 NULL';
+  res := pg_temp.lms_v(res, 'throttle', 'IP key: IPv6 grouped by /64, unparsable header ignored', e, a, a = e);
+  set local role anon;
+
   -- ------------------------------------------------- RLS reads (anon)
   foreach who in array array['none', 'student', 'teacher', 'branch', 'teacherB'] loop
     perform set_config('request.headers', case who
@@ -313,7 +333,7 @@ begin
         a := 'denied ' || sqlstate;
       end;
       res := pg_temp.lms_v(res, 'rls:' || who, 'select ' || tbl || ' (hidden for every LMS role)',
-                           'rows=0 | denied', a, a = 'rows=0' or a like 'denied%');
+                           'rows=0 | denied 42501', a, a in ('rows=0', 'denied 42501'));
     end loop;
 
     select coalesce(string_agg(c.name, ',' order by c.name), '-') into a from public.classes c;
@@ -351,7 +371,8 @@ begin
     exception when others then
       a := 'denied ' || sqlstate;
     end;
-    res := pg_temp.lms_v(res, 'rls:write', left(q, 60), 'denied | rows=0', a, a = 'rows=0' or a like 'denied%');
+    res := pg_temp.lms_v(res, 'rls:write', left(q, 60), 'denied 42501 | rows=0', a,
+                         a in ('rows=0', 'denied 42501'));
   end loop;
 
   -- ------------------------------------------------- internal functions (anon)
@@ -370,6 +391,44 @@ begin
     end;
     res := pg_temp.lms_v(res, 'grants', 'anon cannot call: ' || q, 'denied 42501', a, a = 'denied 42501');
   end loop;
+
+  -- ------------------------------------------------- signed-in Auth user who is NOT an admin
+  set local role authenticated;
+  perform set_config('request.headers', '{}', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('request.jwt.claims',
+    '{"sub":"00000000-0000-4000-8000-00000000beef","role":"authenticated"}', true);
+  foreach tbl in array array['members', 'lms_sessions', 'login_attempts', 'branches', 'classes', 'class_members'] loop
+    begin
+      execute format('select count(*) from public.%I', tbl) into k;
+      a := 'rows=' || k;
+    exception when others then
+      a := 'denied ' || sqlstate;
+    end;
+    res := pg_temp.lms_v(res, 'rls:non-admin', 'select ' || tbl, 'rows=0', a, a = 'rows=0');
+  end loop;
+  foreach q in array array[
+    format('insert into public.classes (branch_id, name) values (%L, %L)', ba, 'V반X'),
+    format('update public.classes set name = %L where id = %L', 'V반Y', ca1),
+    format('delete from public.class_members where class_id = %L', ca1),
+    format('insert into public.branches (code, name) values (%L, %L)', 'zz-verify-x', '검증지사X'),
+    format('insert into public.members (id, password_hash, grade) values (%L, %L, 3)', 'zz-v-new', 'x'),
+    format('update public.members set grade = 1 where member_id = %L', m_student),
+    format('delete from public.lms_sessions where member_id = %L', m_teacher),
+    format('update public.login_attempts set fails = 0')
+  ] loop
+    begin
+      execute q;
+      get diagnostics k = row_count;
+      a := 'rows=' || k;
+    exception when others then
+      a := 'denied ' || sqlstate;
+    end;
+    res := pg_temp.lms_v(res, 'rls:non-admin', left(q, 60), 'denied 42501 | rows=0', a,
+                         a in ('rows=0', 'denied 42501'));
+  end loop;
+  perform set_config('request.jwt.claims', '', true);
+  set local role anon;
 
   -- ------------------------------------------------- throttle (D7d)
   perform set_config('request.headers', '{}', true);
@@ -429,6 +488,62 @@ begin
   e := 'locked 1..600s | other IP: ok role=2 branch=검증지사A token=43ch | no IP: ok role=2 branch=검증지사A token=43ch';
   res := pg_temp.lms_v(res, 'throttle', '30 failures from one IP lock that IP only', e, a, a = e);
 
+  -- now() is fixed inside one transaction, so age the windows by hand
+  reset role;
+  update public.login_attempts x
+     set window_start = now() - interval '11 minutes', locked_until = now() - interval '1 second'
+   where x.key = 'ip:203.0.113.50';
+  update public.login_attempts x
+     set window_start = now() - interval '25 hours', locked_until = now() - interval '1 second'
+   where x.key = 'id:zz-v-lock';
+  set local role anon;
+  perform set_config('request.headers', '{"cf-connecting-ip":"203.0.113.50"}', true);
+  s := pg_temp.lms_v_sum(public.lms_login('zz-v-nobody-x', 'bad'));
+  perform set_config('request.headers', '{}', true);
+  s := s || ',' || pg_temp.lms_v_sum(public.lms_login('zz-v-lock', 'bad7'));
+  reset role;
+  select s || ' ' || string_agg(format('%s:fails=%s locked=%s', x.key, x.fails,
+                                        (x.locked_until > now())::text), ' ' order by x.key)
+    into a from public.login_attempts x where x.key in ('ip:203.0.113.50', 'id:zz-v-lock');
+  e := 'invalid,invalid id:zz-v-lock:fails=1 locked=false ip:203.0.113.50:fails=1 locked=false';
+  res := pg_temp.lms_v(res, 'throttle', 'an expired window starts counting from 1 again (IP 10 min, ID 1 day)',
+                       e, a, a = e);
+  set local role anon;
+
+  -- same normalized ID in two branches: my own login must not clear the counter of the other account
+  for i in 1..4 loop
+    perform public.lms_login('zz-v-pair', 'guess' || i);
+  end loop;
+  s := pg_temp.lms_v_sum(public.lms_login('ZZ-V-PAIR', 'bbbb'));
+  reset role;
+  select s || ' counter=' || coalesce(max(x.fails), 0) into a
+    from public.login_attempts x where x.key = 'id:zz-v-pair';
+  set local role anon;
+  a := a || ' | ' || pg_temp.lms_v_sum(public.lms_login('zz-v-pair', 'guess5'))
+         || ',' || pg_temp.lms_v_sum(public.lms_login('zz-v-pair', 'aaaa'));
+  e := 'ok role=3 branch=검증지사B token=43ch counter=4 | invalid,locked 1..600s';
+  res := pg_temp.lms_v(res, 'throttle', 'shared ID: a login to the other account does not reset the counter',
+                       e, a, a = e);
+
+  s := pg_temp.lms_v_sum(public.lms_login('zz-v-twin', 'tw1n'));
+  reset role;
+  select s || ' counter=' || count(*) into a from public.login_attempts x where x.key = 'id:zz-v-twin';
+  set local role anon;
+  e := 'choose 검증지사A,검증지사B counter=0';
+  res := pg_temp.lms_v(res, 'throttle', 'shared ID: a password that opens every account does reset it',
+                       e, a, a = e);
+
+  -- ------------------------------------------------- password change ends sessions
+  reset role;
+  update public.members set password_hash = extensions.crypt('t5679', extensions.gen_salt('bf'))
+   where id = 'zz-v-teacher-b';
+  select 'sessions=' || count(*) into a from public.lms_sessions x where x.member_id = m_teacherb;
+  set local role anon;
+  perform set_config('request.headers', json_build_object('x-lms-token', tok_tb)::text, true);
+  select a || ' identity=' || count(*) into a from public.lms_member() m;
+  res := pg_temp.lms_v(res, 'session', 'password change deletes that member''s sessions',
+                       'sessions=0 identity=0', a, a = 'sessions=0 identity=0');
+
   -- ------------------------------------------------- logout
   perform set_config('request.headers', json_build_object('x-lms-token', tok_s)::text, true);
   perform public.lms_logout();
@@ -463,6 +578,19 @@ begin
        || ' lms_login=' || pg_temp.lms_v_sum(public.lms_login('zz-v-old3', 'old3pw'));
   e := 'verify_member_login=3 lms_login=ok role=3 branch=' || hq_name || ' token=43ch';
   res := pg_temp.lms_v(res, 'compat', 'old RPC and new RPC both log the old member in', e, a, a = e);
+
+  a := coalesce(public.verify_member_login('zz-v-teacher', 't1234')::text, 'NULL');
+  res := pg_temp.lms_v(res, 'compat', 'old RPC ignores accounts outside hq (no oracle for new branches)',
+                       'NULL', a, a = 'NULL');
+
+  for i in 1..5 loop
+    perform public.verify_member_login('zz-v-old3', 'bad' || i);
+  end loop;
+  a := 'old=' || coalesce(public.verify_member_login('zz-v-old3', 'old3pw')::text, 'NULL')
+       || ' lms=' || pg_temp.lms_v_sum(public.lms_login('zz-v-old3', 'old3pw'));
+  e := 'old=NULL lms=locked 1..600s';
+  res := pg_temp.lms_v(res, 'compat', 'old RPC counts failures in the same throttle (no free guessing)',
+                       e, a, a = e);
   reset role;
 
   begin
