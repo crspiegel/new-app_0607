@@ -225,20 +225,91 @@ REST 1, 다른 교재·월·레벨로 가는 UI 없음, 페이지2·홈·월그�
 
 ---
 
-## Phase 3 — R5 LMS (상위 단계만, 설계 승인 후 세부화)
+## Phase 3 — R5 LMS (3.1·3.2 세부화 `2026-10-23`, 3.3~3.5는 상위 단계만)
 
 의존: 없음(Phase 2와 독립, 단 같은 `app.js`를 고치므로 Phase 2 뒤에 착수). 추정 5~7일. 배포 가능: 3.2까지는
-기존 로그인이 그대로 동작하므로 중간 배포 가능, 3.5 이후 구 RPC 제거.
+기존 로그인이 그대로 동작하므로 중간 배포 가능, 3.5 이후 구 RPC 제거. **3.1·3.2의 확정 결정은 지시서
+`docs/worker-briefs/2026-10-23-phase3a-brief.md`(로컬) D5a~D15 — 스펙 §4.9에 요약.**
 
-| 단계 | 내용                                                                                                                                                               | 수용 기준                                                    | 검증                                                                   |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| 3.1  | SQL 1차(추가만): `branches`·본사 행, `members` 확장, `classes`·`class_members`·`lms_sessions`·`login_attempts`, `lms_member()`, `lms_login/logout`, 시도 제한, RLS | migration.sql 재실행 idempotent, 기존 로그인 RPC 그대로 동작 | SQL Editor에서 역할 4종 계정으로 RPC·RLS 거부 확인(비밀번호 출력 금지) |
-| 3.2  | 로그인 폼(지사 선택) + 세션 토큰 클라이언트 + `role`로 `updateAdminUI`                                                                                             | 기존 회원 본사로 로그인, 관리자 `@` 경로 무변경, 잠금 메시지 | Playwright REST 픽스처                                                 |
-| 3.3  | 역할별 관리자 메뉴·가드(지사·반·회원 뷰), 동명이인 접미사 제안                                                                                                     | §4.6 표대로 노출, 학생 `#admin` 차단                         | Playwright + RLS 스크립트(승인 후)                                     |
-| 3.4  | 엑셀 업로드(SheetJS, 미리보기, 1트랜잭션 RPC, 결과표), 템플릿 2종 파일                                                                                             | 500행 한도, 전체 롤백, 결과표                                | 픽스처 xlsx 3종(정상·중복·오류)                                        |
-| 3.5  | SQL 2차(구 RPC 제거, pk 교체), 문서(`NOTES`, `SUPABASE_SETUP`), 보안 체크리스트(§4.8)                                                                              | 구 RPC 호출 0, 토큰 해시 저장 여부 결정                      | `qa` + 실계정 4종                                                      |
+| 단계 | 내용                                                                                                                                                                       | 수용 기준                                                                 | 검증                                                                |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 3.1  | SQL 1차(추가만): `branches`·본사 행, `members` 확장, `classes`·`class_members`·`lms_sessions`·`login_attempts`, `lms_member()`, `lms_login/session/logout`, 시도 제한, RLS | migration.sql 재실행 idempotent, 기존 로그인 RPC 그대로 동작, 흔적 0 검증 | PGlite `npm run test:sql` + 운영 SQL Editor `verify-3a.sql`(사용자) |
+| 3.2  | 로그인 폼(지사 **자동 판별**, 복수 일치 시 지사 선택) + 세션 토큰 클라이언트 + grade 3 차단 제거                                                                           | 기존 회원 본사로 로그인, 관리자 `@` 경로 무변경, 잠금 메시지              | Playwright REST 픽스처                                              |
+| 3.3  | 역할별 관리자 메뉴·가드(지사·반·회원 뷰), 동명이인 접미사 제안                                                                                                             | §4.6 표대로 노출, 학생 `#admin` 차단                                      | Playwright + RLS 스크립트(승인 후)                                  |
+| 3.4  | 엑셀 업로드(SheetJS, 미리보기, 1트랜잭션 RPC, 결과표), 템플릿 2종 파일                                                                                                     | 500행 한도, 전체 롤백, 결과표                                             | 픽스처 xlsx 3종(정상·중복·오류)                                     |
+| 3.5  | SQL 2차(구 RPC 제거, pk 교체, `lms_probe_headers` 제거), 문서(`NOTES`, `SUPABASE_SETUP`), 보안 체크리스트(§4.8)                                                            | 구 RPC 호출 0                                                             | `qa` + 실계정 4종                                                   |
 
-Phase 3 착수 전 결정 필요: 스펙 §6의 4·5·6번, `x-forwarded-for`·API 로그 헤더 노출 확인.
+### Task 3.1: SQL 1차 — 추가만 (로컬 완료 `4356e19`, 운영 반영은 사용자)
+
+**Files:**
+
+- Modify: `supabase/migration.sql` — 끝의 "LMS (Phase 3A)" 블록(관리자 등록 안내 주석 앞). 위쪽 기존 부분은 무변경.
+- Create: `supabase/lms/00-precheck.sql`(읽기 전용, 표 1개), `supabase/lms/verify-3a.sql`(anon + `x-lms-token`
+  흉내, 전부 rollback, 표 1개), `supabase/lms/README.md`(실행 순서)
+- Test: `tests/lms-sql.spec.js`(`npm run test:sql`), devDependency `@electric-sql/pglite`
+
+**Interfaces (Produces — 3.2가 쓰는 것):**
+
+- `rpc lms_login(p_login_id, p_password, p_branch_id?)` → 항상 jsonb, 예외 없음:
+  `{status:'ok', token, role, branch_id, branch_name, display_name}` · `{status:'choose', branches:[{branch_id, branch_name}]}`
+  (비밀번호가 맞은 뒤에만, 이름순) · `{status:'invalid'}` · `{status:'locked', retry_after_sec}`
+- `rpc lms_session()`(헤더 `x-lms-token`) → `{role, branch_id, branch_name, display_name}` 또는 `null`, 만료 +30일
+- `rpc lms_logout()` → 세션 행 삭제. `lms_member()` → RLS용 `(member_id, role, branch_id)`
+
+- [x] **Step 1:** 로컬 검증 수단 — PGlite 0.5(Postgres 18 WASM + pgcrypto)에서 bcrypt·`normalize`·
+      `set local role anon`·`request.headers` RLS 동작 확인. Docker·전역 설치 불필요.
+- [x] **Step 2 (테스트 먼저):** `tests/lms-sql.spec.js` — Supabase 흉내(anon/authenticated, `extensions`·`auth`·
+      `storage`, Supabase 기본 권한) → 구 스키마 + 구 회원 4명 → precheck → migration **2회**(member_id 불변) →
+      D13 매핑 → `verify-3a.sql` 전 행 pass → 흔적 0 → 관리자 직접 쓰기(인덱스 식 권한) → 구·신 로그인.
+- [x] **Step 3:** 블록 작성 → PASS. verify 93행 중 92 pass, 1 skip(로컬에 관리자 행 없음 → 운영에서 실행).
+- [ ] **Step 4 (사용자):** `00-precheck.sql` 실행 → 표를 워커에게. 기대: pgcrypto `extensions`, normalize `true`,
+      회원 1명(grade 3), 충돌 `0`. 다르면 멈춤.
+- [ ] **Step 5 (사용자):** `migration.sql` 전체 실행 → `Success. No rows returned`.
+- [ ] **Step 6 (워커):** anon 키로 `POST /rest/v1/rpc/lms_probe_headers` 3회 — ① 그대로,
+      ② `X-Forwarded-For: 203.0.113.9` 추가, ③ `x-lms-token: probe-<랜덤>` 추가. 그리고 CORS 사전 요청 1회:
+      `OPTIONS`에 `Origin` = 운영 사이트, `Access-Control-Request-Headers` = `x-lms-token,apikey,authorization`
+      (허용 헤더에 `x-lms-token`이 있어야 브라우저가 보낼 수 있다). 위조 불가한 IP 헤더 판정 → 필요하면
+      `lms_client_ip()` 패치 SQL 1개(사용자 실행).
+- [ ] **Step 7 (사용자):** Logs → API에서 ③의 `probe-…` 검색 → 노출 여부 기록(`NOTES.md`).
+- [ ] **Step 8 (사용자):** `verify-3a.sql` → 전 행 pass, `trace` 행 0. 결과 요약을 PROJECT_MEMORY에.
+
+### Task 3.2: 로그인 클라이언트 (멈춤 1 승인 뒤, Task 3.1 Step 5 이후 푸시)
+
+**Files:**
+
+- Modify: `app.js` — 로그인 핸들러의 비-`@` 경로를 `lms_login`으로, 지사 선택 단계, 토큰 저장·클라이언트 헤더,
+  페이지 로드 `lms_session`, 로그아웃 `lms_logout`, `cra_member` 삭제, `isBlockedByGrade`·`showNoAccessPopup`
+  게이트 제거(D8a), `updateAdminUI`(LMS 사용자 = Log out만, D15). `index.html` — `#loginScreen` 안에 숨김
+  지사 선택 영역(`#loginBranchChoice`, "Choose your branch" + 버튼 목록). `styles.css` — 지사 버튼(DESIGN.md 토큰).
+- Test: `tests/lms-login.spec.js` 신규(REST 픽스처: `**/rest/v1/rpc/lms_login|lms_session|lms_logout`를
+  `page.route`로 응답, 실제 호출 0), `tests/smoke.spec.js` "grade 3 sees the no-access popup…" → "student plays the
+  weekday game"(차단 없음)으로 의미 변경.
+- 스크린샷: `docs/screenshots/phase3/` 로그인 기본·choose·invalid·locked × 375×812·1366×900(8장).
+
+**구현 메모:**
+
+- 비밀번호는 choose 재호출 때문에 **변수에만** 보관(저장 금지), 성공·취소·화면 이탈 시 비운다.
+- 토큰: `localStorage.cra_lms` = `{token, role, branch_name, display_name}`(표시용 캐시). 로드 때 `lms_session()` 1회 →
+  `null`이면 키 삭제·비로그인. `cra_member`는 읽으면 삭제.
+- 헤더: 지시서대로 `sb`를 `let`으로 바꾸고 `createClient(…, {global:{headers:{'x-lms-token': token}}})` 재생성
+  (`background-editor.js`·`hero-banner.js`는 공유 lexical `sb`를 호출 시점에 읽으므로 그대로 동작).
+  **대안(멈춤 1에서 PM 결정):** 클라이언트 1개 + `global.fetch` 래퍼가 `/rest/v1/` 요청에만 현재 토큰을 붙임 —
+  재생성 시 "Multiple GoTrueClient instances" 경고·진행 중 요청이 옛 클라이언트에 남는 문제가 없다.
+- 메시지: invalid "Please check your ID and password." / locked "Too many tries. Please try again in N minutes."
+  (N = `ceil(retry_after_sec / 60)`). 클라이언트 형식 검사(`ACCOUNT_RE`)는 LMS 경로에서 뺀다(서버가 정규화,
+  한글 아이디 허용 — D5a). 빈 칸만 막는다.
+
+- [ ] **Step 1 (테스트 먼저):** `tests/lms-login.spec.js` — ① ok → 홈, Log out 보임, Admin 숨김, `cra_lms` 저장
+      ② choose → 지사 버튼 2개 → 선택 시 `p_branch_id` 포함 재호출 → ok ③ invalid 문구 ④ locked "N minutes"
+      ⑤ 새로고침 → `lms_session` 1회 → 로그인 유지 ⑥ `lms_session` null → 키 삭제·비로그인 ⑦ Log out →
+      `lms_logout` 호출·키 삭제 ⑧ 옛 `cra_member` 삭제 ⑨ `@` 아이디 → `auth/v1/token`만, `lms_login` 0회
+      ⑩ 학생(role 3)으로 요일 슬롯 → 차단 팝업 없이 재생 ⑪ 로그인 후 REST 요청 헤더에 `x-lms-token`.
+- [ ] **Step 2:** FAIL 확인 → 구현 → PASS. 비로그인 화면 시각 테스트(`board-visual`) 무변경.
+- [ ] **Step 3:** smoke의 grade 3 테스트 새 의미로 수정, `npm run check`.
+- [ ] **Step 4:** Vite 종료 → `npm.cmd run qa` 전체 PASS → 스크린샷 8장 → 로컬 커밋.
+- [ ] **Step 5 (멈춤 2):** 보고 — 운영 SQL(Task 3.1 Step 5) 실행 확인 전에는 푸시하지 않는다.
+
+Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼), 3.3 착수 전 pk 교체 시점(스펙 §4.9 위험 1).
 
 ---
 

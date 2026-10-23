@@ -211,6 +211,26 @@ similar work** so the same problems don't recur. Append to this as you learn mor
     still land ~1px smaller on the longest label. **Re-run that sweep before changing icon size,
     icon padding, or wide-button padding.**
 
+## LMS SQL 1차 (Phase 3A, 2026-10-23)
+
+- **운영 DB는 사용자가 SQL Editor로만 바꾼다.** 순서·기대값은 `supabase/lms/README.md`. 로컬 검증은
+  `npm run test:sql`(PGlite = Postgres 18 WASM + pgcrypto, 운영 접속 0). Supabase는 15/17이고 역할·기본 권한은
+  테스트의 shim이 흉내 낸 것 — 새 테이블 권한은 기본 권한에 기대지 말고 migration에서 명시한다.
+- ⚠ **SQL Editor는 마지막 결과 표 하나만 보여 준다.** 점검·검증 SQL은 select 한 개로 표를 만든다.
+  `verify-3a.sql`은 함수 안 서브트랜잭션에서 테스트하고 일부러 예외(`LMS_VERIFY_ROLLBACK`)를 던져 전부 되돌린 뒤
+  결과(plpgsql 변수에 모아 둔 것)를 낸다 + 바깥 `begin … rollback`. 테스트 데이터 이름은 `zz-v…`·`검증지사…`.
+- ⚠ **RLS 정책 안 함수는 조회하는 역할의 EXECUTE가 필요하다**(`lms_member()`를 anon에서 revoke하면 정책이 권한
+  오류). **인덱스 식 함수는 행을 쓰는 역할의 EXECUTE를 검사한다**(`lms_norm_id`를 authenticated에서 빼면 관리자
+  members 직접 쓰기가 `permission denied for function lms_norm_id`).
+- ⚠ `current_setting('request.headers', true)`는 한 번 설정·되돌린 세션에서 NULL이 아니라 `''`를 돌려준다 →
+  `nullif(…, '')` 후 `::json`. 안 하면 `invalid input syntax for type json`.
+- `classes` ↔ `class_members` 정책이 서로를 조회하면 재귀 오류 → SECURITY DEFINER 도우미 함수로 끊는다.
+- 로그인 실패를 예외로 돌려주지 않는다(`lms_login`은 항상 jsonb) — 예외는 실패 카운터 증가까지 롤백한다.
+- ⚠ **`members.id`가 아직 pk(전역 유일)라 3.5 전에는 같은 아이디를 두 지사에 만들 수 없다** — 동명이인 테스트는
+  대소문자 변형(`zz-v-twin`/`ZZ-V-TWIN`)으로 한다. 3.3 전에 pk 교체 여부 결정(스펙 §4.9 위험 1).
+- PGlite: `db.query()`는 한 문장만 → 여러 문장은 `db.exec()`(결과 배열, 마지막 행 있는 결과 = SQL Editor 표).
+  `format('%s', boolean)`은 `t`/`f`를 찍는다(`::text`면 `true`/`false`).
+
 ## Supabase egress — QA burned the free quota (2026-08-24)
 
 - **What happened:** the project hit `exceed_cached_egress_quota` and Supabase **restricted

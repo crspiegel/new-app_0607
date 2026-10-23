@@ -414,6 +414,50 @@ lms_member().branch_id`, "자기 반" = `classes.teacher_id = me` 또는 `class_
 | 관리자 계정                     | 변경 없음(Supabase Auth + 이메일). 자가입 계속 꺼짐                                                                                   |
 | 기존 grade 3 "차단" 의미 소실   | §6 질문. 차단을 유지하려면 `members.blocked boolean` 별도 플래그                                                                      |
 
+### 4.9 정오 메모 — Phase 3A 지시서(`2026-10-23`) 결정 D5a~D15 반영
+
+§4.2~4.4의 초안 위에 덮어쓴다(충돌 시 이 표가 우선). 구현: `supabase/migration.sql` "LMS (Phase 3A)" 블록, 검증
+`tests/lms-sql.spec.js`·`supabase/lms/verify-3a.sql`.
+
+| #    | 초안(§4.2~4.4)                                            | 확정 · 구현                                                                                                                                                                                                                  |
+| ---- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D7a  | `lms_login(p_branch_code, p_login_id, p_password)`        | `lms_login(p_login_id, p_password, p_branch_id default null)`. 활성 지사의 활성 회원 전체에서 정규화 아이디 검색 → bcrypt. 일치 1 = 세션, 2+ = `{status:'choose', branches}`(비밀번호가 맞은 뒤에만), `p_branch_id`로 재호출 |
+| D7b  | `unique (branch_id, lower(login_id))`                     | `(lms_norm_id(id), branch_id)` 유니크(전 역할) + 지사 계정(role 1)은 `lms_norm_id(id)` 전역 유니크(부분 인덱스)                                                                                                              |
+| D7c  | 실패 시 예외                                              | 예외 없음. 항상 jsonb `ok·choose·invalid·locked`. 아이디 없음 = 비밀번호 틀림(같은 응답), 아이디 없을 때 더미 bcrypt 1회                                                                                                     |
+| D7d  | 5회 → 15분, IP 한도 미정, 키 `branch/login`               | 키 `id:<정규화 아이디>` 5회 → 10분(1일 창 — 잠금 후 실패마다 재잠금), `ip:<addr>` 30회/10분 → 10분. 성공 시 아이디 키 삭제, 잠금 중 비교 안 함, `lms_login`이 만료 세션·1일 지난 시도 행 정리                                |
+| D7e  | `x-forwarded-for`(확인 필요)                              | `lms_client_ip()` 한 곳. 1차 = `cf-connecting-ip`만, 없으면 null(IP 제한 생략). 탐침(`lms_probe_headers`, 임시) 결과로 이 함수만 패치                                                                                        |
+| D10a | 토큰 원문 저장, 로그 노출 시 해시(확인 필요)              | **항상 `sha256(token)`만 저장**(`lms_sessions.token_hash`). 원문은 `lms_login` 응답 1회. 32바이트 base64url(43자)                                                                                                            |
+| D10b | `lms_member()` stable security definer                    | 같음 + `search_path = public, extensions`, `request.headers`가 `''`일 때도 안전. 정책은 `(select … from lms_member() m)`                                                                                                     |
+| D10c | 30일 슬라이딩(방법 미정)                                  | `lms_session()`(volatile)이 연장·`last_seen_at` 갱신·`{role, branch_id, branch_name, display_name}` 반환, 무효면 null. `lms_logout()` = 행 삭제                                                                              |
+| D5a  | `^[\p{L}\p{N}._-]{2,20}$`                                 | Postgres 정규식에 `\p{L}` 없음 → `^[0-9a-z가-힣._-]{2,20}$`, **생성·변경 시에만**(3.3 RPC). 로그인은 `lms_norm_id` = NFC → 앞뒤 공백 제거 → 소문자만                                                                         |
+| D6a  | `^[\x21-\x7E]{4,10}$`                                     | 같은 규칙을 **설정 시에만**. 로그인은 기존 비밀번호(10자 초과 등) 그대로 받음                                                                                                                                                |
+| D13  | `role` = 기존 `grade` 그대로                              | 최소 권한: 전원 `hq`(TPS 본사), grade 1·2 → **2**, grade 3 → 3. 3.1~3.3 사이 구 관리자 탭 생성·수정분은 트리거가 같은 매핑으로 채움                                                                                          |
+| D14  | `branches` 익명 select(로그인 폼), `members` 학생 자기 행 | `branches` 익명 select 없음(지사 목록 폼 없음), LMS는 자기 지사 행만. `members`는 LMS select 정책 없음(해시 보호) — 본인 정보는 `lms_session()`                                                                              |
+| D15  | 3.2에서 역할별 헤더 버튼                                  | 3.2는 LMS 사용자 = Log out만. My Branch·My Class는 3.3                                                                                                                                                                       |
+| D8a  | §6-4 등급 3 차단 폐기                                     | 3.2에서 차단 팝업 게이트·테스트 제거(새 의미 = 학생 열람)                                                                                                                                                                    |
+| 3.1  | `id` → `login_id` rename, pk 교체                         | 3.1에서는 하지 않음(`id`·`grade`·pk·구 RPC 유지). 3.5에서                                                                                                                                                                    |
+
+**구현 중 확인한 사실(워커):**
+
+- RLS 정책 안에서 호출하는 함수는 **조회하는 역할의 EXECUTE 권한**이 필요하다 → `lms_member()`와 반 정책 도우미
+  2개(`lms_my_class_ids`·`lms_managed_class_ids`)는 anon에 grant(호출자 자신의 세션 정보만 반환).
+- 인덱스 식 함수도 **행을 쓰는 역할의 EXECUTE**를 검사한다 → `lms_norm_id`는 authenticated에 grant(관리자의
+  members 직접 쓰기). anon은 계속 막힘.
+- `classes` ↔ `class_members` 정책이 서로를 조회하면 재귀 오류 → SECURITY DEFINER 도우미로 끊었다.
+- 새 테이블 권한은 Supabase 기본 권한에 기대지 않고 명시(`revoke all` 후 필요한 것만 `grant`).
+
+**위험·미결:**
+
+1. **pk(`id`)가 전역 유일이라 3.5 전에는 "완전히 같은" 아이디를 두 지사에 만들 수 없다.** 지금 D7a의 choose는
+   대소문자·NFC 변형(`kim`/`KIM`)으로만 생긴다. 3.3에서 지사가 계정을 만들면 다른 지사와 같은 아이디가 pk 충돌로
+   실패하므로, **pk 교체(3.5의 일부)를 3.3 전에 할지** 결정 필요.
+2. 지사 계정 전역 유일은 role 1끼리만 인덱스로 보장. "지사 아이디 = 다른 지사 선생님 아이디" 금지는 3.3 생성
+   RPC에서 검사할지 결정 필요.
+3. 브라우저가 `x-lms-token` 사용자 정의 헤더를 보내려면 Supabase CORS가 그 헤더를 허용해야 한다 — 탐침 때 사전
+   요청으로 확인(3.2 전제).
+4. IP 헤더 확정 전에는 아이디 제한만 동작. `lms_login`은 익명 호출 가능하므로 bcrypt 부하는 Supabase API 자체
+   한도와 IP 제한(헤더 확정 후)에 기댄다.
+
 ## 5. 테스트·검증 방침 요약
 
 - 공유 파일 규칙(`video-source.js`, 새 `board-view.js`): 재선언 금지 테스트(기존 "loads before app.js
