@@ -622,6 +622,13 @@
                 <button class="login-submit" type="submit">Log in</button>
               </form>
 
+              <!-- Shown only when lms_login answers "choose": the same ID and
+                   password exist in more than one branch. -->
+              <div class="login-branches" id="loginBranchChoice" hidden>
+                <p class="login-branches-title">Choose your branch</p>
+                <div class="login-branch-list" id="loginBranchList"></div>
+              </div>
+
               <p class="login-legal">
                 By signing in, you agree to our <strong>Terms</strong> and
                 <strong>Privacy Policy</strong>.
@@ -1385,30 +1392,10 @@
       </div>
     </div>
 
-    <!-- "No access" popup — shown when a grade-3 viewer clicks a video button
-         (activated by the grade gate in Phase 3). Child-friendly shell. -->
-    <div class="noaccess-modal" id="noAccessModal" hidden>
-      <div class="noaccess-overlay" data-noaccess-close></div>
-      <div
-        class="noaccess-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="noAccessTitle"
-      >
-        <div class="noaccess-emoji" aria-hidden="true">&#129417;</div>
-        <h2 class="noaccess-title" id="noAccessTitle">Oops!</h2>
-        <p class="noaccess-text">
-          You don't have permission to watch this yet.
-        </p>
-        <button type="button" class="noaccess-ok" data-noaccess-close>
-          OK
-        </button>
-      </div>
-    </div>
-
     <!-- "Coming soon" popup — shown when a lesson/song button has no video URL
-         yet (replaces the old sample-video fallback). Reuses the no-access
-         shell. -->
+         yet (replaces the old sample-video fallback). Uses the .noaccess-*
+         popup shell (the grade-3 "no access" popup itself was removed in
+         Phase 3A). -->
     <div class="noaccess-modal" id="comingSoonModal" hidden>
       <div class="noaccess-overlay" data-comingsoon-close></div>
       <div

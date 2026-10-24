@@ -4111,6 +4111,49 @@ body.game-open {
   display: none;
 }
 
+/* Branch choice under the login form (lms_login "choose"). Same control
+   language as the login inputs: soft fill, hairline border, blue on focus. */
+.login-branches {
+  margin-top: 18px;
+}
+.login-branches[hidden] {
+  display: none;
+}
+.login-branches-title {
+  margin: 0 0 10px;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+}
+.login-branch-list {
+  display: grid;
+  gap: 10px;
+}
+.login-branch {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 20px;
+  background: #f7f7f7;
+  border: 2px solid var(--hairline);
+  border-radius: var(--radius-control);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 700;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+.login-branch:hover,
+.login-branch:focus-visible {
+  background: var(--canvas);
+  border-color: var(--macaw-blue);
+  outline: none;
+}
+
 /* Admin screen shell. */
 
 /* Admin body area: unify ALL text (title, hint, members, board, slot names,

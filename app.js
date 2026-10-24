@@ -1,6 +1,7 @@
 const state = {
   level: "",
   month: "",
+  lms: null, // signed-in LMS member { role, branch_name, display_name } (Phase 3A)
 };
 
 // months, lessonTypes, weekdays, LEVEL_LABELS/levelLabel, TOOLBAR_BUTTONS/
@@ -770,20 +771,11 @@ function parseBgVideoUrl(value) {
   return null;
 }
 
-// Current viewer grade. Phase 3 sets state.grade on login; until then everyone
-// has full access (undefined !== 3).
-function isBlockedByGrade() {
-  return state.grade === 3;
-}
-
-// Single entry point for opening a content slot's video. Grade 3 is screen-
-// gated with the cute popup; an empty slot shows the "coming soon" popup (no
-// sample fallback); otherwise the slot's URL plays. Works on every level/month.
+// Single entry point for opening a content slot's video. An empty slot shows
+// the "coming soon" popup (no sample fallback); otherwise the slot's URL plays.
+// Works on every level/month. Every viewer may play — students included (the
+// old grade-3 "no access" block was dropped in Phase 3A, decision §6-4).
 function openSlot(slot, label) {
-  if (isBlockedByGrade()) {
-    showNoAccessPopup();
-    return;
-  }
   const url = getVideoUrl(state.level, state.month, slot);
   if (!url) {
     showComingSoon();
@@ -1398,34 +1390,6 @@ if (videoModal) {
   });
 }
 
-/* ---- "No access" popup (grade 3) ---------------------------------------
-   A small child-friendly modal shown when a grade-3 viewer clicks a video
-   button. Built now; activated by the grade gate in Phase 3. */
-const noAccessModal = document.querySelector("#noAccessModal");
-
-function showNoAccessPopup() {
-  if (!noAccessModal) return;
-  noAccessModal.hidden = false;
-  document.body.classList.add("noaccess-open");
-}
-
-function hideNoAccessPopup() {
-  if (!noAccessModal) return;
-  noAccessModal.hidden = true;
-  document.body.classList.remove("noaccess-open");
-}
-
-if (noAccessModal) {
-  noAccessModal.querySelectorAll("[data-noaccess-close]").forEach((el) => {
-    el.addEventListener("click", hideNoAccessPopup);
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !noAccessModal.hidden) {
-      hideNoAccessPopup();
-    }
-  });
-}
-
 /* ---- "Coming soon" popup (empty slot) ----------------------------------
    Shown when a lesson/song button has no video URL yet — replaces the old
    sample-video fallback so an empty slot reads as "not ready" instead of
@@ -1573,13 +1537,9 @@ function closeGameModal() {
   document.body.classList.remove("game-open");
 }
 
-// Same gating as videos: grade 3 sees the no-access popup, an empty slot the
-// coming-soon popup. `slot` is a game-kind toolbar slot ("game" / "game2").
+// Same as videos: an empty slot shows the coming-soon popup. `slot` is a
+// game-kind toolbar slot ("game" / "game2").
 function openGameSlot(slot) {
-  if (isBlockedByGrade()) {
-    showNoAccessPopup();
-    return;
-  }
   const url = getVideoUrl(state.level, state.month, slot || "game");
   if (!url) {
     showComingSoon();
@@ -1680,14 +1640,37 @@ document.querySelectorAll(".content-v3-type").forEach((button) => {
 
 /* ---- Supabase: content hydration, admin editor, auth -------------------
    The site reads content URLs/covers from Supabase (public, anon key). Only
-   authenticated admins can write. Admins are real Supabase Auth users; member
-   (grade 1-3) login arrives in Phase 3. */
+   authenticated admins can write. Admins are real Supabase Auth users (IDs
+   with "@"); LMS members (branch · teacher · student) log in through the
+   lms_login RPC and carry a session token (Phase 3A). */
+
+// The LMS session token rides on ONE Supabase client: this fetch wrapper adds
+// it as `x-lms-token` to Supabase REST requests only (RLS reads it through
+// lms_member()). No token → no header. Auth and Storage requests are never
+// touched, so the admin (@) login path is unchanged. Never put it in a URL.
+let lmsToken = null;
+const SUPABASE_REST = window.SUPABASE_URL
+  ? `${String(window.SUPABASE_URL).replace(/\/+$/, "")}/rest/v1/`
+  : "";
+function lmsFetch(input, init) {
+  const isRequest = input instanceof window.Request;
+  const url = isRequest ? input.url : String(input);
+  if (!lmsToken || !SUPABASE_REST || !url.startsWith(SUPABASE_REST)) {
+    return window.fetch(input, init);
+  }
+  const headers = new window.Headers(
+    (init && init.headers) || (isRequest ? input.headers : undefined),
+  );
+  headers.set("x-lms-token", lmsToken);
+  return window.fetch(input, { ...init, headers });
+}
 
 const sb =
   window.supabase && window.SUPABASE_URL && window.SUPABASE_ANON_KEY
     ? window.supabase.createClient(
         window.SUPABASE_URL,
         window.SUPABASE_ANON_KEY,
+        { global: { fetch: lmsFetch } },
       )
     : null;
 
@@ -1695,40 +1678,78 @@ let isAdmin = false;
 const adminState = { level: "Level 1", month: "March" };
 const levels = ["Level 1", "Level 2", "Level 3", "Level 4"];
 
-// Account-format rule (mirrors the server's `^[!-~]{4,}$`): >= 4 printable-ASCII
-// chars, no spaces, no Korean. Used for member login + admin member creation.
+// Account-format rule (mirrors the old server rule `^[!-~]{4,}$`): >= 4
+// printable-ASCII chars, no spaces, no Korean. Used by the old admin member tab
+// only (until Phase 3.3); LMS login sends the ID as typed — the server
+// normalizes it and Korean IDs are allowed.
 const ACCOUNT_RE = /^[\x21-\x7E]{4,}$/;
 
-// Member (grade 1-3) session. Members are NOT Supabase Auth users, so the grade
-// is held client-side (localStorage) — a UI-level gate, intentionally simple
-// (write-protection is enforced by RLS; see NOTES). `state.grade` drives the
-// no-access popup in openSlot().
-const MEMBER_KEY = "cra_member";
-function saveMemberSession(id, grade) {
-  state.grade = grade;
+// LMS member session (role 1 branch · 2 teacher · 3 student). localStorage
+// keeps the token plus display fields (a cache — the server decides through
+// lms_session() on every page load). The password is never stored.
+const LMS_KEY = "cra_lms";
+const LEGACY_MEMBER_KEY = "cra_member"; // pre-LMS {id, grade}: deleted on sight
+// lms_login issues 43-char base64url tokens; anything else in storage is junk
+// (and could not even go into a request header) — drop it.
+const LMS_TOKEN_RE = /^[A-Za-z0-9_-]{8,256}$/;
+function saveLmsSession(token, info) {
+  lmsToken = token;
+  state.lms = {
+    role: info.role,
+    branch_name: info.branch_name ?? null,
+    display_name: info.display_name ?? null,
+  };
   try {
-    window.localStorage.setItem(MEMBER_KEY, JSON.stringify({ id, grade }));
+    window.localStorage.setItem(
+      LMS_KEY,
+      JSON.stringify({ token, ...state.lms }),
+    );
   } catch {
-    /* localStorage may be unavailable (private mode) — gate still works in-session */
+    /* private mode: the session lasts for this page only */
   }
 }
-function clearMemberSession() {
-  state.grade = undefined;
+function clearLmsSession() {
+  lmsToken = null;
+  state.lms = null;
   try {
-    window.localStorage.removeItem(MEMBER_KEY);
+    window.localStorage.removeItem(LMS_KEY);
   } catch {
     /* ignore */
   }
 }
-function restoreMemberSession() {
+// Page load: one lms_session() call checks the stored token (and slides its
+// 30-day expiry). A dead token signs out and drops the key; a failed call
+// (offline, API down) only stays signed out for this load.
+async function restoreLmsSession() {
+  let stored = null;
   try {
-    const raw = window.localStorage.getItem(MEMBER_KEY);
-    if (!raw) return;
-    const m = JSON.parse(raw);
-    if (m && [1, 2, 3].includes(m.grade)) state.grade = m.grade;
+    stored = JSON.parse(window.localStorage.getItem(LMS_KEY) || "null");
   } catch {
-    /* ignore malformed/blocked storage */
+    stored = null;
   }
+  if (
+    !stored ||
+    typeof stored.token !== "string" ||
+    !LMS_TOKEN_RE.test(stored.token)
+  ) {
+    if (stored) clearLmsSession();
+    return;
+  }
+  if (!sb) return;
+  lmsToken = stored.token;
+  const { data, error } = await sb.rpc("lms_session");
+  // Someone logged in or out while the check was in flight (shared tablet):
+  // their session wins over this late answer.
+  if (lmsToken !== stored.token) return;
+  if (error) {
+    lmsToken = null;
+    return;
+  }
+  if (!data) {
+    clearLmsSession();
+    return;
+  }
+  saveLmsSession(stored.token, data);
 }
 
 const adminBoard = document.querySelector("#adminBoard");
@@ -1866,10 +1887,10 @@ async function savePage(level, month) {
 }
 
 function updateAdminUI() {
-  // signed-in = admin OR a logged-in member (grade set). Admin button is
-  // admin-only; Log out shows for anyone signed in; Login hides when signed in
-  // (CSS keys off body.signed-in).
-  const signedIn = isAdmin || state.grade != null;
+  // signed-in = admin OR an LMS member. The Admin button is admin-only (LMS
+  // roles get only Log out until Phase 3.3 — decision D15); Login hides when
+  // signed in (CSS keys off body.signed-in).
+  const signedIn = isAdmin || state.lms != null;
   document.body.classList.toggle("is-admin", isAdmin);
   document.body.classList.toggle("signed-in", signedIn);
   if (adminNavBtn) adminNavBtn.hidden = !isAdmin;
@@ -1900,9 +1921,120 @@ function setLoginError(text) {
   loginError.hidden = !text;
 }
 
+// lms_login can answer "choose" (the same ID + password in several branches).
+// The branch buttons then wait under the form; the password waits in memory
+// only and is dropped when the form changes, a branch is picked or the login
+// screen is left.
+const loginBranchChoice = document.querySelector("#loginBranchChoice");
+const loginBranchList = document.querySelector("#loginBranchList");
+let pendingLogin = null; // { id, pw } while the branch buttons are shown
+let loginSeq = 0; // bumped by every form edit / screen change: older answers are dropped
+let loginBusy = false; // one lms_login at a time (double click, second branch tap)
+
+function hideBranchChoice() {
+  pendingLogin = null;
+  if (loginBranchList) loginBranchList.replaceChildren();
+  if (loginBranchChoice) loginBranchChoice.hidden = true;
+}
+
+// The form changed or the screen was left: forget the pending choice and make
+// any answer still in flight stale.
+function dropPendingLogin() {
+  loginSeq += 1;
+  hideBranchChoice();
+}
+
+function showBranchChoice(branches) {
+  if (!loginBranchChoice || !loginBranchList) return;
+  loginBranchList.replaceChildren(
+    ...branches.map((branch) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "login-branch";
+      button.textContent = branch.branch_name;
+      button.dataset.branchId = branch.branch_id;
+      return button;
+    }),
+  );
+  loginBranchChoice.hidden = false;
+}
+
+function lockedMessage(seconds) {
+  const minutes = Math.max(1, Math.ceil((Number(seconds) || 0) / 60));
+  const unit = minutes === 1 ? "minute" : "minutes";
+  return `Too many tries. Please try again in ${minutes} ${unit}.`;
+}
+
+// One lms_login round trip. Answers: ok · choose · invalid · locked (never an
+// exception — see supabase/migration.sql). An RPC error (network, or the SQL
+// not run yet) gets the generic message.
+async function lmsLogin(id, pw, branchId) {
+  if (loginBusy) return;
+  const args = { p_login_id: id, p_password: pw };
+  if (branchId) args.p_branch_id = branchId;
+  const seq = ++loginSeq;
+  loginBusy = true;
+  let answer;
+  try {
+    answer = await sb.rpc("lms_login", args);
+  } finally {
+    loginBusy = false;
+  }
+  if (seq !== loginSeq) return; // the form changed or the screen was left meanwhile
+  const { data, error } = answer;
+  if (error || !data || !data.status) {
+    hideBranchChoice();
+    setLoginError("Login is not available right now.");
+    return;
+  }
+  if (data.status === "choose" && Array.isArray(data.branches)) {
+    pendingLogin = { id, pw };
+    showBranchChoice(data.branches);
+    return;
+  }
+  hideBranchChoice();
+  if (data.status === "locked") {
+    setLoginError(lockedMessage(data.retry_after_sec));
+    return;
+  }
+  if (data.status !== "ok" || !data.token) {
+    setLoginError("Please check your ID and password.");
+    return;
+  }
+  saveLmsSession(data.token, data);
+  updateAdminUI();
+  if (loginPassword) loginPassword.value = "";
+  setHash("home");
+  showScreen("home");
+}
+
+if (loginBranchList) {
+  loginBranchList.addEventListener("click", async (event) => {
+    const button = event.target.closest("button.login-branch");
+    if (!button || !pendingLogin || !sb || loginBusy) return;
+    const { id, pw } = pendingLogin;
+    setLoginError("");
+    await lmsLogin(id, pw, button.dataset.branchId);
+  });
+}
+[loginId, loginPassword].forEach((input) => {
+  if (input) input.addEventListener("input", dropPendingLogin);
+});
+// Leaving the login screen (showScreen sets body[data-screen]) drops it too,
+// and empties the password box — a shared classroom tablet must not keep it.
+new window.MutationObserver(() => {
+  if (document.body.dataset.screen === "login") return;
+  dropPendingLogin();
+  if (loginPassword) loginPassword.value = "";
+}).observe(document.body, {
+  attributes: true,
+  attributeFilter: ["data-screen"],
+});
+
 if (loginForm) {
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (loginBusy) return; // an LMS login is already on its way
     setLoginError("");
     const id = loginId ? loginId.value.trim() : "";
     const pw = loginPassword ? loginPassword.value : "";
@@ -1925,7 +2057,7 @@ if (loginForm) {
         setLoginError("Login failed. Check your ID and password.");
         return;
       }
-      clearMemberSession(); // an admin session supersedes any member grade
+      clearLmsSession(); // an admin session supersedes an LMS session
       await refreshAdminStatus();
       if (loginPassword) loginPassword.value = "";
       if (isAdmin) {
@@ -1937,35 +2069,20 @@ if (loginForm) {
       return;
     }
 
-    // Member (grade 1-3): validate format, then verify server-side via the RPC
-    // (the hash never leaves the DB). Returns the grade or null.
-    if (!ACCOUNT_RE.test(id) || !ACCOUNT_RE.test(pw)) {
-      setLoginError(
-        "ID and password must be at least 4 characters — letters, numbers or symbols, no spaces.",
-      );
-      return;
-    }
-    const { data: grade, error } = await sb.rpc("verify_member_login", {
-      p_id: id,
-      p_password: pw,
-    });
-    if (error || grade == null) {
-      setLoginError("Login failed. Check your ID and password.");
-      return;
-    }
-    saveMemberSession(id, grade);
-    updateAdminUI();
-    if (loginPassword) loginPassword.value = "";
-    setHash("home");
-    showScreen("home");
+    // LMS member: the server normalizes the ID (Korean allowed) and finds the
+    // branch itself, so there is no client-side format rule here.
+    dropPendingLogin();
+    await lmsLogin(id, pw);
   });
 }
 
 if (logoutBtn) {
   logoutBtn.addEventListener("click", async () => {
+    // LMS first (needs the header; the token dies server-side), then Auth.
+    if (sb && lmsToken) await sb.rpc("lms_logout");
     if (sb) await sb.auth.signOut();
     isAdmin = false;
-    clearMemberSession();
+    clearLmsSession();
     updateAdminUI();
     setHash("home");
     showScreen("home");
@@ -2691,8 +2808,13 @@ if (view === "content-v3" && hashLevel && hashMonth) {
 // Restore any admin session, load saved content from Supabase, then honor an
 // #admin deep link (admins only — others are bounced to login).
 (async () => {
+  try {
+    window.localStorage.removeItem(LEGACY_MEMBER_KEY); // pre-LMS: sign in again
+  } catch {
+    /* ignore */
+  }
   await refreshAdminStatus();
-  if (!isAdmin) restoreMemberSession(); // admin session supersedes member grade
+  if (!isAdmin) await restoreLmsSession(); // an admin session supersedes it
   updateAdminUI();
   refreshSignupUI();
   await hydrateContent();

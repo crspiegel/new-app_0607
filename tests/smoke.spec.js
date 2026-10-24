@@ -1391,14 +1391,31 @@ test("site_settings.game_hosts merges into the game hosts in one settings read",
   });
 });
 
-test("grade 3 sees the no-access popup before a weekday game", async ({
+test("a signed-in student (LMS role 3) plays a weekday game — no block", async ({
   page,
 }) => {
+  // The old grade-3 "no access" popup is gone (Phase 3A, decision §6-4): a
+  // student plays like everyone else. lms_session and the game are stubbed.
   const gameUrl = "https://book-english-games.vercel.app/play/the-tractor";
+  await page.route("**/rest/v1/rpc/lms_session", (route) =>
+    route.fulfill({
+      json: { role: 3, branch_id: "b-hq", branch_name: "TPS 본사" },
+    }),
+  );
+  await page.route(/^https:\/\/book-english-games\.vercel\.app\//, (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><title>game</title>",
+    }),
+  );
   await page.addInitScript(() => {
-    localStorage.setItem("cra_member", JSON.stringify({ id: "kid", grade: 3 }));
+    localStorage.setItem(
+      "cra_lms",
+      JSON.stringify({ token: "tok-student", role: 3 }),
+    );
   });
   await page.goto("/#content/Level%201/March");
+  await expect(page.locator("#logoutBtn")).toBeVisible();
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   await resetContentLabels(page);
   await page.evaluate((url) => {
@@ -1410,8 +1427,8 @@ test("grade 3 sees the no-access popup before a weekday game", async ({
     };
   }, gameUrl);
   await page.locator('#lessonGrid .lesson-button[data-slot="w1-Mon"]').click();
-  await expect(page.locator("#noAccessModal")).toBeVisible();
-  await expect(page.locator("#gameModal")).toBeHidden();
+  await expect(page.locator("#gameModal")).toBeVisible();
+  await expect(page.locator("#noAccessModal")).toHaveCount(0);
   await expect(page.locator("#videoModal")).toBeHidden();
 });
 
