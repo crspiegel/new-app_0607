@@ -235,7 +235,7 @@ REST 1, 다른 교재·월·레벨로 가는 UI 없음, 페이지2·홈·월그�
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | 3.1  | SQL 1차(추가만): `branches`·본사 행, `members` 확장, `classes`·`class_members`·`lms_sessions`·`login_attempts`, `lms_member()`, `lms_login/session/logout`, 시도 제한, RLS | migration.sql 재실행 idempotent, 기존 로그인 RPC 그대로 동작, 흔적 0 검증 | PGlite `npm run test:sql` + 운영 SQL Editor `verify-3a.sql`(사용자) |
 | 3.2  | 로그인 폼(지사 **자동 판별**, 복수 일치 시 지사 선택) + 세션 토큰 클라이언트 + grade 3 차단 제거                                                                           | 기존 회원 본사로 로그인, 관리자 `@` 경로 무변경, 잠금 메시지              | Playwright REST 픽스처                                              |
-| 3.3  | 역할별 관리자 메뉴·가드(지사·반·회원 뷰), 동명이인 접미사 제안                                                                                                             | §4.6 표대로 노출, 학생 `#admin` 차단                                      | Playwright + RLS 스크립트(승인 후)                                  |
+| 3.3  | 역할별 관리자 메뉴·가드(지사·반·회원 뷰), 동명이인 접미사 제안, 로그인 "잠금 해제"(최고관리자·지사, `login_attempts`)                                                      | §4.6 표대로 노출, 학생 `#admin` 차단                                      | Playwright + RLS 스크립트(승인 후)                                  |
 | 3.4  | 엑셀 업로드(SheetJS, 미리보기, 1트랜잭션 RPC, 결과표), 템플릿 2종 파일                                                                                                     | 500행 한도, 전체 롤백, 결과표                                             | 픽스처 xlsx 3종(정상·중복·오류)                                     |
 | 3.5  | SQL 2차(구 RPC 제거, pk 교체, `lms_probe_headers` 제거), 문서(`NOTES`, `SUPABASE_SETUP`), 보안 체크리스트(§4.8)                                                            | 구 RPC 호출 0                                                             | `qa` + 실계정 4종                                                   |
 
@@ -294,21 +294,20 @@ REST 1, 다른 교재·월·레벨로 가는 UI 없음, 페이지2·홈·월그�
 - 비밀번호는 choose 재호출 때문에 **변수에만** 보관(저장 금지), 성공·취소·화면 이탈 시 비운다.
 - 토큰: `localStorage.cra_lms` = `{token, role, branch_name, display_name}`(표시용 캐시). 로드 때 `lms_session()` 1회 →
   `null`이면 키 삭제·비로그인. `cra_member`는 읽으면 삭제.
-- 헤더: 지시서대로 `sb`를 `let`으로 바꾸고 `createClient(…, {global:{headers:{'x-lms-token': token}}})` 재생성
-  (`background-editor.js`·`hero-banner.js`는 공유 lexical `sb`를 호출 시점에 읽으므로 그대로 동작).
-  **대안(멈춤 1에서 PM 결정):** 클라이언트 1개 + `global.fetch` 래퍼가 `/rest/v1/` 요청에만 현재 토큰을 붙임 —
-  재생성 시 "Multiple GoTrueClient instances" 경고·진행 중 요청이 옛 클라이언트에 남는 문제가 없다.
+- 헤더: **PM 결정(멈춤 1) = fetch 래퍼.** 클라이언트 1개 + `global.fetch`가 Supabase REST(`/rest/v1/`) 요청에만
+  현재 토큰을 `x-lms-token`으로 붙인다. 토큰 없으면 헤더 없음, 관리자 Auth 경로 무변경.
 - 메시지: invalid "Please check your ID and password." / locked "Too many tries. Please try again in N minutes."
   (N = `ceil(retry_after_sec / 60)`). 클라이언트 형식 검사(`ACCOUNT_RE`)는 LMS 경로에서 뺀다(서버가 정규화,
   한글 아이디 허용 — D5a). 빈 칸만 막는다.
 
-- [ ] **Step 1 (테스트 먼저):** `tests/lms-login.spec.js` — ① ok → 홈, Log out 보임, Admin 숨김, `cra_lms` 저장
+- [x] **Step 1 (테스트 먼저):** `tests/lms-login.spec.js` — ① ok → 홈, Log out 보임, Admin 숨김, `cra_lms` 저장
       ② choose → 지사 버튼 2개 → 선택 시 `p_branch_id` 포함 재호출 → ok ③ invalid 문구 ④ locked "N minutes"
       ⑤ 새로고침 → `lms_session` 1회 → 로그인 유지 ⑥ `lms_session` null → 키 삭제·비로그인 ⑦ Log out →
       `lms_logout` 호출·키 삭제 ⑧ 옛 `cra_member` 삭제 ⑨ `@` 아이디 → `auth/v1/token`만, `lms_login` 0회
       ⑩ 학생(role 3)으로 요일 슬롯 → 차단 팝업 없이 재생 ⑪ 로그인 후 REST 요청 헤더에 `x-lms-token`.
-- [ ] **Step 2:** FAIL 확인 → 구현 → PASS. 비로그인 화면 시각 테스트(`board-visual`) 무변경.
-- [ ] **Step 3:** smoke의 grade 3 테스트 새 의미로 수정, `npm run check`.
+- [x] **Step 2:** FAIL 확인(11/12) → 구현 → PASS(12×3). 비로그인 로그인 화면은 변경 전 빌드와 로그인 카드 이미지·
+      레이아웃 값 동일(375·1366).
+- [x] **Step 3:** smoke의 grade 3 테스트 새 의미로 수정, `npm run check`.
 - [ ] **Step 4:** Vite 종료 → `npm.cmd run qa` 전체 PASS → 스크린샷 8장 → 로컬 커밋.
 - [ ] **Step 5 (멈춤 2):** 보고 — 운영 SQL(Task 3.1 Step 5) 실행 확인 전에는 푸시하지 않는다.
 

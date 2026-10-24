@@ -29,10 +29,11 @@ Doc map → `CLAUDE.md`, gotchas → `NOTES.md`, session detail → `.claude/WOR
     5.25 MB via `npm run covers:sync`), `qr/qr-list.csv` 70 rows. **iPhone real-device check is the
     user's** (weekday tap → Vimeo full screen, back closes the overlay). Gotchas: `NOTES.md` "학생 QR
     페이지 2세대", "페이지2 보드 공유 파일".
-  - **Phase 3A — LMS SQL done locally, NOT run on the live DB** (`4356e19` + security-review fixes, `2026-10-23`):
-    `migration.sql` "LMS (Phase 3A)" block + `supabase/lms/` (precheck, verify, run order),
-    `npm run test:sql`. Decisions → review §4.9, tasks → plan 3.1/3.2. **At stop 1** (PM review) → user
-    runs the SQL → 3.2 login client → push only after the SQL. **Next:** 3.3~3.5, then Phase 4 (R4).
+  - **Phase 3A — done locally, NOT live** (`2026-10-23`..`24`): SQL 1 = `migration.sql` "LMS (Phase 3A)"
+    block + `supabase/lms/` (precheck, verify, run order), `npm run test:sql`; 3.2 login client
+    (`lms_login`, branch choice, `cra_lms`, fetch wrapper adds `x-lms-token`, grade-3 block gone).
+    Decisions → review §4.9, tasks → plan 3.1/3.2. **Push only after the user ran the SQL** + PM "푸시".
+    **Next:** 3.3~3.5 (incl. admin "unlock"), then Phase 4 (R4).
 - **Naver QR registration (user):** 70 codes from `qr/qr-list.csv` (`play.tps-education.com`). TPS
   still to move its songs to its own Vimeo (`vimeo.com/<id>` in the admin screen).
 - **Home hero cast** — stage 1 rejected by the PM on real devices (`2026-10-21`); only on the local

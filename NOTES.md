@@ -122,14 +122,11 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 ## Auth, grades & Supabase (Phase 2/3)
 
 - **Two login kinds share one form** (`#loginForm`). Branch on `@`: an id containing `@` → **admin**
-  Supabase Auth (`auth.signInWithPassword({email:id})`); otherwise → **member** `sb.rpc("verify_member_login",
-{p_id,p_password})` returning the grade (1-3) or null. ⚠ Don't issue member ids containing `@` — they'd
-  misroute to the admin Auth path and fail.
-- **Member grade is a CLIENT-SIDE gate**, not real auth. It lives in `state.grade` + `localStorage.cra_member`
-  (`saveMemberSession`/`clearMemberSession`/`restoreMemberSession`), restored on load (an admin Supabase
-  session supersedes it). It's spoofable on purpose — the real protection is RLS (only admins can WRITE
-  content/members/settings; video URLs are public to read). The grade only drives the `#noAccessModal` popup
-  in `openSlot` (grade 3 blocked; 1/2/admin/anon play).
+  Supabase Auth (`auth.signInWithPassword({email:id})`); otherwise → **LMS member** `sb.rpc("lms_login")`
+  (Phase 3A — see "LMS 로그인 클라이언트" below). ⚠ Don't issue member ids containing `@` — they'd misroute to
+  the admin Auth path and fail.
+- _(Superseded in Phase 3A)_ The old client-side grade (`state.grade` + `localStorage.cra_member`) and the
+  grade-3 `#noAccessModal` block are gone. `cra_member` is deleted on load; everyone plays videos.
 - **`body.signed-in`** (admin OR member) hides the header Login button and shows Log out; **`body.is-admin`**
   additionally shows the Admin button. `updateAdminUI()` sets both; logout clears admin (`signOut`) AND the
   member session.
@@ -234,6 +231,26 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 - ⚠ pgcrypto `crypt(pw, hash)`는 깨진 bcrypt(`$2a$06$short`)·빈 값·1글자 값이면 `invalid salt` 예외, 아무 2글자 이상
   문자열은 옛 DES 솔트로 받아들여 예외가 없다 → "평문 해시" 테스트 픽스처는 `$2a$06$short`처럼 써야 예외 경로를 탄다.
 - PGlite: `db.query()`는 한 문장만 → 여러 문장은 `db.exec()`(결과 배열, 마지막 행 있는 결과 = SQL Editor 표).
+
+### LMS 로그인 클라이언트 (Phase 3A / 3.2, 2026-10-24)
+
+- **Supabase 클라이언트는 하나.** `createClient(…, {global:{fetch: lmsFetch}})` — `lmsFetch`가 현재 `lmsToken`을
+  `${SUPABASE_URL}/rest/v1/` 요청에만 `x-lms-token`으로 붙인다(토큰 없으면 헤더 없음). Auth·Storage 요청은 그대로라
+  관리자 `@` 경로 무변경. 클라이언트를 다시 만들지 말 것(GoTrueClient 중복·옛 클라이언트에 남는 요청).
+- 저장: `localStorage.cra_lms` = `{token, role, branch_name, display_name}`(표시용 캐시). 로드 때 `lms_session()`
+  1회 → `null`이면 키 삭제, 오류(오프라인·SQL 미실행)면 이번 로드만 비로그인. 비밀번호는 저장하지 않는다.
+- `choose` 응답: `#loginBranchChoice` 버튼 목록, 비밀번호는 `pendingLogin` 변수에만. 입력 변경·화면 이탈
+  (`body[data-screen]` MutationObserver)·선택 완료 때 비운다.
+- 로그아웃은 `lms_logout()`을 **토큰을 지우기 전에, Auth signOut보다 먼저** 호출(헤더가 필요). LMS 사용자 헤더 = Log out만(D15).
+- ⚠ **공용 태블릿 경쟁 상태(보안 검토 2026-10-24):** 로드 때 `lms_session` 응답이 늦게 오면 그사이 로그인한 사람을
+  덮어쓴다 → 응답 후 `lmsToken !== stored.token`이면 무시. 로그인은 `loginBusy`(한 번에 하나: 연타·지사 두 번 탭)와
+  `loginSeq`(폼 수정·화면 이탈 때 증가 → 늦은 응답 버림)로 막는다. 화면을 떠나면 비밀번호 칸도 비운다.
+- `window.fetch`를 직접 부르는 테스트는 래퍼를 거치지 않아 아무것도 검사하지 않는다 → 래퍼 `lmsFetch`를 직접 부를 것.
+- CORS: Supabase REST 사전 요청은 요청한 헤더를 그대로 허용한다(`x-lms-token` 포함, 2026-10-24 curl 확인).
+- 테스트 `tests/lms-login.spec.js`는 Supabase 요청 **전부**를 가짜 응답으로 받는다(운영 0). smoke 스위트는 REST를
+  실제로 쓰므로, 토큰을 심는 smoke 테스트는 `lms_session`만 가짜로 준다.
+- ⚠ 1366 폭 전체 화면 스크린샷은 같은 빌드끼리도 바이트가 달라진다(움직이는 요소) → 화면 무변경은
+  `.login-card` 요소 스크린샷 + 주요 요소 `getBoundingClientRect` 비교로 확인한다.
   `format('%s', boolean)`은 `t`/`f`를 찍는다(`::text`면 `true`/`false`).
 
 ## Supabase egress — QA burned the free quota (2026-08-24)
