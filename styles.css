@@ -5463,3 +5463,230 @@ body.bg-editing.bg-ghost .site-footer {
 .admin-bg-btn:hover {
   background: #f2f6ff;
 }
+
+/* ==========================================================================
+   Teacher resources (교사 자료실, teacher-resources.js, 2026-10-29)
+   The resource page is the month page in another mode: body[data-screen=
+   "resources"] hides the 3~12월 grid and shows 2-3 download buttons that
+   reuse .month-button (same size, level color and lip) with their own text.
+   The '교사 자료실' button sits at the right end of the title row (>=768px)
+   or under the left-aligned title (phones); "월 선택" takes the same spot on the
+   resource page. Korean labels are a PM-set exception to the English UI
+   (teacher-only screens) — NOTES "교사 자료실".
+   ========================================================================== */
+.teacher-res-button {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 48px;
+  /* Phones: under the (left-aligned) title, on its left edge. */
+  margin: 14px 0 0;
+  padding: 0 18px;
+  border: 2px solid var(--level-accent, var(--macaw-blue));
+  border-radius: 16px;
+  background: var(--canvas);
+  box-shadow: 0 4px 0 var(--level-accent-shadow, var(--macaw-blue-shadow));
+  color: var(--level-accent-shadow, var(--ink));
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.teacher-res-button:active {
+  box-shadow: 0 1px 0 var(--level-accent-shadow, var(--macaw-blue-shadow));
+  transform: translateY(3px);
+}
+
+.teacher-res-icon {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+body.can-teacher-res[data-screen="months"] #teacherResBtn,
+body[data-screen="resources"] #resourceBackBtn {
+  display: flex;
+}
+
+#resourceGrid,
+#resourceStatus,
+body[data-screen="resources"] #monthGrid {
+  display: none;
+}
+
+body[data-screen="resources"] #resourceGrid {
+  display: flex;
+}
+
+body[data-screen="resources"] #resourceStatus {
+  display: block;
+}
+
+/* Same cell math as the month grid: 2 columns on phones, each button 90% of
+   its cell (.month-button width: 90%). */
+.res-grid {
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 12px;
+  row-gap: 20px;
+}
+
+.res-grid > .month-button.res-button {
+  flex: 0 0 calc((100% - 12px) / 2 * 0.9);
+  width: auto;
+}
+
+#monthScreen[class*="level-theme-"] .month-button.res-button strong.res-name {
+  margin-top: 12px;
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  word-break: keep-all;
+  -webkit-text-stroke: 0;
+}
+
+#monthScreen[class*="level-theme-"] .month-button.res-button:disabled {
+  background: #ececec;
+  border-color: #d6d6d6;
+  box-shadow: 0 7px 0 #d6d6d6;
+  cursor: default;
+}
+
+#monthScreen[class*="level-theme-"] .month-button.res-button:disabled span,
+#monthScreen[class*="level-theme-"]
+  .month-button.res-button:disabled
+  strong.res-name {
+  color: #9a9a9a;
+}
+
+.res-status {
+  min-height: 1.5em;
+  margin: 28px 0 0;
+  color: var(--level-accent-shadow, var(--ink));
+  font-family: "Noto Sans KR", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  #monthScreen .month-header {
+    position: relative;
+  }
+
+  #monthScreen .teacher-res-button {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    margin: 0;
+    transform: translateY(-50%);
+  }
+
+  #monthScreen .teacher-res-button:active {
+    transform: translateY(calc(-50% + 3px));
+  }
+
+  /* 5 columns on the month grid → each button = 90% of a fifth. */
+  .res-grid {
+    column-gap: 24px;
+  }
+
+  .res-grid > .month-button.res-button {
+    flex-basis: calc((100% - 48px) / 5 * 0.9);
+  }
+
+  #monthScreen[class*="level-theme-"] .month-button.res-button strong.res-name {
+    font-size: 24px;
+  }
+}
+
+/* Admin: 배너 tab section — 4 levels, one row per slot. */
+.admin-res {
+  display: grid;
+  gap: 12px;
+  max-width: 720px;
+  margin-top: 36px;
+  padding-top: 24px;
+  border-top: 2px solid #eee;
+  font-family: var(--font-admin);
+}
+
+.res-admin-list {
+  display: grid;
+  gap: 16px;
+}
+
+.res-admin-level {
+  display: grid;
+  gap: 8px;
+}
+
+.res-admin-level h3 {
+  margin: 0;
+  color: #444;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.res-admin-row {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e3e3e3;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13px;
+}
+
+.res-admin-slot {
+  font-weight: 700;
+}
+
+.res-admin-file {
+  color: var(--muted-ink);
+  overflow-wrap: anywhere;
+}
+
+.res-admin-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.res-admin-actions button {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 9px;
+  background: #fafafa;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.res-admin-actions .res-admin-delete[data-armed] {
+  border-color: #e04444;
+  background: #ff4b4b;
+  color: #fff;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .res-admin-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

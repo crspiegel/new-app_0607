@@ -961,6 +961,209 @@ notify pgrst, 'reload schema';
 -- ==== end LMS (Phase 3A) ====
 
 -- ============================================================================
+-- Teacher resources (교사 자료실, 2026-10-29) — 1 private bucket + 1 table
+-- ----------------------------------------------------------------------------
+-- ADD-ONLY and safe to re-run. Needs the "LMS (Phase 3A)" block above
+-- (lms_member). Level keys are the NEW keys: beginner · level-1..3.
+-- Slots: plan (월간.연간교육안) · award (상장) · test (테스트, level-2/3 only).
+-- Admins upload / replace / delete. Admins and LMS role 1 (branch) / 2
+-- (teacher) list and download through 60-second signed URLs: the Storage API
+-- passes the x-lms-token header to Postgres as request.headers, so the
+-- storage.objects read policy can ask lms_member() (checked live 2026-10-29:
+-- the Storage CORS preflight allows x-lms-token). Nobody reads the table
+-- directly — RPCs only.
+-- ============================================================================
+
+-- Private bucket: 10 MB, PDF / xlsx / xls only (the admin screen checks the
+-- same before uploading).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('teacher-resources', 'teacher-resources', false, 10485760,
+        array['application/pdf',
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'application/vnd.ms-excel'])
+on conflict (id) do update
+  set public             = false,
+      file_size_limit    = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+-- One row per filled slot. storage_path is ASCII only:
+-- <level>/<slot>/<upload epoch ms>.<ext>; the original (Korean) name lives in
+-- file_name and becomes the download name.
+create table if not exists public.teacher_resources (
+  level        text not null,
+  slot         text not null,
+  storage_path text not null unique,
+  file_name    text not null check (length(file_name) between 1 and 200),
+  file_size    bigint not null check (file_size between 1 and 10485760),
+  updated_at   timestamptz not null default now(),
+  primary key (level, slot),
+  constraint teacher_resources_slot_ok check (
+    (level in ('beginner', 'level-1') and slot in ('plan', 'award'))
+    or (level in ('level-2', 'level-3') and slot in ('plan', 'award', 'test'))),
+  constraint teacher_resources_path_ok check (
+    storage_path ~ ('^' || level || '/' || slot || '/[0-9]{13}\.(pdf|xlsx|xls)$'))
+);
+
+-- RLS on with NO policies: anon / authenticated get nothing directly.
+alter table public.teacher_resources enable row level security;
+revoke all on public.teacher_resources from anon, authenticated;
+
+-- Who may list and download: an admin, or an LMS branch (1) / teacher (2).
+create or replace function public.teacher_resources_allowed()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select public.is_admin()
+      or exists (select 1 from public.lms_member() m where m.role in (1, 2));
+$$;
+
+-- The level's slots in button order with the current file (NULL file = an
+-- empty slot, shown as "준비 중"). No rows for anyone else or a bad level.
+create or replace function public.teacher_resources_list(p_level text)
+returns table (slot text, file_name text, file_size bigint, updated_at timestamptz)
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select s.slot, r.file_name, r.file_size, r.updated_at
+    from (values ('plan', 1), ('award', 2), ('test', 3)) as s (slot, ord)
+    left join public.teacher_resources r
+      on r.level = p_level and r.slot = s.slot
+   where public.teacher_resources_allowed()
+     and p_level in ('beginner', 'level-1', 'level-2', 'level-3')
+     and (s.slot <> 'test' or p_level in ('level-2', 'level-3'))
+   order by s.ord;
+$$;
+
+-- One slot's file for a download: {"path", "name"}, or NULL (empty slot or
+-- not allowed). The client then asks Storage for a 60-second signed URL.
+create or replace function public.teacher_resource_file(p_level text, p_slot text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select jsonb_build_object('path', r.storage_path, 'name', r.file_name)
+    from public.teacher_resources r
+   where r.level = p_level
+     and r.slot = p_slot
+     and public.teacher_resources_allowed();
+$$;
+
+-- Admin: point a slot at an object that was just uploaded. Returns the
+-- REPLACED object's path (the client deletes it from Storage), or NULL.
+create or replace function public.teacher_resource_set(
+  p_level text, p_slot text, p_path text, p_name text, p_size bigint
+)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_old text;
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  if not exists (select 1 from storage.objects o
+                  where o.bucket_id = 'teacher-resources' and o.name = p_path) then
+    raise exception 'teacher resource: % is not in storage', p_path;
+  end if;
+  select r.storage_path into v_old
+    from public.teacher_resources r
+   where r.level = p_level and r.slot = p_slot
+   for update;
+  insert into public.teacher_resources as r
+    (level, slot, storage_path, file_name, file_size, updated_at)
+  values (p_level, p_slot, p_path, btrim(p_name), p_size, now())
+  on conflict (level, slot) do update
+    set storage_path = excluded.storage_path,
+        file_name    = excluded.file_name,
+        file_size    = excluded.file_size,
+        updated_at   = now();
+  return nullif(v_old, p_path);
+end;
+$$;
+
+-- Admin: empty a slot. Returns the object path to delete from Storage, or NULL.
+create or replace function public.teacher_resource_clear(p_level text, p_slot text)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_old text;
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  delete from public.teacher_resources r
+   where r.level = p_level and r.slot = p_slot
+  returning r.storage_path into v_old;
+  return v_old;
+end;
+$$;
+
+-- Storage: admins write (only well-formed ASCII paths) and read.
+drop policy if exists teacher_resources_admin_all on storage.objects;
+create policy teacher_resources_admin_all on storage.objects
+  for all to authenticated
+  using (bucket_id = 'teacher-resources' and public.is_admin())
+  with check (
+    bucket_id = 'teacher-resources'
+    and public.is_admin()
+    and name ~ '^(beginner|level-1|level-2|level-3)/(plan|award|test)/[0-9]{13}\.(pdf|xlsx|xls)$'
+    and (name !~ '/test/' or name ~ '^level-[23]/'));
+
+-- Is this object the CURRENT file of a slot? A replaced or cleared file whose
+-- Storage removal failed (an orphan) answers false. Used by the policy below
+-- (anon needs EXECUTE); it only says yes/no about an ASCII timestamp path.
+create or replace function public.teacher_resource_is_current(p_name text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select exists (select 1 from public.teacher_resources r
+                  where r.storage_path = p_name);
+$$;
+
+-- An LMS branch / teacher session (the x-lms-token header) may read = get a
+-- signed URL — for current files only. Read only: no insert / update /
+-- delete policy for anon.
+drop policy if exists teacher_resources_lms_read on storage.objects;
+create policy teacher_resources_lms_read on storage.objects
+  for select to anon
+  using (bucket_id = 'teacher-resources'
+         and public.teacher_resource_is_current(name)
+         and exists (select 1 from public.lms_member() m where m.role in (1, 2)));
+
+-- Grants: the helper is internal; list/file are public RPCs (they answer
+-- nothing to the wrong caller); set/clear are for signed-in admins.
+revoke execute on function public.teacher_resources_allowed() from public, anon, authenticated;
+revoke execute on function public.teacher_resource_is_current(text) from public, authenticated;
+grant execute on function public.teacher_resource_is_current(text) to anon;  -- in the policy
+grant execute on function public.teacher_resources_list(text) to anon, authenticated;
+grant execute on function public.teacher_resource_file(text, text) to anon, authenticated;
+revoke execute on function public.teacher_resource_set(text, text, text, text, bigint) from public, anon;
+revoke execute on function public.teacher_resource_clear(text, text) from public, anon;
+grant execute on function public.teacher_resource_set(text, text, text, text, bigint) to authenticated;
+grant execute on function public.teacher_resource_clear(text, text) to authenticated;
+
+notify pgrst, 'reload schema';
+-- ==== end Teacher resources ====
+
+-- ============================================================================
 -- AFTER running the above: register your first admin.
 -- 1) Dashboard → Authentication → Users → Add user (email + password).
 -- 2) Run, replacing the email with the one you just created:

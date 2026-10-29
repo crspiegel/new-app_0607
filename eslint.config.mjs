@@ -139,6 +139,33 @@ export default [
       "no-undef": "error",
     },
   },
+  // teacher-resources.js: classic script after app.js (same shared scope).
+  {
+    files: ["teacher-resources.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "script",
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        sb: "readonly",
+        state: "readonly",
+        isAdmin: "readonly",
+        showScreen: "readonly",
+        setHash: "readonly",
+        applyLevelTheme: "readonly",
+        monthLevelTag: "readonly",
+        canSeeTeacherResources: "readonly",
+        LEVELS: "readonly",
+        levelLabel: "readonly",
+        levelFromAny: "readonly",
+      },
+    },
+    rules: {
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "no-undef": "error",
+    },
+  },
   {
     files: ["app.js", "scripts/**/*.mjs", "tests/**/*.js"],
     languageOptions: {

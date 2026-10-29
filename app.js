@@ -183,8 +183,13 @@ function getBackgroundEntry(level, page, month) {
 }
 
 const appShell = document.querySelector(".app-shell");
-// Which screens have an editable background, and their storage page key.
-const SCREEN_BG_PAGE = { months: "page1", content: "page2" };
+// Which screens have an editable background, and their storage page key. The
+// teacher-resources page wears its level's 페이지1 (month page) background.
+const SCREEN_BG_PAGE = {
+  months: "page1",
+  resources: "page1",
+  content: "page2",
+};
 
 function ensureBgLayer() {
   let layer = document.querySelector("#pageBgLayer");
@@ -408,6 +413,10 @@ const screens = {
   home: document.querySelector("#homeScreen"),
   overview: document.querySelector("#overviewScreen"),
   months: document.querySelector("#monthScreen"),
+  // The teacher-resources page IS the month page in another mode
+  // (body[data-screen="resources"] swaps the month buttons for downloads), so
+  // its header, title, colors and background match by construction.
+  resources: document.querySelector("#monthScreen"),
   content: document.querySelector("#contentScreen"),
   contentV2: document.querySelector("#contentScreenV2"),
   contentV3: document.querySelector("#contentScreenV3"),
@@ -442,6 +451,7 @@ const calendarGridV3 = document.querySelector("#calendarGridV3");
 // level pages, so they keep the default (green) footer.
 const levelPageScreens = new Set([
   "months",
+  "resources",
   "content",
   "contentV2",
   "contentV3",
@@ -479,6 +489,7 @@ function showScreen(name) {
 function applyLevelTheme() {
   [
     screens.months,
+    screens.resources,
     screens.content,
     screens.contentV2,
     screens.contentV3,
@@ -501,8 +512,8 @@ function setHash(view) {
     return;
   }
 
-  if (view === "months") {
-    window.location.hash = `months/${encodeURIComponent(state.level)}`;
+  if (view === "months" || view === "resources") {
+    window.location.hash = `${view}/${encodeURIComponent(state.level)}`;
     return;
   }
 
@@ -1636,17 +1647,28 @@ document.querySelectorAll(".content-v3-type").forEach((button) => {
    lms_login RPC and carry a session token (Phase 3A). */
 
 // The LMS session token rides on ONE Supabase client: this fetch wrapper adds
-// it as `x-lms-token` to Supabase REST requests only (RLS reads it through
-// lms_member()). No token → no header. Auth and Storage requests are never
-// touched, so the admin (@) login path is unchanged. Never put it in a URL.
+// it as `x-lms-token` to Supabase REST requests (RLS reads it through
+// lms_member()) and to signing a teacher-resources download URL (the Storage
+// API hands the header to the storage.objects policy the same way). No token
+// → no header. Auth and every other Storage request are never touched, so
+// the admin (@) login path is unchanged. Never put it in a URL.
 let lmsToken = null;
-const SUPABASE_REST = window.SUPABASE_URL
-  ? `${String(window.SUPABASE_URL).replace(/\/+$/, "")}/rest/v1/`
+const SUPABASE_BASE = window.SUPABASE_URL
+  ? String(window.SUPABASE_URL).replace(/\/+$/, "")
   : "";
+const LMS_TOKEN_PREFIXES = SUPABASE_BASE
+  ? [
+      `${SUPABASE_BASE}/rest/v1/`,
+      `${SUPABASE_BASE}/storage/v1/object/sign/teacher-resources/`,
+    ]
+  : [];
 function lmsFetch(input, init) {
   const isRequest = input instanceof window.Request;
   const url = isRequest ? input.url : String(input);
-  if (!lmsToken || !SUPABASE_REST || !url.startsWith(SUPABASE_REST)) {
+  if (
+    !lmsToken ||
+    !LMS_TOKEN_PREFIXES.some((prefix) => url.startsWith(prefix))
+  ) {
     return window.fetch(input, init);
   }
   const headers = new window.Headers(
@@ -1891,13 +1913,23 @@ async function savePage(level, month) {
   });
 }
 
+// Teacher resources (교사 자료실) are for admins and LMS branch (1) / teacher
+// (2) accounts — never students (3) or visitors. This only decides what the
+// page shows; the server checks again on every list / download
+// (teacher_resources_allowed, the storage.objects policy).
+function canSeeTeacherResources() {
+  return isAdmin || (state.lms != null && [1, 2].includes(state.lms.role));
+}
+
 function updateAdminUI() {
   // signed-in = admin OR an LMS member. The Admin button is admin-only (LMS
   // roles get only Log out until Phase 3.3 — decision D15); Login hides when
-  // signed in (CSS keys off body.signed-in).
+  // signed in (CSS keys off body.signed-in). Every login / logout / restore
+  // passes through here, so the 교사 자료실 button flips without a reload.
   const signedIn = isAdmin || state.lms != null;
   document.body.classList.toggle("is-admin", isAdmin);
   document.body.classList.toggle("signed-in", signedIn);
+  document.body.classList.toggle("can-teacher-res", canSeeTeacherResources());
   if (adminNavBtn) adminNavBtn.hidden = !isAdmin;
   if (logoutBtn) logoutBtn.hidden = !signedIn;
 }
@@ -2769,11 +2801,18 @@ renderLessons();
 renderLessonsV2();
 renderCalendarV3();
 
-// Level routes: #months/<level>, #content[-v2|-v3]/<level>/<month>. An old
-// bookmark with an old level key (#months/Level%201 = Beginner) is rewritten
-// in place to the new key — replaceState, so no extra history entry — and an
-// unknown level opens the home page.
-const LEVEL_VIEWS = ["months", "content", "content-v2", "content-v3"];
+// Level routes: #months/<level>, #resources/<level>,
+// #content[-v2|-v3]/<level>/<month>. An old bookmark with an old level key
+// (#months/Level%201 = Beginner) is rewritten in place to the new key —
+// replaceState, so no extra history entry — and an unknown level opens the
+// home page.
+const LEVEL_VIEWS = [
+  "months",
+  "resources",
+  "content",
+  "content-v2",
+  "content-v3",
+];
 const hashParts = window.location.hash.slice(1).split("/");
 const [view, , hashMonth] = hashParts;
 let hashLevel = null;
@@ -2794,7 +2833,11 @@ if (LEVEL_VIEWS.includes(view)) {
   }
 }
 
-if (view === "months" && hashLevel) {
+// #resources/<level> opens on the month page; teacher-resources.js moves on
+// to the resource page once the sign-in is known (craAuthReady) — or puts
+// #months/<level> in the address for anyone not allowed. No forbidden screen
+// shows even for a moment.
+if ((view === "months" || view === "resources") && hashLevel) {
   state.level = hashLevel;
   monthLevelTag.textContent = levelLabel(state.level);
   applyLevelTheme();
@@ -2837,6 +2880,13 @@ if (view === "content-v3" && hashLevel && hashMonth) {
   showScreen("contentV3");
 }
 
+// Resolves once the load-time sign-in (admin or LMS) is known. Scripts loaded
+// after this one (teacher-resources.js) wait on it rather than on timing.
+let resolveAuthReady;
+window.craAuthReady = new Promise((resolve) => {
+  resolveAuthReady = resolve;
+});
+
 // Restore any admin session, load saved content from Supabase, then honor an
 // #admin deep link (admins only — others are bounced to login).
 (async () => {
@@ -2848,6 +2898,7 @@ if (view === "content-v3" && hashLevel && hashMonth) {
   await refreshAdminStatus();
   if (!isAdmin) await restoreLmsSession(); // an admin session supersedes it
   updateAdminUI();
+  resolveAuthReady();
   refreshSignupUI();
   await hydrateContent();
   await hydrateBackgrounds();

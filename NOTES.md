@@ -973,6 +973,40 @@ level, book, slot)`)에서만.
   48장 중 1장 — 실패 1건은 재실행으로 확인하고, 같은 장이 반복 실패할 때만 진짜 변화로 본다.
 - Windows: Vite 개발 서버가 떠 있으면 감시 중인 폴더의 `git mv`가 `Permission denied` → 서버를 끄고 옮긴다.
 
+## 교사 자료실 (`2026-10-29`, B — Phase 4 대체)
+
+- **자료페이지 = 월 화면의 "자료 모드".** `screens.resources`가 `#monthScreen` 자체이고 `body[data-screen="resources"]`가
+  월 버튼을 숨기고 `#resourceGrid`를 보인다 → 헤더·제목·레벨 색·배경(페이지1)·반응형 규칙이 월 페이지와 저절로 같다.
+  자료 버튼은 `.month-button` 클래스를 재사용(크기·턱·색) + 자기 글자 규칙(`.res-name`, 높은 특이도).
+- **표시 조건은 `updateAdminUI()` 한 곳**(`body.can-teacher-res` = 관리자 또는 LMS role 1·2). 로그인·로그아웃·로드 복원이
+  모두 이 함수를 거치므로 새로고침 없이 바뀐다. 서버도 매번 다시 판정(RPC `teacher_resources_allowed`, Storage 정책).
+- **`#resources/<key>` 직접 진입:** `app.js`는 월 화면을 먼저 열고, `teacher-resources.js`가 `window.craAuthReady`(로드 때
+  로그인 확인이 끝나면 resolve) 뒤에 자료페이지로 가거나 `#months/<key>`로 주소를 바꾼다 — 금지 화면이 한 순간도 안 보임.
+  ⚠ 뒤 스크립트가 app.js의 초기화 흐름에 기대야 하면 타이밍 말고 이런 Promise를 쓴다(첫 await가 마이크로태스크로 끝나면
+  뒤 스크립트가 아직 실행 전일 수 있다).
+- **다운로드 = Content-Disposition 방식(PM 결정).** RPC `teacher_resource_file` → `createSignedUrl(path, 60)` → URL 뒤에
+  `&download=<encodeURIComponent(원래 이름)>`를 **직접** 붙여 같은 탭의 숨은 `<a>`(target 없음) 클릭. 응답이 attachment라
+  페이지가 그대로다(새 탭·이동·CORS 없음). ⚠ supabase-js `createSignedUrl(…, { download })`는 이름을 **두 번 인코딩**한다
+  (`URLSearchParams` 뒤 `encodeURI`) → 옵션을 쓰지 말 것.
+- `lmsFetch`는 REST 외에 `…/storage/v1/object/sign/teacher-resources/`에만 `x-lms-token`을 붙인다. Storage API가 요청 헤더를
+  `request.headers`로 Postgres에 넘겨 `storage.objects` 정책의 `lms_member()`가 읽는다(소스 확인, 공식 문서 없음 — 설계
+  문서 B4). 운영 사전 요청이 `x-lms-token`을 허용함을 2026-10-29 확인.
+- ⚠ **supabase-js는 `File`/`Blob` 업로드를 multipart로 보내 `contentType` 옵션이 무시된다** — 버킷 MIME 제한은 파일 자체의
+  type을 보는데 일부 PC는 xlsx type이 빈 값이다 → `await file.arrayBuffer()` + 확장자로 정한 `contentType`으로 올린다.
+- 교체 순서: 새 객체 업로드 → RPC `teacher_resource_set`(이전 경로 반환) → 이전 객체 삭제. set 실패면 새 객체를 지워 되돌림.
+  삭제는 RPC `teacher_resource_clear` → 객체 삭제. 관리자 삭제 확인은 대화상자 대신 같은 버튼 2번(4초).
+- **LMS 읽기 정책은 "현재 파일"만**(`teacher_resource_is_current(name)`, 보안 검토 반영) — Storage 삭제가 실패해 남은 고아
+  파일은 선생님이 목록·서명할 수 없다(관리자만 보임).
+- ⚠ **(가)의 한계: 서명 만료(60초)는 클라이언트가 정한다.** 토큰을 꺼낸 선생님은 `expiresIn`을 크게 줘 오래가는 링크를 만들
+  수 있다(만료값은 요청 본문이라 Postgres 정책이 볼 수 없음). 서버 강제가 필요하면 (나) Edge Function. 같은 칸에 다시 올리면
+  옛 객체가 지워져 옛 링크는 죽는다.
+- 운영 선생님 테스트 계정 SQL은 비밀번호를 **서버가 만들어 결과 표에만** 보여 준다 — 문장에 비밀번호 리터럴을 넣으면 오류 로그·
+  `pg_stat_statements`·SQL Editor 기록에 남을 수 있다.
+- 폰에서는 월 페이지 제목이 원래 **왼쪽 정렬**이다 → 버튼은 제목 아래 같은 왼쪽 선. ≥768은 제목 줄 오른쪽 끝(absolute,
+  제목 위치 불변 — 테스트가 버튼 유무로 제목 rect를 비교).
+- 영어 UI 규칙 예외: '교사 자료실'·버튼 이름·안내 문구는 PM이 정한 한국어(교사 전용 화면, R4 때와 같은 예외).
+- 테스트 함정: `x?.token ?? "missing"`은 토큰이 `null`일 때도 "missing"이 된다 — 없음과 null을 구분하려면 찾은 뒤 분기.
+
 ## 요일 슬롯 게임 URL (`2026-10-22`, R1)
 
 - **비-Vimeo http(s) 호스트는 기본이 `kind:"page"`(출판사 페이지 iframe)이고, 게임은 `GAME_HOSTS`에 있는

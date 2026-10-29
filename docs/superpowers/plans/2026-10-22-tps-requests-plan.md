@@ -336,7 +336,25 @@ Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼), 3.3 착수 
   `video-source.js` `levelDbKeys`(옛 북마크 주소 이동 `levelFromLegacy`는 남겨도 됨), 스크립트 2개의 옛 키 처리.
   `tests/board-visual.spec.js` 픽스처 행을 새 키로.
 
-## Phase 4 — R4 '선생님자료실' 헤더 버튼 (상위 단계만)
+## B — 교사 자료실 (2026-10-29, Phase 4를 대체)
+
+설계·결정: `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`. 레벨별 월 선택 페이지 제목 줄 오른쪽에
+'교사 자료실'(관리자·LMS role 1·2만) → 그 레벨 자료페이지(= 월 페이지의 "자료 모드", 3~12월 버튼 자리에 다운로드 2~3개) →
+비공개 Storage 버킷 `teacher-resources`(10MB, PDF·xlsx·xls)의 60초 서명 URL을 같은 탭에서 엶. 관리자 '배너' 탭에 10칸 업로드.
+
+- [x] 테스트 먼저: `tests/teacher-resources-sql.spec.js`(버킷·표 직접 접근 차단·RPC 권한 5종 호출자·CHECK·Storage 정책·
+      선생님 테스트 계정 SQL), `tests/teacher-resources.spec.js`(버튼 노출·로그인/로그아웃 즉시 반영·위치·자료페이지 4개·
+      다운로드·실패 3종·권한 없는 직접 진입·토큰 범위·관리자 업로드/교체/삭제·10MB/형식 차단) → RED 확인.
+- [x] SQL: `migration.sql` "Teacher resources" 블록(추가만, 재실행 안전). 운영 선생님 테스트 계정
+      `supabase/lms/teacher-test-account.sql`(비밀번호는 자리표시자).
+- [x] 클라이언트: `teacher-resources.js`(새 classic script), `app.js` 연결(화면·해시·`canSeeTeacherResources`·
+      `craAuthReady`·`lmsFetch`가 서명 요청에만 토큰), `index.html`, `styles.css`.
+- [ ] 운영(사용자): B SQL → 선생님 테스트 계정 → (가) 확인 2(실제 다운로드) → 푸시 → 실제 파일 업로드 → 아이폰 사파리 확인.
+
+## Phase 4 — R4 '선생님자료실' 헤더 버튼 — **취소 (2026-10-29)**
+
+> PM 결정: 위 **B — 교사 자료실**이 대체한다(헤더 알약 버튼·`site_settings.header_buttons`·관리자 "버튼" 탭은 만들지
+> 않는다). 아래는 기록용으로 남긴다.
 
 의존: Phase 3(역할 세션). 추정 1일. 배포 가능: 단독.
 
@@ -355,4 +373,4 @@ Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼), 3.3 착수 
 | 1     | 3~4h  | 단독                           | —                       |
 | 2     | 3~4일 | 2.1~2.4 각각 / 2.5~2.8 한 번에 | Phase 1                 |
 | 3     | 5~7일 | 3.1~3.2 / 3.3~3.4 / 3.5        | Phase 2(코드 충돌 회피) |
-| 4     | 1일   | 단독                           | Phase 3                 |
+| 4     | —     | **취소** → B 교사 자료실       | —                       |

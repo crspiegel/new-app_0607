@@ -309,12 +309,60 @@
                     <strong id="monthLevelTag">Level</strong>
                   </div>
                 </div>
+                <!-- Teacher resources (teacher-resources.js): shown on the
+                     month page to admins + LMS branch/teacher only
+                     (body.can-teacher-res); "월 선택" only in resources mode. -->
+                <button
+                  type="button"
+                  class="teacher-res-button"
+                  id="teacherResBtn"
+                >
+                  <svg
+                    class="teacher-res-icon"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    focusable="false"
+                  >
+                    <path
+                      d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"
+                    ></path>
+                    <path d="M12 10v6"></path>
+                    <path d="m9 13 3 3 3-3"></path>
+                  </svg>
+                  <span>교사 자료실</span>
+                </button>
+                <button
+                  type="button"
+                  class="teacher-res-button teacher-res-back"
+                  id="resourceBackBtn"
+                >
+                  <svg
+                    class="teacher-res-icon"
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    focusable="false"
+                  >
+                    <path d="M15 6 9 12l6 6"></path>
+                  </svg>
+                  <span>월 선택</span>
+                </button>
               </div>
               <div
                 class="month-grid"
                 id="monthGrid"
                 aria-label="Choose month"
               ></div>
+              <div
+                class="res-grid"
+                id="resourceGrid"
+                aria-label="교사 자료"
+              ></div>
+              <p
+                class="res-status"
+                id="resourceStatus"
+                role="status"
+                aria-live="polite"
+              ></p>
             </div>
           </div>
         </section>
@@ -934,6 +982,24 @@
                   >
                     저장
                   </button>
+                </div>
+
+                <!-- Teacher resources (teacher-resources.js): one file per
+                     slot, 10 slots in 4 levels — the admin mirror of the
+                     resource pages. Saves immediately, no 저장 button. -->
+                <div class="admin-res" id="teacherResAdmin">
+                  <h2 class="admin-subtitle">교사 자료실 파일</h2>
+                  <p class="admin-hint">
+                    PDF · 엑셀(xlsx, xls), 한 파일 <strong>10MB까지</strong>.
+                    올리는 즉시 반영되고, 새 파일을 올리면 이전 파일은
+                    지워집니다. (위 배너 '저장' 버튼과는 관계없어요.)
+                  </p>
+                  <div class="res-admin-list" id="teacherResAdminList"></div>
+                  <p
+                    class="admin-status"
+                    id="teacherResStatus"
+                    aria-live="polite"
+                  ></p>
                 </div>
               </div>
             </div>
@@ -1630,5 +1696,6 @@
     <script src="app.js"></script>
     <script src="background-editor.js"></script>
     <script src="hero-banner.js"></script>
+    <script src="teacher-resources.js"></script>
   </body>
 </html>

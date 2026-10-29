@@ -28,3 +28,17 @@ SQL Editor는 마지막 결과 표만 보여 준다. 세 파일 모두 결과가
 - `verify-3a.sql` — anon 역할 + `x-lms-token` 헤더로 브라우저 호출을 흉내 내 로그인·세션·RLS·잠금·구 RPC 호환을
   확인하고 전부 되돌린다.
 - 로컬 검증: `npm.cmd run test:sql` (PGlite 임베디드 Postgres, 운영 접속 없음) — `tests/lms-sql.spec.js`.
+
+## 교사 자료실 확인용 선생님 테스트 계정 (2026-10-29)
+
+`teacher-test-account.sql` — 운영에 role 2(선생님)·지사 hq 계정 `tps-teacher-test`를 만든다(교사 자료실 (가) 확인 2:
+실제 다운로드). **3A 운영 반영(위 2번) 뒤, 교사 자료실 B SQL(`migration.sql` 재실행) 뒤에** 실행한다.
+
+- **아무도 비밀번호를 입력하지 않는다.** 서버가 12자 무작위 비밀번호를 만들어 결과 표의 `password` 칸에 **한 번만**
+  보여 준다. SQL 문장에 비밀번호가 없으므로 SQL Editor 기록·오류 로그·쿼리 통계에 남지 않는다(보안 검토 반영).
+  그 자리에서 확인에만 쓰고 파일·문서·채팅·커밋에 옮기지 않는다.
+- 기대 결과: 표 1줄 `tps-teacher-test | 2 | hq | true | 0 | (비밀번호)`. 다시 실행하면 새 비밀번호(이전 것은 무효)·
+  재활성화·세션 종료.
+- ⚠ 아이디가 공개 저장소에 있다 → **확인이 끝나면 바로** 파일 맨 아래 한 줄
+  (`delete from public.members where id = 'tps-teacher-test';`)만 따로 실행해 지운다.
+- 대안: 관리자 화면 '회원' 탭에서 등급 2로 만들어도 role 2·hq가 된다.

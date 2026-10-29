@@ -225,7 +225,11 @@ slugify(month)/book-n`)와 1:1(예 `assets/covers/level-3/march/book-2.jpg`). �
 
 스크린샷은 세션 스크래치 폴더(로컬 임시). 학생 페이지 픽셀 비교 기준선은 Phase 2 Task에서 다시 찍는다.
 
-## 3. R4 — 헤더 '선생님자료실' 버튼 (R5 이후 Phase)
+## 3. R4 — 헤더 '선생님자료실' 버튼 (R5 이후 Phase) — **취소 (2026-10-29)**
+
+> PM 결정(2026-10-29): 이 안(헤더 알약 버튼 + 외부 링크)은 만들지 않는다. 레벨별 월 선택 페이지의 '교사 자료실' 버튼 +
+> 레벨별 자료페이지 + 비공개 Storage 다운로드로 대체 — `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`
+> (B). 아래는 기록용.
 
 - **저장:** `site_settings` 키 `header_buttons` = `[{ id, label, url, newTab, visible, minRole }]`.
   테이블·RLS 추가 없음(공개 읽기, 관리자 쓰기 정책 재사용). `minRole`: `0` 최고관리자, `1` 지사, `2`

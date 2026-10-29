@@ -243,6 +243,22 @@ Menu button requirements:
 - Host `play.tps-education.com` (publisher Vimeo embedded directly); `www.cambridgereading.com/q/…`
   also works (publisher page framed).
 
+## Teacher Resources (교사 자료실, 2026-10-29)
+
+- Who: admins and LMS branch (role 1) / teacher (role 2) accounts. Students (role 3) and visitors
+  never see the button or the page; the server refuses them too (RPCs + Storage policy).
+- Each level's month page has a '교사 자료실' button at the right end of the title row (under the
+  title on phones). It opens that level's resource page `#resources/<key>`: the same page with the
+  March-December buttons replaced by download buttons, same level colors.
+- Buttons (fixed names): Beginner, Level 1 → 월간.연간교육안 · 상장; Level 2, Level 3 → 월간.연간교육안 ·
+  상장 · 테스트 (10 slots). A slot without a file is a grey, disabled "준비 중" button.
+- One file per slot (PDF / xlsx / xls, 10 MB max) in the private Storage bucket `teacher-resources`.
+  A download is a 60-second signed URL opened in the same tab (the file is saved, the page stays).
+- Admin: 배너 tab → "교사 자료실 파일": per slot the current file name · size · date, upload (replace —
+  the old file is deleted) and a two-click delete.
+- The Korean labels are a PM-set exception to the English UI (teacher-only screens).
+- This replaces the cancelled header "선생님자료실" link button (former Phase 4 / R4).
+
 ## Data Model Direction
 
 Future implementation should separate content data from rendering logic.

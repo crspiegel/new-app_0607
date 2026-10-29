@@ -180,6 +180,7 @@ test("levels: old hash addresses move to the new keys", async ({
   context,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "routing only, run once");
+  test.setTimeout(60000); // nine full page loads in one test
   const cases = [
     ["#months/Level%201", "#months/beginner", "#monthLevelTag", "Beginner"],
     ["#months/Level%204", "#months/level-3", "#monthLevelTag", "Level 3"],
