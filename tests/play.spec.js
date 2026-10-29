@@ -45,11 +45,11 @@ test("video-source.js loads before app.js without redeclaration", async ({
     ),
     youtube: publisherVimeoId("https://youtu.be/tHybl0l9tbQ"),
     otherHost: publisherVimeoId("https://example.com/?video=1"),
-    beginnerSlots: allSlotKeys("Level 1").length,
-    levelOneSlots: allSlotKeys("Level 2").length,
-    path: qrPath("Level 1", "March", "w1-Mon"),
-    slotUpper: slotFromQr("W4-FRI", "Level 1"),
-    slotOtherLevel: slotFromQr("song1", "Level 1"),
+    beginnerSlots: allSlotKeys("beginner").length,
+    levelOneSlots: allSlotKeys("level-1").length,
+    path: qrPath("beginner", "March", "w1-Mon"),
+    slotUpper: slotFromQr("W4-FRI", "beginner"),
+    slotOtherLevel: slotFromQr("song1", "beginner"),
     monthPadded: monthFromNumber("03"),
     monthOutOfRange: monthFromNumber(13),
     sameParser: window.craVideo.parseVideoSource === parseVideoSource,
@@ -153,26 +153,26 @@ test("book layout: fixed book↔week mapping and book-level QR tokens", async ({
   await expect(page.locator("#homeTitle")).toBeVisible();
 
   const result = await page.evaluate(() => ({
-    beginnerBooks: bookLayout("Level 1").map((b) => b.book),
-    levelBooks: bookLayout("Level 3").map((b) => b.book),
-    beginnerWeeks: bookEntry("Level 1", 1).weeks,
-    book1Weeks: bookEntry("Level 2", 1).weeks,
-    book2Weeks: bookEntry("Level 2", 2).weeks,
-    beginnerBook2: bookEntry("Level 1", 2),
-    book3: bookEntry("Level 2", 3),
-    book0: bookEntry("Level 2", 0),
-    bookString: bookEntry("Level 2", "2").book,
-    beginnerKeys: bookSlotKeys("Level 1", 1),
-    book1Keys: bookSlotKeys("Level 2", 1),
-    book2Keys: bookSlotKeys("Level 2", 2),
-    book2Toolbar: bookToolbarButtons("Level 4", 2).map((b) => b.slot),
-    book1ToolbarTags: bookToolbarButtons("Level 4", 1).map((b) => b.tag || ""),
-    beginnerToolbar: bookToolbarButtons("Level 1", 1).map((b) => b.slot),
-    covers: bookLayout("Level 2").map((b) => b.cover),
-    path: bookQrPath("Level 3", "March", 2),
-    pathBeginner: bookQrPath("Level 1", "December", 1),
-    name: bookQrName("Level 1", "March", 1),
-    name2: bookQrName("Level 4", "December", 2),
+    beginnerBooks: bookLayout("beginner").map((b) => b.book),
+    levelBooks: bookLayout("level-2").map((b) => b.book),
+    beginnerWeeks: bookEntry("beginner", 1).weeks,
+    book1Weeks: bookEntry("level-1", 1).weeks,
+    book2Weeks: bookEntry("level-1", 2).weeks,
+    beginnerBook2: bookEntry("beginner", 2),
+    book3: bookEntry("level-1", 3),
+    book0: bookEntry("level-1", 0),
+    bookString: bookEntry("level-1", "2").book,
+    beginnerKeys: bookSlotKeys("beginner", 1),
+    book1Keys: bookSlotKeys("level-1", 1),
+    book2Keys: bookSlotKeys("level-1", 2),
+    book2Toolbar: bookToolbarButtons("level-3", 2).map((b) => b.slot),
+    book1ToolbarTags: bookToolbarButtons("level-3", 1).map((b) => b.tag || ""),
+    beginnerToolbar: bookToolbarButtons("beginner", 1).map((b) => b.slot),
+    covers: bookLayout("level-1").map((b) => b.cover),
+    path: bookQrPath("level-2", "March", 2),
+    pathBeginner: bookQrPath("beginner", "December", 1),
+    name: bookQrName("beginner", "March", 1),
+    name2: bookQrName("level-3", "December", 2),
     aliasOne: levelFromQrCode("1"),
     aliasThree: levelFromQrCode("3"),
     aliasB: levelFromQrCode("B"),
@@ -180,7 +180,7 @@ test("book layout: fixed book↔week mapping and book-level QR tokens", async ({
     aliasFour: levelFromQrCode("4"),
     legacy: levelFromQrCode("l3"),
     // Unchanged for now (removed in Task 2.5 with the route switch).
-    legacyPath: qrPath("Level 1", "March", "w1-Mon"),
+    legacyPath: qrPath("beginner", "March", "w1-Mon"),
   }));
 
   const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
@@ -213,12 +213,12 @@ test("book layout: fixed book↔week mapping and book-level QR tokens", async ({
     pathBeginner: "/q/b/12/1",
     name: "B-03-1",
     name2: "L3-12-2",
-    aliasOne: "Level 2",
-    aliasThree: "Level 4",
-    aliasB: "Level 1",
+    aliasOne: "level-1",
+    aliasThree: "level-3",
+    aliasB: "beginner",
     aliasZero: null,
     aliasFour: null,
-    legacy: "Level 4",
+    legacy: "level-3",
     legacyPath: "/q/b/3/w1-mon",
   });
   expect(result.beginnerKeys).toHaveLength(24);
@@ -378,7 +378,7 @@ const MARCH_ROW = {
   },
   labels: {},
 };
-// A Level 1 (internal "Level 2") month: two books, custom titles, book 2's
+// A Level 1 (internal "level-1") month: two books, custom titles, book 2's
 // game slot filled, a video in each book's weeks.
 const LEVEL2_ROW = {
   videos: {
@@ -455,7 +455,7 @@ test("play board: a Beginner book is the whole month, shaped like 페이지2", a
   );
 
   const screen = page.locator("#contentScreen");
-  await expect(screen).toHaveClass(/level-theme-1/);
+  await expect(screen).toHaveClass(/level-theme-beginner/);
   await expect(screen).toHaveAttribute("data-month", "March");
   await expect(page.locator("#contentLevelName")).toHaveText("Beginner");
   await expect(page.locator("#contentBannerMonthNumber")).toHaveText("3");
@@ -514,7 +514,9 @@ test("play board: a Level 1 book 2 shows only its half of the month", async ({
   await mockContent(page, [LEVEL2_ROW]);
   await page.goto("/play.html?l=l1&m=3&b=2");
   await expect(page.locator("#play")).toHaveAttribute("data-state", "board");
-  await expect(page.locator("#contentScreen")).toHaveClass(/level-theme-2/);
+  await expect(page.locator("#contentScreen")).toHaveClass(
+    /level-theme-level-1/,
+  );
   await expect(page.locator("#contentLevelName")).toHaveText("Level 1");
 
   const toolbar = page.locator("#contentScreen .content-type");
@@ -572,10 +574,10 @@ test("play board: the cover paints from the static asset, placeholder on 404", a
   await expect(card).toHaveClass(/has-cover/);
   await expect(card).toHaveCSS(
     "background-image",
-    /\/assets\/covers\/level-2\/march\/book-2.jpg/,
+    /\/assets\/covers\/level-1\/march\/book-2.jpg/,
   );
   expect(covers).toEqual([
-    "http://127.0.0.1:5173/assets/covers/level-2/march/book-2.jpg",
+    "http://127.0.0.1:5173/assets/covers/level-1/march/book-2.jpg",
   ]);
 
   await page.unroute(COVER_ROUTE);
@@ -622,11 +624,11 @@ test("play: route variants", async ({ page }) => {
     };
   });
   expect(result).toEqual({
-    path: { level: "Level 3", month: "March", book: 2 },
-    pathSlash: { level: "Level 1", month: "December", book: 1 },
-    alias: { level: "Level 4", month: "May", book: 1 },
-    query: { level: "Level 1", month: "March", book: 1 },
-    queryWins: { level: "Level 1", month: "April", book: 1 },
+    path: { level: "level-2", month: "March", book: 2 },
+    pathSlash: { level: "beginner", month: "December", book: 1 },
+    alias: { level: "level-3", month: "May", book: 1 },
+    query: { level: "beginner", month: "March", book: 1 },
+    queryWins: { level: "beginner", month: "April", book: 1 },
   });
 });
 
@@ -1339,9 +1341,12 @@ test("play: cost guard — no Storage, one content read, covers are static", asy
   await expect(page.locator("#playFrame iframe")).toHaveCount(1);
   expect(supabase.filter((url) => /\/storage\//.test(url))).toEqual([]);
   expect(calls).toHaveLength(1);
-  expect(calls[0]).toContain("level=eq.Level%202");
+  // The new key and its old twin in one read (until 01-rename.sql has run).
+  expect(decodeURIComponent(calls[0])).toContain(
+    'level=in.(level-1,"Level 2")',
+  );
   expect(calls[0]).toContain("month=eq.March");
-  expect(calls[0]).toContain("select=videos,labels");
+  expect(calls[0]).toContain("select=level,videos,labels");
   expect(supabase).toEqual(calls);
 });
 
@@ -1472,20 +1477,20 @@ test("play end overlay: next only when a filled slot follows in this book", asyn
     ({ march, level2 }) => {
       const find = window.craPlay.nextFilledSlot;
       return {
-        afterW1Mon: find(march, "Level 1", 1, "w1-Mon"),
+        afterW1Mon: find(march, "beginner", 1, "w1-Mon"),
         // "game" is skipped, empty "unit" is skipped.
-        afterEnding: find(march, "Level 1", 1, "ending"),
+        afterEnding: find(march, "beginner", 1, "ending"),
         // w2-Tue is whitespace only.
-        afterW2Mon: find(march, "Level 1", 1, "w2-Mon"),
-        afterLast: find(march, "Level 1", 1, "w4-Mon"),
-        noRow: find(null, "Level 1", 1, "w1-Mon"),
+        afterW2Mon: find(march, "beginner", 1, "w2-Mon"),
+        afterLast: find(march, "beginner", 1, "w4-Mon"),
+        noRow: find(null, "beginner", 1, "w1-Mon"),
         // Book 1 ends at w2-Fri: w3-Mon belongs to book 2, never offered.
-        book1AfterW2Mon: find(level2, "Level 2", 1, "w2-Mon"),
-        book1AfterSong1: find(level2, "Level 2", 1, "song1"),
+        book1AfterW2Mon: find(level2, "level-1", 1, "w2-Mon"),
+        book1AfterSong1: find(level2, "level-1", 1, "song1"),
         // Book 2 starts at its toolbar: game2 (game, skipped) → song2 (empty) → w3-Mon.
-        book2AfterEnding: find(level2, "Level 2", 2, "ending"),
-        book2AfterW3Tue: find(level2, "Level 2", 2, "w3-Tue"),
-        book2AfterLast: find(level2, "Level 2", 2, "w4-Fri"),
+        book2AfterEnding: find(level2, "level-1", 2, "ending"),
+        book2AfterW3Tue: find(level2, "level-1", 2, "w3-Tue"),
+        book2AfterLast: find(level2, "level-1", 2, "w4-Fri"),
       };
     },
     { march: MARCH_ROW, level2: LEVEL2_ROW },

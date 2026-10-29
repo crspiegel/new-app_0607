@@ -315,6 +315,27 @@ Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼), 3.3 착수 
 
 ---
 
+## A — 레벨 표기 정리 (2026-10-29, 3A 운영 작업 보류 중 끼워 넣음)
+
+설계·결정: `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`(멈춤 1 승인). 배포 가능: 단독, 단
+**코드 푸시 → `supabase/levels/01-rename.sql`** 순서(사용자 실행).
+
+- [x] 테스트 먼저: `tests/levels.spec.js`(LEVELS 표, QR 70개 URL·이름 고정, 표지 이동 해시, 옛 주소 이동, 호환 읽기·새 키
+      우선, 관리자 쓰기·표지 경로, 배경 삭제 두 키, 학생 페이지 한 번 읽기), `tests/levels-sql.spec.js`(00·01 SQL) → RED 확인.
+- [x] `video-source.js` `LEVELS` 한 곳 정의(키 `beginner`·`level-1..3`, `qr`, `legacy`) + `levelFromAny`·`levelDbKeys`·
+      `levelThemeClass`. 화면 코드·CSS(`level-theme-<key>` 등 28곳)·`index.html` `data-level`·스크립트를 새 키로.
+- [x] 표지 폴더 `assets/covers/level-1..4` → `beginner`, `level-1..3`(순서대로 `git mv`), 시드 `assets/l1-march-*` →
+      `beginner-march-*`. `qr/qr-list.csv` 재생성(로컬): 70행 모두 `cover_file`만 바뀜, QR URL 동일.
+- [x] 픽셀 기준선 그대로 통과(학생 Level 1 2장은 스텁을 PostgREST처럼 고친 뒤 **옛 코드로** 다시 찍음 — NOTES "레벨 키 정리").
+
+### 백로그 — SQL 2 (Phase 3.5)에 합칠 것
+
+- `supabase/levels/01-rename.sql`의 CHECK(`content_pages_level_key`, `page_backgrounds_level_key`)를 `migration.sql`로
+  옮긴다(운영에서 01이 실행된 뒤에만 — 그 전에 넣으면 옛 키 행 때문에 실패).
+- 옛 키 호환 읽기 삭제: `app.js` `rowsByNewKey`, `play.js` `level=in.(…)`, `background-editor.js` 두 키 삭제,
+  `video-source.js` `levelDbKeys`(옛 북마크 주소 이동 `levelFromLegacy`는 남겨도 됨), 스크립트 2개의 옛 키 처리.
+  `tests/board-visual.spec.js` 픽스처 행을 새 키로.
+
 ## Phase 4 — R4 '선생님자료실' 헤더 버튼 (상위 단계만)
 
 의존: Phase 3(역할 세션). 추정 1일. 배포 가능: 단독.

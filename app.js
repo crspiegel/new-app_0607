@@ -4,7 +4,8 @@ const state = {
   lms: null, // signed-in LMS member { role, branch_name, display_name } (Phase 3A)
 };
 
-// months, lessonTypes, weekdays, LEVEL_LABELS/levelLabel, TOOLBAR_BUTTONS/
+// LEVELS (levelLabel, levelFromAny, levelThemeClass …), months, lessonTypes,
+// weekdays, TOOLBAR_BUTTONS/
 // toolbarButtons, the slot-key helpers and the video URL parsers live in
 // video-source.js (loaded before this file; shared with play.html).
 const contentTypeMeta = [
@@ -115,12 +116,12 @@ if (document.fonts && document.fonts.ready) {
    toolbar slots (TOOLBAR_BUTTONS) and the 20 weekday buttons
    "w{1..4}-{Mon..Fri}" — see allSlotKeys(). Cover keys: "book-1", "book-2". */
 const contentData = {
-  "Level 1": {
+  beginner: {
     March: {
       videos: {},
       covers: {
-        "book-1": "assets/l1-march-book-1.jpg",
-        "book-2": "assets/l1-march-book-2.jpg",
+        "book-1": "assets/beginner-march-book-1.jpg",
+        "book-2": "assets/beginner-march-book-2.jpg",
       },
     },
   },
@@ -414,12 +415,7 @@ const screens = {
   admin: document.querySelector("#adminScreen"),
 };
 
-const levelThemeClasses = [
-  "level-theme-1",
-  "level-theme-2",
-  "level-theme-3",
-  "level-theme-4",
-];
+const levelThemeClasses = LEVELS.map((item) => levelThemeClass(item.key));
 const monthGrid = document.querySelector("#monthGrid");
 const lessonGrid = document.querySelector("#lessonGrid");
 const lessonGridV2 = document.querySelector("#lessonGridV2");
@@ -469,7 +465,7 @@ function showScreen(name) {
   }
   document.body.classList.toggle("subpage-active", name !== "home");
   if (levelPageScreens.has(name)) {
-    const themeClass = levelToThemeClass(state.level);
+    const themeClass = levelThemeClass(state.level);
     if (themeClass) {
       document.body.classList.add(themeClass);
     }
@@ -480,11 +476,6 @@ function showScreen(name) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function levelToThemeClass(level) {
-  const match = level.match(/\d+/);
-  return match ? `level-theme-${match[0]}` : "";
-}
-
 function applyLevelTheme() {
   [
     screens.months,
@@ -493,7 +484,7 @@ function applyLevelTheme() {
     screens.contentV3,
   ].forEach((screen) => {
     screen.classList.remove(...levelThemeClasses);
-    const themeClass = levelToThemeClass(state.level);
+    const themeClass = levelThemeClass(state.level);
     if (themeClass) {
       screen.classList.add(themeClass);
     }
@@ -1675,8 +1666,8 @@ const sb =
     : null;
 
 let isAdmin = false;
-const adminState = { level: "Level 1", month: "March" };
-const levels = ["Level 1", "Level 2", "Level 3", "Level 4"];
+const adminState = { level: "beginner", month: "March" };
+const levels = LEVELS.map((item) => item.key);
 
 // Account-format rule (mirrors the old server rule `^[!-~]{4,}$`): >= 4
 // printable-ASCII chars, no spaces, no Korean. Used by the old admin member tab
@@ -1810,6 +1801,20 @@ function slotLabel(slot, level, month) {
   return slot;
 }
 
+// Until supabase/levels/01-rename.sql has run, live rows still carry the old
+// level keys ("Level 1" = Beginner). Give each row its new key and put the
+// old-key rows first, so a page already re-saved under its new key wins over
+// its stale old copy. Rows with an unknown level are dropped. (Remove with
+// SQL 2 / Phase 3.5, once no old key is left.)
+function rowsByNewKey(rows) {
+  const legacyFirst = (item) => (item.level === item.row.level ? 1 : 0);
+  return rows
+    .map((row) => ({ row, level: levelFromAny(row.level) }))
+    .filter((item) => item.level)
+    .sort((a, b) => legacyFirst(a) - legacyFirst(b))
+    .map(({ row, level }) => ({ ...row, level }));
+}
+
 // Load every content_pages row into the cache so user pages reflect saved data.
 async function hydrateContent() {
   // "settled" = the fetch attempt finished (success OR failure) — tests wait
@@ -1821,7 +1826,7 @@ async function hydrateContent() {
   const { data, error } = await sb.from("content_pages").select("*");
   window.craContent.settled = true;
   if (error || !data) return;
-  data.forEach((row) => {
+  rowsByNewKey(data).forEach((row) => {
     contentCache[pageKey(row.level, row.month)] = {
       videos: row.videos || {},
       covers: row.covers || {},
@@ -1849,7 +1854,7 @@ async function hydrateBackgrounds() {
   const { data, error } = await sb.from("page_backgrounds").select("*");
   window.craBg.settled = true;
   if (error || !data) return;
-  data.forEach((row) => {
+  rowsByNewKey(data).forEach((row) => {
     bgCache[bgKey(row.level, row.page, row.month)] = row.data || {};
   });
   window.craBg.ready = true;
@@ -2473,10 +2478,10 @@ function renderAdminBoard() {
   const grid = document.createElement("div");
   grid.className = "admin-grid";
 
-  // Level 1 mirrors the public page: a single cover (book-1) centered next to
+  // Beginner mirrors the public page: a single cover (book-1) centered next to
   // all four weeks, instead of one cover per two-week book block. Slot keys are
   // w1..w4 (independent of the cover), so the four weeks of editors are kept.
-  const singleCover = adminState.level === "Level 1";
+  const singleCover = adminState.level === "beginner";
   const books = singleCover ? [1] : [1, 2];
   let weekNumber = 0;
   books.forEach((book) => {
@@ -2706,7 +2711,10 @@ async function uploadCover(book, file) {
   if (!sb || !file) return;
   setAdminStatus("업로드 중…");
   const art = await shrinkImage(file, COVER_MAX_EDGE, IMG_QUALITY);
-  const path = `${slugify(adminState.level)}/${slugify(adminState.month)}/${book}`;
+  // levels/<key>/… — NOT <key>/…: the old top-level folders (level-1 = old
+  // Beginner) still hold the live covers content_pages.covers points at, and
+  // a new Level 1 cover upserted to level-1/… would overwrite Beginner's.
+  const path = `levels/${slugify(adminState.level)}/${slugify(adminState.month)}/${book}`;
   const { error: upErr } = await sb.storage
     .from("covers")
     .upload(path, art, { upsert: true, contentType: art.type });
@@ -2761,9 +2769,33 @@ renderLessons();
 renderLessonsV2();
 renderCalendarV3();
 
-const [view, hashLevel, hashMonth] = window.location.hash.slice(1).split("/");
+// Level routes: #months/<level>, #content[-v2|-v3]/<level>/<month>. An old
+// bookmark with an old level key (#months/Level%201 = Beginner) is rewritten
+// in place to the new key — replaceState, so no extra history entry — and an
+// unknown level opens the home page.
+const LEVEL_VIEWS = ["months", "content", "content-v2", "content-v3"];
+const hashParts = window.location.hash.slice(1).split("/");
+const [view, , hashMonth] = hashParts;
+let hashLevel = null;
+if (LEVEL_VIEWS.includes(view)) {
+  let raw = "";
+  try {
+    raw = decodeURIComponent(hashParts[1] || "");
+  } catch {
+    raw = "";
+  }
+  hashLevel = levelFromAny(raw);
+  const base = window.location.pathname + window.location.search;
+  if (!hashLevel) {
+    history.replaceState(null, "", base);
+  } else if (hashLevel !== raw) {
+    hashParts[1] = hashLevel;
+    history.replaceState(null, "", `${base}#${hashParts.join("/")}`);
+  }
+}
+
 if (view === "months" && hashLevel) {
-  state.level = decodeURIComponent(hashLevel);
+  state.level = hashLevel;
   monthLevelTag.textContent = levelLabel(state.level);
   applyLevelTheme();
   showScreen("months");
@@ -2778,7 +2810,7 @@ if (view === "login") {
 }
 
 if (view === "content" && hashLevel && hashMonth) {
-  state.level = decodeURIComponent(hashLevel);
+  state.level = hashLevel;
   state.month = decodeURIComponent(hashMonth);
   monthLevelTag.textContent = levelLabel(state.level);
   updateContentMonthNumber();
@@ -2787,7 +2819,7 @@ if (view === "content" && hashLevel && hashMonth) {
 }
 
 if (view === "content-v2" && hashLevel && hashMonth) {
-  state.level = decodeURIComponent(hashLevel);
+  state.level = hashLevel;
   state.month = decodeURIComponent(hashMonth);
   monthLevelTag.textContent = levelLabel(state.level);
   updateContentV2Header();
@@ -2796,7 +2828,7 @@ if (view === "content-v2" && hashLevel && hashMonth) {
 }
 
 if (view === "content-v3" && hashLevel && hashMonth) {
-  state.level = decodeURIComponent(hashLevel);
+  state.level = hashLevel;
   state.month = decodeURIComponent(hashMonth);
   monthLevelTag.textContent = levelLabel(state.level);
   updateContentV3Header();

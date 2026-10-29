@@ -952,10 +952,13 @@ bgDeleteOverride.addEventListener("click", async () => {
   if (bgEdit.saving) return;
   bgEdit.saving = true;
   setBgStatus("삭제 중…");
+  // Both level keys: until supabase/levels/01-rename.sql has run, an old-key
+  // copy of this override would otherwise come back on the next load.
   const { error } = await sb
     .from("page_backgrounds")
     .delete()
-    .match({ level: state.level, page: bgEdit.page, month: state.month });
+    .in("level", levelDbKeys(state.level))
+    .match({ page: bgEdit.page, month: state.month });
   bgEdit.saving = false;
   if (error) {
     setBgStatus("삭제 실패.");

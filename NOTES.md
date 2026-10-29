@@ -939,7 +939,7 @@ level, book, slot)`)에서만.
 - **표지는 정적 파일 `assets/covers/<level-slug>/<month-slug>/book-<n>.jpg`**(`coverAssetPath`, Storage 경로와 1:1,
   `COVER_EXT = "jpg"` — 업로드가 WebP 재인코딩이라고 적혀 있지만 실제 70개 전부 `image/jpeg`였다). 학생 페이지는 `new Image()`
   로 미리 읽어 성공할 때만 `.has-cover`(404면 흰 자리표시자, 요청 1회). **Storage는 절대 읽지 않는다.**
-  관리자가 표지를 바꾸면 선생님 사이트는 즉시(Storage), 학생 페이지는 `npm run covers:sync -- --only "Level 3"` → 커밋 →
+  관리자가 표지를 바꾸면 선생님 사이트는 즉시(Storage), 학생 페이지는 `npm run covers:sync -- --only level-2` → 커밋 →
   푸시 후 반영(관리자 표지 카드 밑 힌트). `--dry-run`은 REST 1회 + HEAD 70회(용량·타입만). `tests/covers.spec.js`가 70개
   존재·소문자·크기를 고정한다. `check-assets-case`는 리터럴 경로만 보므로 동적 경로는 이 테스트가 대신한다.
 - ⚠ **`scripts/check-assets-case.mjs`는 주석 속 `assets/…` 문자열도 잡는다**(정규식이 리터럴만 봄). `play.js` 주석의
@@ -947,6 +947,31 @@ level, book, slot)`)에서만.
   적을 것. 동적 경로(표지 70개)는 `tests/covers.spec.js`가 대신 검사한다.
 - **1세대의 🎮 목록 표시(`.play-game-mark`)는 목록과 함께 사라졌다**(보드는 선생님과 동일해야 하므로). 게임 슬롯은 탭하면
   "Let's play!" 카드. `tests/board-visual.spec.js`에 학생 페이지 4장(Beginner·Level 1 교재2 × 2 뷰포트) 기준선이 있다.
+
+## 레벨 키 정리 (`2026-10-29`, A)
+
+- **레벨 정의는 `video-source.js` `LEVELS` 한 곳.** 키 `beginner`·`level-1`·`level-2`·`level-3` = 화면 표기. 옛 키
+  `"Level 1".."Level 4"`(옛 Level 1 = Beginner)는 `legacy`로만 남아 옛 북마크·이름 안 바뀐 DB 행을 읽을 때 쓴다.
+  새 키를 화면 표기("Level 1")와 똑같이 쓰지 않은 이유: 옛 Beginner 키와 같은 문자열이 되어 전환이 모호해진다.
+- ⚠ **테마 색을 키의 숫자에서 뽑지 말 것** — `levelThemeClass(key)` → `level-theme-<key>`. 예전 `/\d+/` 방식이면
+  `level-1`이 Beginner 노랑이 되고 `beginner`에서 `play.js`가 예외로 멈춘다.
+- ⚠ **표지 업로드 경로는 `levels/<key>/<month>/<book>`.** Storage의 옛 최상위 폴더 `level-1/…`은 옛 Beginner 표지이고
+  `content_pages.covers`가 전체 URL로 가리킨다 → 새 키로 같은 경로에 upsert하면 Beginner 표지를 덮어쓴다. 옛 객체는
+  지우지 말 것(아직 URL로 쓰임).
+- **DB 전환 순서: 코드 푸시 → `supabase/levels/01-rename.sql`.** 코드가 옛 키·새 키를 둘 다 읽고(`rowsByNewKey`,
+  학생 페이지 `level=in.(…)`, 배경 삭제는 두 키 모두) 새 키 행이 이긴다. SQL을 먼저 돌리면 옛 코드가 빈 화면.
+  01은 끝에 CHECK를 걸어 옛 키 쓰기를 막는다. 호환 코드·CHECK의 migration.sql 합치기는 SQL 2(3.5) 백로그.
+- 옛 주소 `#months/Level%201`은 로드 때 `history.replaceState`로 새 키 주소로 바뀐다(기록이 늘지 않음). 알 수 없는
+  레벨은 홈.
+- supabase-js `.in()`은 공백을 `+`로 보낸다(PostgREST는 공백으로 읽음) — 테스트에서 URL을 `decodeURIComponent`로
+  읽으면 `+`가 남는다 → `new URL(url).searchParams`로 읽을 것. 직접 만드는 PostgREST 목록은 공백 있는 값을 `"…"`로.
+- Playwright: 헤더 레벨 아이콘은 계속 움직여서 "stable"이 안 된다 → 클릭은 홈 레벨 카드(`#levelSection [data-level]`).
+- `board-visual` 스텁은 이제 PostgREST처럼 `level`·`month` 필터를 지킨다. 예전엔 학생 페이지에 항상 첫 행(Beginner)을
+  줘서 학생 Level 1 기준선 2장이 Beginner 데이터였다 → 옛 코드로 다시 찍은 뒤 새 코드를 0픽셀로 비교했다. 픽스처 행은
+  일부러 옛 키(호환 읽기 검증) — 호환 제거 때 새 키로 바꾼다.
+- ⚠ 정확 비교(0픽셀) 기준선은 **원래부터 약 2% 흔들린다**(375 등에서 글자 가장자리 ~400픽셀). `fe991f8`과 새 코드 모두
+  48장 중 1장 — 실패 1건은 재실행으로 확인하고, 같은 장이 반복 실패할 때만 진짜 변화로 본다.
+- Windows: Vite 개발 서버가 떠 있으면 감시 중인 폴더의 `git mv`가 `Permission denied` → 서버를 끄고 옮긴다.
 
 ## 요일 슬롯 게임 URL (`2026-10-22`, R1)
 

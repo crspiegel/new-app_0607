@@ -18,7 +18,11 @@ const PUBLISHER = "https://tps-education.com/58?video=173725167";
 const GAME = "https://book-english-games.vercel.app/play/the-tractor";
 
 // March for every level: filled + empty slots, two covers (one for Beginner),
-// custom book titles on the 6-button levels.
+// custom book titles on the 6-button levels. The rows keep the OLD level keys
+// ("Level 1" = Beginner) on purpose: they are the bytes these baselines were
+// taken from, and the pages must read them through the legacy fallback
+// (levelFromAny) until supabase/levels/01-rename.sql has run and that
+// fallback is removed (plan backlog, SQL 2 / 3.5) — then switch to new keys.
 const ROWS = ["Level 1", "Level 2", "Level 3", "Level 4"].map((level, i) => ({
   level,
   month: "March",
@@ -50,6 +54,28 @@ const ROWS = ["Level 1", "Level 2", "Level 3", "Level 4"].map((level, i) => ({
           song2: "I Can Help",
         },
 }));
+
+// Answer like PostgREST: honour the level / month filters the student page
+// sends (eq.<v> or in.(<v>,"<v w/ space>")). The teacher site reads every row.
+// (Until 2026-10-29 every request got all four rows and the student page took
+// the first — Beginner's — so the Level 1 student shots showed Beginner data.)
+function filterRows(url) {
+  const params = new URL(url).searchParams;
+  const allowed = (filter) => {
+    if (!filter) return null;
+    const eq = filter.match(/^eq\.(.*)$/);
+    if (eq) return [eq[1]];
+    const list = filter.match(/^in\.\((.*)\)$/);
+    return list ? list[1].split(",").map((v) => v.replace(/^"|"$/g, "")) : [];
+  };
+  const levels = allowed(params.get("level"));
+  const months = allowed(params.get("month"));
+  return ROWS.filter(
+    (row) =>
+      (!levels || levels.includes(row.level)) &&
+      (!months || months.includes(row.month)),
+  );
+}
 
 // Headless Chromium on Windows rasterises glyph edges slightly differently
 // from run to run (LCD/subpixel text): a handful of pixels then cross the
@@ -90,7 +116,7 @@ test.beforeEach(async ({ page }) => {
       });
     }
     if (url.includes("/rest/v1/content_pages")) {
-      return route.fulfill({ json: ROWS });
+      return route.fulfill({ json: filterRows(url) });
     }
     return route.fulfill({ json: [] });
   });
@@ -128,12 +154,19 @@ const SHOT = {
   threshold: 0, // exact colour match per pixel (default 0.2 hides AA noise)
 };
 
+// Snapshot names keep the old position number (page2-level-1 = Beginner) so
+// the baseline files themselves never had to change.
 for (const [w, h] of VIEWPORTS) {
-  for (const level of [1, 2, 3, 4]) {
-    test(`페이지2 Level ${level} March @${w}x${h}`, async ({ page }, info) => {
+  for (const [level, key] of [
+    [1, "beginner"],
+    [2, "level-1"],
+    [3, "level-2"],
+    [4, "level-3"],
+  ]) {
+    test(`페이지2 ${key} March @${w}x${h}`, async ({ page }, info) => {
       test.skip(info.project.name !== "desktop", "one project, by viewport");
       await page.setViewportSize({ width: w, height: h });
-      await page.goto(`/#content/Level%20${level}/March`);
+      await page.goto(`/#content/${key}/March`);
       await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
       await settle(page);
       await expect(page.locator("#lessonGrid .lesson-button")).toHaveCount(20);
@@ -157,10 +190,10 @@ test("홈 @1366x900", async ({ page }, info) => {
   });
 });
 
-test("월그리드 Level 2 @1366x900", async ({ page }, info) => {
+test("월그리드 level-1 @1366x900", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "one project, by viewport");
   await page.setViewportSize({ width: 1366, height: 900 });
-  await page.goto("/#months/Level%202");
+  await page.goto("/#months/level-1");
   await expect(page.locator("#monthGrid .month-button")).toHaveCount(10);
   await settle(page);
   await expect(page).toHaveScreenshot("months-level-2-1366x900.png", {
@@ -171,14 +204,14 @@ test("월그리드 Level 2 @1366x900", async ({ page }, info) => {
 
 // The admin board mirrors the user board with the same slot/label helpers.
 // No login: the classic-script globals render it straight into #adminScreen.
-test("관리자 보드 Level 2 @1366x900", async ({ page }, info) => {
+test("관리자 보드 level-1 @1366x900", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop", "one project, by viewport");
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/");
   await expect(page.locator("#homeTitle")).toBeVisible();
   await settle(page);
   await page.evaluate(() => {
-    adminState.level = "Level 2";
+    adminState.level = "level-1";
     adminState.month = "March";
     populateAdminSelectors();
     setAdminView("content");

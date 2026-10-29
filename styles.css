@@ -170,22 +170,22 @@ body:not(.subpage-active) .top-nav {
   line-height: 1;
 }
 
-.nav-level-one .nav-book {
+.nav-beginner .nav-book {
   background: var(--sunny-yellow);
   box-shadow: 0 5px 0 var(--sunny-yellow-shadow);
 }
 
-.nav-level-two .nav-book {
+.nav-level-1 .nav-book {
   background: var(--alert-red);
   box-shadow: 0 5px 0 var(--alert-red-shadow);
 }
 
-.nav-level-three .nav-book {
+.nav-level-2 .nav-book {
   background: var(--macaw-blue);
   box-shadow: 0 5px 0 var(--macaw-blue-shadow);
 }
 
-.nav-level-four .nav-book {
+.nav-level-3 .nav-book {
   background: var(--purple-accent);
   box-shadow: 0 5px 0 var(--purple-shadow);
 }
@@ -331,7 +331,7 @@ body[class*="level-theme-"] main {
 /* Month-selection pages — shared treatment for ALL levels (1-4). The layout,
    tactile button styling, centered Manrope numbers, and theme-tinted body are
    identical across levels (prototyped on Level 4, then rolled out to 1-3).
-   Per-level colors come from the .level-theme-N CSS variables below.
+   Per-level colors come from the .level-theme-<key> CSS variables (board.css).
    DESIGN.md grounding: saturated accent fill + white text for strong
    child-facing contrast (Learning Content Button); a thick bottom lip and no
    soft drop shadow (Tactile Depth); centered content; rounded rectangle (39px,
@@ -392,7 +392,7 @@ body[class*="level-theme-"] main {
    level's soft body tint as the background and the deeper theme shade for the
    copyright text (instead of the saturated accent fill + white text, which
    walled off the body and made it feel cramped). --level-accent-soft /
-   --level-accent-shadow are set on the body's .level-theme-N class. */
+   --level-accent-shadow are set on the body's .level-theme-<key> class. */
 body[class*="level-theme-"] .site-footer {
   background: var(--level-accent-soft);
   color: var(--level-accent-shadow);
@@ -1151,22 +1151,22 @@ p {
   text-align: center;
 }
 
-.level-one {
+.level-button--beginner {
   background: var(--sunny-yellow);
   box-shadow: 0 6px 0 var(--sunny-yellow-shadow);
 }
 
-.level-two {
+.level-button--level-1 {
   background: var(--alert-red);
   box-shadow: 0 6px 0 var(--alert-red-shadow);
 }
 
-.level-three {
+.level-button--level-2 {
   background: var(--macaw-blue);
   box-shadow: 0 6px 0 var(--macaw-blue-shadow);
 }
 
-.level-four {
+.level-button--level-3 {
   background: var(--purple-accent);
   box-shadow: 0 6px 0 var(--purple-shadow);
 }
@@ -4775,7 +4775,7 @@ body.page-bg-active .page-bg-layer {
 }
 /* Readability scrim: when a FULL background image is set (.has-full, toggled
    by applyPageBackground + the editor), a top gradient in the LEVEL's own
-   tint (--level-accent-soft, inherited from the body's level-theme-N class)
+   tint (--level-accent-soft, inherited from the body's level-theme-<key> class)
    keeps the level name / month badge readable over any artwork. The opaque
    run must extend BELOW the opaque topbar (~86px desktop / ~105px mobile
    portrait) — a 0px start would hide the 100% point behind the header and

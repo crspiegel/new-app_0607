@@ -15,12 +15,12 @@
 }
 
 /* --content-* variables drive the V1 content-page design (weekday buttons +
-   flat week-label cards). Level 1 holds the client-approved April values
-   exactly; Levels 2-4 use the analogous shades from their own theme palette:
+   flat week-label cards). Beginner holds the client-approved April values
+   exactly; Level 1-3 use the analogous shades from their own theme palette:
    --content-day-bg/-shadow = the theme-colored weekday button (3D),
    --content-day-text       = dark theme shade for the Mon–Fri label,
    --content-week-tint      = light theme tint for the flat week-label card. */
-.level-theme-1 {
+.level-theme-beginner {
   --level-accent: var(--sunny-yellow);
   --level-accent-shadow: var(--sunny-yellow-shadow);
   --level-accent-soft: #fff3cc;
@@ -30,7 +30,7 @@
   --content-week-tint: #ffe9a8;
 }
 
-.level-theme-2 {
+.level-theme-level-1 {
   --level-accent: var(--alert-red);
   --level-accent-shadow: var(--alert-red-shadow);
   --level-accent-soft: #ffe8e8;
@@ -40,7 +40,7 @@
   --content-week-tint: #ffcfcf;
 }
 
-.level-theme-3 {
+.level-theme-level-2 {
   --level-accent: var(--macaw-blue);
   --level-accent-shadow: var(--macaw-blue-shadow);
   --level-accent-soft: #e8f6ff;
@@ -50,7 +50,7 @@
   --content-week-tint: #c6e7ff;
 }
 
-.level-theme-4 {
+.level-theme-level-3 {
   --level-accent: var(--purple-accent);
   --level-accent-shadow: var(--purple-shadow);
   --level-accent-soft: #f4e3ff;
@@ -543,18 +543,18 @@
   box-shadow: 0 0 0 3px #ffffff;
 }
 
-/* Level 1 only: a single cover instead of two. The second card is dropped at
+/* Beginner only: a single cover instead of two. The second card is dropped at
    every breakpoint; the first reserves the whole left column (4 rows) so the
    weekday grid auto-flows unchanged, while the cover itself keeps its current
    size/proportion (aspect-ratio, not stretched) and sits vertically centered
    in that 1–4 week span. Column width is untouched, so the tablet/mobile
-   no-scroll layouts are unaffected. Levels 2–4 keep both covers. */
-#contentScreen.level-theme-1 .book-title-card.book-2 {
+   no-scroll layouts are unaffected. Level 1-3 keep both covers. */
+#contentScreen.level-theme-beginner .book-title-card.book-2 {
   display: none;
 }
 
 @media (min-width: 768px) {
-  #contentScreen.level-theme-1 .book-title-card.book-1 {
+  #contentScreen.level-theme-beginner .book-title-card.book-1 {
     grid-column: 1;
     grid-row: 1 / span 4;
     align-self: center;

@@ -11,38 +11,31 @@ Doc map → `CLAUDE.md`, gotchas → `NOTES.md`, session detail → `.claude/WOR
 - Backend = **Supabase** (Auth + Postgres + Storage) via the CDN UMD build — no framework, no build.
   Reads public (anon key), **writes admin-only via RLS** (`is_admin()`).
 - Live: admin content manager, login + 3 member grades, background editor, hero banner carousel,
-  game modal, per-level toolbars (Beginner 4 buttons, Level 1-3 six). Level labels are remapped for
-  display only (internal keys stay `"Level 1".."Level 4"`).
+  game modal, per-level toolbars (Beginner 4 buttons, Level 1-3 six). Level keys: live =
+  `"Level 1".."Level 4"` (label remapped); local master = `beginner`, `level-1..3` (⏳ A below).
 - The Next.js/Capacitor rebuild is out of scope (`PLATFORM_ROADMAP.md`).
 
 ## ⏳ In-progress work
 
 - **TPS requests (10/20 meeting), 5 items** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`
   (errata, recommendations, PM decisions §6) + plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`.
-  - **Phase 1 R1 — live** (`b6bb29e`, `2026-10-22`): a `GAME_HOSTS` URL in a weekday slot opens the
-    game modal / "Let's play!" like the toolbar Game button.
-  - **Phase 2A — live** (`1167b85`..`efeaf10`): `BOOK_LAYOUT` + book QR helpers, `board-view.js`
-    (shared DOM builders), `board.css` (board rules out of `styles.css`, loaded first), page2 pixel
-    baseline (`tests/board-visual.spec.js`, exact).
-  - **Phase 2B — live** (`f513aa2`..`00f4bad`, curl-checked): student page = one book of the teacher
-    board (`/q/<lv>/<month>/<book>`, 70 QR, overlay player, static covers `assets/covers` 70 files
-    5.25 MB via `npm run covers:sync`), `qr/qr-list.csv` 70 rows. **iPhone real-device check is the
-    user's** (weekday tap → Vimeo full screen, back closes the overlay). Gotchas: `NOTES.md` "학생 QR
-    페이지 2세대", "페이지2 보드 공유 파일".
+  - **Phase 1, 2A, 2B — live** (`b6bb29e`, `1167b85`..`00f4bad`; detail in the archive): game URLs in
+    weekday slots, shared board files + exact pixel baseline, student page = one book (70 QR, static
+    covers). **iPhone real-device check is the user's.**
   - **Phase 3A — done locally, NOT live** (`2026-10-23`..`24`): SQL 1 = `migration.sql` "LMS (Phase 3A)"
     block + `supabase/lms/` (precheck, verify, run order), `npm run test:sql`; 3.2 login client
     (`lms_login`, branch choice, `cra_lms`, fetch wrapper adds `x-lms-token`, grade-3 block gone).
     Decisions → review §4.9, tasks → plan 3.1/3.2. **Push only after the user ran the SQL** + PM "푸시".
     **Next:** 3.3~3.5 (incl. admin "unlock"), then Phase 4 (R4).
+- **A levels + B teacher resources (`2026-10-29`)** — design
+  `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`. **A done locally, NOT live:**
+  one `LEVELS` table, keys `beginner`/`level-1..3`, old hashes rewritten, reads accept old DB keys (new
+  row wins), `assets/covers/<key>/`, cover uploads `levels/<key>/`. **User runs
+  `supabase/levels/01-rename.sql` only AFTER the A push.** B next (local).
 - **Naver QR registration (user):** 70 codes from `qr/qr-list.csv` (`play.tps-education.com`). TPS
   still to move its songs to its own Vimeo (`vimeo.com/<id>` in the admin screen).
 - **Home hero cast** — stage 1 rejected by the PM on real devices (`2026-10-21`); only on the local
   branch `hero-cast-v1` (`1e7f059`, `dc27a21`, not on origin). Stage 2 = AI video, awaiting a PM brief.
-
-## Recent state (newest first)
-
-- `2026-10-19`..`2026-10-22` — QR student page v1 (`/q/<lv>/<month>/<slot>`, host
-  `play.tps-education.com`, iPhone full screen) shipped, then superseded by the book-level v2 (above).
 
 ## Standing rules
 

@@ -5,6 +5,21 @@
 > updated to the current `D:\_TPS` root). The live, short status now lives in `PROJECT_MEMORY.md`.
 > Read this only when you need past history, rationale, or old session logs.
 
+## Entries moved out of PROJECT_MEMORY.md (`2026-10-29`, verbatim)
+
+- **Phase 1 R1 — live** (`b6bb29e`, `2026-10-22`): a `GAME_HOSTS` URL in a weekday slot opens the
+  game modal / "Let's play!" like the toolbar Game button.
+- **Phase 2A — live** (`1167b85`..`efeaf10`): `BOOK_LAYOUT` + book QR helpers, `board-view.js`
+  (shared DOM builders), `board.css` (board rules out of `styles.css`, loaded first), page2 pixel
+  baseline (`tests/board-visual.spec.js`, exact).
+- **Phase 2B — live** (`f513aa2`..`00f4bad`, curl-checked): student page = one book of the teacher
+  board (`/q/<lv>/<month>/<book>`, 70 QR, overlay player, static covers `assets/covers` 70 files
+  5.25 MB via `npm run covers:sync`), `qr/qr-list.csv` 70 rows. **iPhone real-device check is the
+  user's** (weekday tap → Vimeo full screen, back closes the overlay). Gotchas: `NOTES.md` "학생 QR
+  페이지 2세대", "페이지2 보드 공유 파일".
+- `2026-10-19`..`2026-10-22` — QR student page v1 (`/q/<lv>/<month>/<slot>`, host
+  `play.tps-education.com`, iPhone full screen) shipped, then superseded by the book-level v2 (above).
+
 ## Recent-state entries moved out of PROJECT_MEMORY.md (`2026-10-19`, verbatim)
 
 - `2026-10-19` (deployed) — YouTube captions forced OFF (`disableYouTubeCaptions`, 3 call sites —

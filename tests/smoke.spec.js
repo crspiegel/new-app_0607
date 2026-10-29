@@ -58,14 +58,14 @@ test("main level-to-month-to-content flow renders", async ({ page }) => {
     page.getByRole("button", { name: "Beginner" }).first(),
   ).toBeVisible();
 
-  // Internal key stays "Level 1" (URL hash / data-level); the label shows
+  // The internal key (URL hash / data-level) is "beginner"; the label shows
   // "Beginner".
   await page.getByRole("button", { name: "Beginner" }).first().click();
-  await expect(page).toHaveURL(/#months\/Level%201$/);
+  await expect(page).toHaveURL(/#months\/beginner$/);
   await expect(page.locator("#monthLevelTag")).toHaveText("Beginner");
 
   await page.getByRole("button", { name: /March/i }).click();
-  await expect(page).toHaveURL(/#content\/Level%201\/March$/);
+  await expect(page).toHaveURL(/#content\/beginner\/March$/);
   await expect(page.locator("#contentLevelName")).toBeVisible();
   await expect(page.locator("#contentLevelName")).toHaveText("Beginner");
   // Beginner renames the song buttons (other levels keep "Opening Song").
@@ -79,7 +79,7 @@ test("main level-to-month-to-content flow renders", async ({ page }) => {
 });
 
 test("calendar version 2 remains available", async ({ page }) => {
-  await page.goto("/#content-v2/Level%201/March");
+  await page.goto("/#content-v2/beginner/March");
 
   await expect(page.locator("#contentScreenV2")).toHaveClass(/screen-active/);
   await expect(
@@ -91,7 +91,7 @@ test("calendar version 2 remains available", async ({ page }) => {
 test("calendar version 3 renders Mon-Fri learning calendar", async ({
   page,
 }) => {
-  await page.goto("/#content-v3/Level%201/March");
+  await page.goto("/#content-v3/beginner/March");
 
   await expect(page.locator("#contentScreenV3")).toHaveClass(/screen-active/);
   await expect(
@@ -141,7 +141,7 @@ async function resetContentLabels(page) {
 }
 
 test("page background layer stays inert without a config", async ({ page }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   await resetBgCache(page);
   // No background config → body class off, layer empty, page unchanged.
@@ -153,15 +153,15 @@ test("page background layer stays inert without a config", async ({ page }) => {
 test("seeded background renders full image and elements, month row wins", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await resetBgCache(page);
   await page.evaluate(() => {
     const { bgCache, bgKey, applyPageBackground } = window.craBg;
-    bgCache[bgKey("Level 1", "page2", "")] = {
-      full: "assets/l1-march-book-1.jpg",
+    bgCache[bgKey("beginner", "page2", "")] = {
+      full: "assets/beginner-march-book-1.jpg",
       elements: [
         {
-          src: "assets/l1-march-book-2.jpg",
+          src: "assets/beginner-march-book-2.jpg",
           x: 20,
           y: 30,
           w: 10,
@@ -223,7 +223,7 @@ test("seeded background renders full image and elements, month row wins", async 
   // A month row REPLACES the level default entirely (no merging).
   await page.evaluate(() => {
     const { bgCache, bgKey, applyPageBackground } = window.craBg;
-    bgCache[bgKey("Level 1", "page2", "March")] = { full: null, elements: [] };
+    bgCache[bgKey("beginner", "page2", "March")] = { full: null, elements: [] };
     applyPageBackground("content");
   });
   await expect(page.locator("body")).not.toHaveClass(/page-bg-active/);
@@ -293,7 +293,7 @@ test("content page fits PC screens without a vertical scrollbar", async ({
     [1440, 900],
   ]) {
     await page.setViewportSize({ width, height });
-    await page.goto("/#content/Level%201/March");
+    await page.goto("/#content/beginner/March");
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(250);
     const m = await page.evaluate(() => {
@@ -329,7 +329,7 @@ test("content page bottom spacing is unchanged on tablet and phone", async ({
     [390, 844, "151px"],
   ]) {
     await page.setViewportSize({ width, height });
-    await page.goto("/#content/Level%201/March");
+    await page.goto("/#content/beginner/March");
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(250);
     const pb = await page.evaluate(
@@ -386,8 +386,8 @@ test("hero banners build a full-width carousel under the wave", async ({
     mode: "fade",
     interval: 7,
     banners: [
-      { src: "assets/l1-march-book-1.jpg", focus: "top" },
-      { src: "assets/l1-march-book-2.jpg", focus: "bottom" },
+      { src: "assets/beginner-march-book-1.jpg", focus: "top" },
+      { src: "assets/beginner-march-book-2.jpg", focus: "bottom" },
     ],
   });
   // Default hero is slide 1; the two banners follow it.
@@ -479,7 +479,7 @@ test("hero 전환 시간 drives the real transition and the cycle length", async
         mode: "fade",
         interval: 3,
         duration: d,
-        banners: [{ src: "assets/l1-march-book-1.jpg", focus: "top" }],
+        banners: [{ src: "assets/beginner-march-book-1.jpg", focus: "top" }],
       });
       return {
         cssVar: document
@@ -503,7 +503,7 @@ test("hero 전환 시간 drives the real transition and the cycle length", async
           mode: "fade",
           interval: 3,
           duration: 1,
-          banners: [{ src: "assets/l1-march-book-1.jpg", focus: "top" }],
+          banners: [{ src: "assets/beginner-march-book-1.jpg", focus: "top" }],
         });
         const t0 = performance.now();
         const from = window.craHero.state().index;
@@ -537,8 +537,8 @@ async function heroFadeTrace(page, opts) {
           interval: 10,
           duration: 1,
           banners: [
-            { src: "assets/l1-march-book-1.jpg", focus: "center" },
-            { src: "assets/l1-march-book-2.jpg", focus: "center" },
+            { src: "assets/beginner-march-book-1.jpg", focus: "center" },
+            { src: "assets/beginner-march-book-2.jpg", focus: "center" },
           ],
         });
         // Freshly inserted slides need one resolved style pass before a class
@@ -607,7 +607,7 @@ test("both hero transitions survive prefers-reduced-motion", async ({
       mode: "fade",
       interval: 10,
       duration: 1,
-      banners: [{ src: "assets/l1-march-book-1.jpg", focus: "center" }],
+      banners: [{ src: "assets/beginner-march-book-1.jpg", focus: "center" }],
     });
     const cs = getComputedStyle(document.querySelector(".hero-slide"));
     return {
@@ -643,8 +643,8 @@ async function heroSlideTravel(page) {
           interval: 10,
           duration: 1,
           banners: [
-            { src: "assets/l1-march-book-1.jpg", focus: "center" },
-            { src: "assets/l1-march-book-2.jpg", focus: "center" },
+            { src: "assets/beginner-march-book-1.jpg", focus: "center" },
+            { src: "assets/beginner-march-book-2.jpg", focus: "center" },
           ],
         });
         requestAnimationFrame(() =>
@@ -685,8 +685,8 @@ test("the incoming hero slide always paints above the outgoing one", async ({
       interval: 10,
       duration: 1,
       banners: [
-        { src: "assets/l1-march-book-1.jpg", focus: "center" },
-        { src: "assets/l1-march-book-2.jpg", focus: "center" },
+        { src: "assets/beginner-march-book-1.jpg", focus: "center" },
+        { src: "assets/beginner-march-book-2.jpg", focus: "center" },
       ],
     });
     const slides = [...document.querySelectorAll(".hero-slide")];
@@ -833,7 +833,7 @@ test("game modal scales a fixed 1280x720 frame into a 16:9 card", async ({
     [1200, 640], // small enough to take the 1280x720 downscale fallback
   ]) {
     await page.setViewportSize({ width, height });
-    await page.goto("/#content/Level%201/March");
+    await page.goto("/#content/beginner/March");
     await page.evaluate(() => {
       /* global openGameModal */
       openGameModal("about:blank");
@@ -877,7 +877,7 @@ test("game modal keeps a native responsive frame on tablet and phone", async ({
     [390, 844],
   ]) {
     await page.setViewportSize({ width, height });
-    await page.goto("/#content/Level%201/March");
+    await page.goto("/#content/beginner/March");
     await page.evaluate(() => openGameModal("about:blank"));
     const m = await page.evaluate(() => {
       const frame = document.querySelector("#gameFrame");
@@ -905,16 +905,16 @@ test("full-width band elements span the page on every viewport", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1366, height: 900 });
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await resetBgCache(page);
   await page.evaluate(() => {
     const { bgCache, bgKey, applyPageBackground } = window.craBg;
-    bgCache[bgKey("Level 1", "page2", "")] = {
+    bgCache[bgKey("beginner", "page2", "")] = {
       full: null,
       elements: [
         // A footer pattern: repeated on X, flush with the page bottom.
         {
-          src: "assets/l1-march-book-1.jpg",
+          src: "assets/beginner-march-book-1.jpg",
           x: 50,
           y: 40,
           w: 20,
@@ -929,7 +929,7 @@ test("full-width band elements span the page on every viewport", async ({
         },
         // A stretched strip pinned 24px below the top of the page.
         {
-          src: "assets/l1-march-book-2.jpg",
+          src: "assets/beginner-march-book-2.jpg",
           x: 50,
           y: 40,
           w: 20,
@@ -1002,15 +1002,15 @@ test("full-width band elements span the page on every viewport", async ({
 test("explicit element z-index keeps the saved order and the scrim on top", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await resetBgCache(page);
   const order = await page.evaluate(() => {
     const { bgCache, bgKey, applyPageBackground } = window.craBg;
-    bgCache[bgKey("Level 1", "page2", "")] = {
-      full: "assets/l1-march-book-1.jpg",
+    bgCache[bgKey("beginner", "page2", "")] = {
+      full: "assets/beginner-march-book-1.jpg",
       elements: [
         {
-          src: "assets/l1-march-book-1.jpg",
+          src: "assets/beginner-march-book-1.jpg",
           x: 30,
           y: 30,
           w: 10,
@@ -1019,7 +1019,7 @@ test("explicit element z-index keeps the saved order and the scrim on top", asyn
           z: 0,
         },
         {
-          src: "assets/l1-march-book-2.jpg",
+          src: "assets/beginner-march-book-2.jpg",
           x: 60,
           y: 30,
           w: 10,
@@ -1045,8 +1045,8 @@ test("explicit element z-index keeps the saved order and the scrim on top", asyn
   // though bands and free elements now live in different parents.
   expect(order.zIndexes).toEqual(["1", "2"]);
   expect(order.srcOrder).toEqual([
-    "l1-march-book-1.jpg",
-    "l1-march-book-2.jpg",
+    "beginner-march-book-1.jpg",
+    "beginner-march-book-2.jpg",
   ]);
   // Free elements stay in the content-anchored frame — unchanged behaviour.
   expect(order.inFrame).toEqual([true, true]);
@@ -1058,7 +1058,7 @@ test("explicit element z-index keeps the saved order and the scrim on top", asyn
 test("editor: 가로 100% toggles a band and unchecking restores the placement", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await resetBgCache(page);
   await page.evaluate(() => {
     /* global isAdmin, updateAdminUI */
@@ -1071,7 +1071,7 @@ test("editor: 가로 100% toggles a band and unchecking restores the placement",
   await page.evaluate(() => {
     /* global bgEdit, renderBgEditCanvas */
     bgEdit.data.elements.push({
-      src: "assets/l1-march-book-1.jpg",
+      src: "assets/beginner-march-book-1.jpg",
       x: 40,
       y: 80,
       w: 20,
@@ -1179,7 +1179,7 @@ test("editor: 가로 100% toggles a band and unchecking restores the placement",
 test("background edit button hidden for non-admin visitors", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   // FAB exists in the DOM but CSS keeps it display:none without body.is-admin.
   await expect(page.locator("#bgEditFab")).toHaveCount(1);
@@ -1191,7 +1191,7 @@ test("background edit button hidden for non-admin visitors", async ({
 test("editor: element tools stay hidden until a selection exists, ghost preview overlays content", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await resetBgCache(page);
   // Stub the admin flag client-side (UI gate only; no Supabase writes here).
   await page.evaluate(() => {
@@ -1242,7 +1242,7 @@ test("editor: element tools stay hidden until a selection exists, ghost preview 
   await page.evaluate(() => {
     /* global bgEdit, renderBgEditCanvas */
     bgEdit.data.elements.push({
-      src: "assets/l1-march-book-1.jpg",
+      src: "assets/beginner-march-book-1.jpg",
       x: 50,
       y: 40,
       w: 20,
@@ -1325,12 +1325,12 @@ test("weekday slot with a game URL opens the game modal, not the video window", 
   await page.route(/^https:\/\/book-english-games\.vercel\.app\//, (route) =>
     route.fulfill({ contentType: "text/html", body: "<p>game</p>" }),
   );
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   await resetContentLabels(page);
   await page.evaluate((url) => {
     const { contentCache, pageKey } = window.craContent;
-    contentCache[pageKey("Level 1", "March")] = {
+    contentCache[pageKey("beginner", "March")] = {
       videos: { "w1-Mon": url, "w1-Tue": "https://youtu.be/LPl2AR2rm0g" },
       covers: {},
       labels: {},
@@ -1414,13 +1414,13 @@ test("a signed-in student (LMS role 3) plays a weekday game — no block", async
       JSON.stringify({ token: "tok-student", role: 3 }),
     );
   });
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await expect(page.locator("#logoutBtn")).toBeVisible();
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   await resetContentLabels(page);
   await page.evaluate((url) => {
     const { contentCache, pageKey } = window.craContent;
-    contentCache[pageKey("Level 1", "March")] = {
+    contentCache[pageKey("beginner", "March")] = {
       videos: { "w1-Mon": url },
       covers: {},
       labels: {},
@@ -1466,12 +1466,12 @@ test("external video page opens inside the video window", async ({ page }) => {
 test("video background renders above the full-image fallback", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await resetBgCache(page);
   await page.evaluate(() => {
     const { bgCache, bgKey, applyPageBackground } = window.craBg;
-    bgCache[bgKey("Level 1", "page2", "")] = {
-      full: "assets/l1-march-book-1.jpg",
+    bgCache[bgKey("beginner", "page2", "")] = {
+      full: "assets/beginner-march-book-1.jpg",
       elements: [],
       videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     };
@@ -1513,7 +1513,7 @@ test("video background renders above the full-image fallback", async ({
   // the resulting error event removes the wrapper again moments later.)
   const fileVideo = await page.evaluate(() => {
     const { bgCache, bgKey, applyPageBackground } = window.craBg;
-    bgCache[bgKey("Level 1", "page2", "")].videoUrl =
+    bgCache[bgKey("beginner", "page2", "")].videoUrl =
       "https://example.com/bg.mp4";
     applyPageBackground("content");
     const video = document.querySelector("#pageBgLayer .page-bg-video video");
@@ -1529,7 +1529,7 @@ test("video background renders above the full-image fallback", async ({
   // Clearing the URL removes the video layer; the image stays.
   await page.evaluate(() => {
     const { bgCache, bgKey, applyPageBackground } = window.craBg;
-    bgCache[bgKey("Level 1", "page2", "")].videoUrl = null;
+    bgCache[bgKey("beginner", "page2", "")].videoUrl = null;
     applyPageBackground("content");
   });
   await expect(page.locator("#pageBgLayer .page-bg-video")).toHaveCount(0);
@@ -1539,7 +1539,7 @@ test("video background renders above the full-image fallback", async ({
 test("editor: 영상 URL input validates, dirties, previews, and clears", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await resetBgCache(page);
   await page.evaluate(() => {
     /* global isAdmin, updateAdminUI */
@@ -1593,13 +1593,13 @@ test("editor: 영상 URL input validates, dirties, previews, and clears", async 
 test("toolbar renders a seeded custom button name and falls back when cleared", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   await resetContentLabels(page);
   // A custom label seeded per level+month replaces the default name.
   await page.evaluate(() => {
     const { contentCache, pageKey, renderContentToolbar } = window.craContent;
-    contentCache[pageKey("Level 1", "March")] = {
+    contentCache[pageKey("beginner", "March")] = {
       videos: {},
       covers: {},
       labels: { opening: "우리 아침 노래" },
@@ -1624,12 +1624,12 @@ test("toolbar renders a seeded custom button name and falls back when cleared", 
 test("admin board top row mirrors the custom toolbar name", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await resetContentLabels(page);
   await page.evaluate(() => {
     /* global isAdmin, updateAdminUI, openAdmin */
     const { contentCache, pageKey } = window.craContent;
-    contentCache[pageKey("Level 1", "March")] = {
+    contentCache[pageKey("beginner", "March")] = {
       videos: {},
       covers: {},
       labels: { opening: "우리 아침 노래" },
@@ -1649,7 +1649,7 @@ test("admin board top row mirrors the custom toolbar name", async ({
 test("slot modal: name field + apply-all boxes for toolbar slots only", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await resetContentLabels(page);
   await page.evaluate(() => {
     /* global isAdmin, updateAdminUI, openAdmin */
@@ -1685,7 +1685,7 @@ test("slot modal: name field + apply-all boxes for toolbar slots only", async ({
 test("GAME/SONG corner tags render on 6-button levels only", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%202/March");
+  await page.goto("/#content/level-1/March");
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   await resetContentLabels(page);
   // Line SVG icons replaced the glyph circles on every button.
@@ -1709,8 +1709,8 @@ test("GAME/SONG corner tags render on 6-button levels only", async ({
     page.getByRole("button", { name: /^I Sit\s+SONG$/ }),
   ).toBeVisible();
   // Beginner: icons unified but no tags, original names kept. (Same-document
-  // hash navigation doesn't re-route the SPA — reload to boot into Level 1.)
-  await page.goto("/#content/Level%201/March");
+  // hash navigation doesn't re-route the SPA — reload to boot into Beginner.)
+  await page.goto("/#content/beginner/March");
   await page.reload();
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   await resetContentLabels(page);
@@ -1729,7 +1729,7 @@ test("content banner keeps the level name and month circle on one row", async ({
   page,
 }) => {
   // December = a two-digit month number, the tightest fit for the circle.
-  await page.goto("/#content/Level%202/December");
+  await page.goto("/#content/level-1/December");
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   const banner = await page.evaluate(() => {
     const q = (s) => document.querySelector(s);
@@ -1770,7 +1770,7 @@ test("content banner keeps the level name and month circle on one row", async ({
 test("toolbar icons sit on a tinted circle keyed to the icon family", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%202/March");
+  await page.goto("/#content/level-1/March");
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   await resetContentLabels(page);
   const icons = await page.evaluate(() =>
@@ -1815,13 +1815,13 @@ test("toolbar icons sit on a tinted circle keyed to the icon family", async ({
 test("video player title composes '<label> · Song' for tagged song slots", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%202/March");
+  await page.goto("/#content/level-1/March");
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   await resetContentLabels(page);
   // Seed URLs — openSlot only opens the player when the slot has a video.
   await page.evaluate(() => {
     const { contentCache, pageKey, renderContentToolbar } = window.craContent;
-    contentCache[pageKey("Level 2", "March")] = {
+    contentCache[pageKey("level-1", "March")] = {
       videos: {
         song1: "https://vimeo.com/76979871",
         opening: "https://vimeo.com/76979871",
@@ -1842,14 +1842,14 @@ test("video player title composes '<label> · Song' for tagged song slots", asyn
 test("wide toolbar keeps fixed button geometry for long labels", async ({
   page,
 }) => {
-  await page.goto("/#content/Level%202/March");
+  await page.goto("/#content/level-1/March");
   await expect(page.locator("#contentScreen")).toHaveClass(/screen-active/);
   await resetContentLabels(page);
   const song1 = page.locator('.content-type[data-slot="song1"]');
   const before = await song1.boundingBox();
   await page.evaluate(() => {
     const { contentCache, pageKey, renderContentToolbar } = window.craContent;
-    contentCache[pageKey("Level 2", "March")] = {
+    contentCache[pageKey("level-1", "March")] = {
       videos: {},
       covers: {},
       labels: { song1: "The Extraordinary Show and Tell Day Adventure" },
@@ -1882,12 +1882,12 @@ test("wide toolbar keeps fixed button geometry for long labels", async ({
 });
 
 test("page background clears when leaving a level page", async ({ page }) => {
-  await page.goto("/#content/Level%201/March");
+  await page.goto("/#content/beginner/March");
   await resetBgCache(page);
   await page.evaluate(() => {
     const { bgCache, bgKey, applyPageBackground } = window.craBg;
-    bgCache[bgKey("Level 1", "page2", "")] = {
-      full: "assets/l1-march-book-1.jpg",
+    bgCache[bgKey("beginner", "page2", "")] = {
+      full: "assets/beginner-march-book-1.jpg",
       elements: [],
     };
     applyPageBackground("content");
@@ -1924,9 +1924,9 @@ test("no Supabase Storage request escapes the test stub", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#homeTitle")).toBeVisible();
   await page.getByRole("button", { name: "Beginner" }).first().click();
-  await expect(page).toHaveURL(/#months\/Level%201$/);
+  await expect(page).toHaveURL(/#months\/beginner$/);
   await page.getByRole("button", { name: /March/i }).click();
-  await expect(page).toHaveURL(/#content\/Level%201\/March$/);
+  await expect(page).toHaveURL(/#content\/beginner\/March$/);
   await page.locator(".brand").click();
   await expect(page.locator("#homeTitle")).toBeVisible();
 
@@ -1956,7 +1956,7 @@ test("local dev defaults to offline so a stray dev server spends no egress", asy
   await page.goto("/");
   await expect(page.locator("#homeTitle")).toBeVisible();
   await page.getByRole("button", { name: "Beginner" }).first().click();
-  await expect(page).toHaveURL(/#months\/Level%201$/);
+  await expect(page).toHaveURL(/#months\/beginner$/);
   await page.getByRole("button", { name: /March/i }).click();
   await expect(page.locator("#contentLevelName")).toBeVisible();
 

@@ -24,6 +24,10 @@ create extension if not exists pgcrypto;
 -- ---------------------------------------------------------------------------
 
 -- One row per (level, month) page.
+--   level:  beginner | level-1 | level-2 | level-3 (video-source.js LEVELS). Rows
+--           written before 2026-10-29 carry the old keys "Level 1".."Level 4"
+--           until supabase/levels/01-rename.sql (run AFTER the new code is live).
+--           The same applies to page_backgrounds.level below.
 --   videos: { "<slotKey>": "<vimeo url or id>" }   slotKey = opening | ending | w1-Mon .. w4-Fri
 --   covers: { "book-1": "<public url>", "book-2": "<public url>" }
 --   labels: { "<toolbarSlot>": "custom button name" }  toolbar slots only

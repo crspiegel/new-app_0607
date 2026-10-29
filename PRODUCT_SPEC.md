@@ -39,7 +39,7 @@ The app must feel simple, colorful, readable, and classroom-friendly. Controls m
 The full target structure is:
 
 - `P-00`: Main landing page
-- `P-11` to `P-14`: Level home pages for Level 1-4
+- `P-11` to `P-14`: Level home pages for Beginner and Level 1-3
 - `P-20` to `P-29`: Monthly calendar pages for March-December per level
 - `P-30` to `P-34`: Content menu actions
   - Opening Song
@@ -56,6 +56,22 @@ Target total page model from the PRD:
 - 5 content action types
 
 Implementation may use a single-page app pattern in HTML/CSS/Vanilla JS as long as the user-facing structure and navigation match this spec.
+
+### Levels (2026-10-29)
+
+Four levels, defined once in `video-source.js` `LEVELS`:
+
+| Key        | On screen | Student QR token | Old key (until 2026-10) |
+| ---------- | --------- | ---------------- | ----------------------- |
+| `beginner` | Beginner  | `b`              | `Level 1`               |
+| `level-1`  | Level 1   | `l1` (or `1`)    | `Level 2`               |
+| `level-2`  | Level 2   | `l2` (or `2`)    | `Level 3`               |
+| `level-3`  | Level 3   | `l3` (or `3`)    | `Level 4`               |
+
+The key is used everywhere inside the site: DB rows, the URL hash (`#months/level-1`,
+`#content/level-1/March`), `data-level`, the CSS class `level-theme-<key>` and file paths
+(`assets/covers/<key>/…`). Old bookmarks with an old key (`#months/Level%201`) are rewritten to
+the new key on load. The QR tokens never change (printed books).
 
 ## Design Requirements
 
@@ -82,10 +98,10 @@ Purpose:
 
 Required controls:
 
+- Beginner
 - Level 1
 - Level 2
 - Level 3
-- Level 4
 
 Responsive layout:
 
@@ -143,7 +159,7 @@ Calendar requirement:
 
 ## Main Landing Page Content
 
-The main page introduces Cambridge Reading Adventures and provides Level 1-4 entry. Section
+The main page introduces Cambridge Reading Adventures and provides Beginner / Level 1-3 entry. Section
 order: Header → Hero → Level Selection → Program Intro → Key Features → Footer. Excluded from
 the main page: reading-band progression detail, the complete book list, and any monthly
 calendar or content-entry UI. (Absorbed from the former `MAIN_PAGE_CONTENT.md`; source PDF:
@@ -163,14 +179,15 @@ calendar or content-entry UI. (Absorbed from the former `MAIN_PAGE_CONTENT.md`; 
 Title: `Choose Your Level`. Description: `Select a level to begin monthly lessons with songs,
 stories, chants, and reading activities.`
 
-| Button  | Subtitle          |
-| ------- | ----------------- |
-| Level 1 | Starter Readers   |
-| Level 2 | Growing Readers   |
-| Level 3 | Confident Readers |
-| Level 4 | Fluent Explorers  |
+| Button   | Subtitle          |
+| -------- | ----------------- |
+| Beginner | Starter Readers   |
+| Level 1  | Growing Readers   |
+| Level 2  | Confident Readers |
+| Level 3  | Fluent Explorers  |
 
-The top navigation also exposes text-form Level 1-4 menus that link to the same flow.
+The top navigation also exposes the four levels (Beginner, Level 1-3) as menus that link to the
+same flow.
 
 ### Program Intro
 

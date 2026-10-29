@@ -7,8 +7,8 @@
 //
 //   node scripts/sync-covers.mjs --dry-run          REST + HEAD only: list + total bytes
 //   node scripts/sync-covers.mjs                    download every cover (Storage egress!)
-//   node scripts/sync-covers.mjs --only "Level 3"   one level (after an admin replaced a cover)
-//   npm run covers:sync -- --only "Level 3"
+//   node scripts/sync-covers.mjs --only level-2   one level (after an admin replaced a cover)
+//   npm run covers:sync -- --only level-2         (keys: beginner, level-1, level-2, level-3)
 //
 // Afterwards: commit assets/covers and push (the student page reads the
 // committed file). Nothing here re-encodes the image: the admin upload
@@ -19,7 +19,6 @@ import process from "node:process";
 import vm from "node:vm";
 
 const root = process.cwd();
-const LEVELS = ["Level 1", "Level 2", "Level 3", "Level 4"];
 
 function parseArgs(argv) {
   const args = { dryRun: false, only: null };
@@ -37,7 +36,7 @@ function loadVideoSource() {
   const file = path.join(root, "video-source.js");
   vm.runInContext(readFileSync(file, "utf8"), context, { filename: file });
   return vm.runInContext(
-    "({ months, bookLayout, coverAssetPath, COVER_EXT })",
+    "({ LEVELS, levelFromAny, months, bookLayout, coverAssetPath, COVER_EXT })",
     context,
   );
 }
@@ -50,7 +49,9 @@ function supabaseConfig() {
   return { url: url[1], key: key[1] };
 }
 
-async function fetchCovers() {
+// Keyed "<new level key>||<month>". Rows may still carry the old level keys
+// until supabase/levels/01-rename.sql has run: the new-key row wins.
+async function fetchCovers(vs) {
   const { url, key } = supabaseConfig();
   const response = await fetch(
     `${url}/rest/v1/content_pages?select=level,month,covers`,
@@ -58,9 +59,16 @@ async function fetchCovers() {
   );
   if (!response.ok) throw new Error(`content_pages: HTTP ${response.status}`);
   const rows = await response.json();
-  return Object.fromEntries(
-    rows.map((row) => [`${row.level}||${row.month}`, row.covers || {}]),
-  );
+  const byKey = {};
+  for (const legacy of [true, false]) {
+    for (const row of rows) {
+      const level = vs.levelFromAny(row.level);
+      if (level && (level !== row.level) === legacy) {
+        byKey[`${level}||${row.month}`] = row.covers || {};
+      }
+    }
+  }
+  return byKey;
 }
 
 const EXT_BY_TYPE = {
@@ -72,9 +80,14 @@ const EXT_BY_TYPE = {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const vs = loadVideoSource();
-  const covers = await fetchCovers();
+  const keys = vs.LEVELS.map((item) => item.key);
+  // New keys only: "Level 3" would be ambiguous (old key = Level 2).
+  if (args.only && !keys.includes(args.only)) {
+    throw new Error(`--only takes one of: ${keys.join(", ")}`);
+  }
+  const covers = await fetchCovers(vs);
   const jobs = [];
-  for (const level of LEVELS) {
+  for (const level of keys) {
     if (args.only && level !== args.only) continue;
     for (const month of vs.months) {
       const row = covers[`${level}||${month}`] || {};

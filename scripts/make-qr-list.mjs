@@ -18,7 +18,6 @@ import path from "node:path";
 import process from "node:process";
 import vm from "node:vm";
 
-const LEVELS = ["Level 1", "Level 2", "Level 3", "Level 4"];
 const HEADER = [
   "qr_name",
   "level",
@@ -55,7 +54,7 @@ function loadVideoSource() {
   const file = path.join(root, "video-source.js");
   vm.runInContext(readFileSync(file, "utf8"), context, { filename: file });
   return vm.runInContext(
-    "({ months, levelLabel, monthNumber, bookLayout, bookSlotKeys, bookQrPath, bookQrName, bookTitle, coverAssetPath })",
+    "({ LEVELS, levelFromAny, months, levelLabel, monthNumber, bookLayout, bookSlotKeys, bookQrPath, bookQrName, bookTitle, coverAssetPath })",
     context,
   );
 }
@@ -69,7 +68,9 @@ function supabaseConfig() {
   return { url: url[1], key: key[1] };
 }
 
-async function fetchRows() {
+// Keyed "<new level key>||<month>". Rows may still carry the old level keys
+// until supabase/levels/01-rename.sql has run: the new-key row wins.
+async function fetchRows(vs) {
   const { url, key } = supabaseConfig();
   const response = await fetch(
     `${url}/rest/v1/content_pages?select=level,month,videos,labels`,
@@ -77,9 +78,16 @@ async function fetchRows() {
   );
   if (!response.ok) throw new Error(`content_pages: HTTP ${response.status}`);
   const rows = await response.json();
-  return Object.fromEntries(
-    rows.map((row) => [`${row.level}||${row.month}`, row]),
-  );
+  const byKey = {};
+  for (const legacy of [true, false]) {
+    for (const row of rows) {
+      const level = vs.levelFromAny(row.level);
+      if (level && (level !== row.level) === legacy) {
+        byKey[`${level}||${row.month}`] = row;
+      }
+    }
+  }
+  return byKey;
 }
 
 function csvField(value) {
@@ -107,11 +115,11 @@ const MEMO = `네이버 QR 등록 메모 — 교재별 QR 70개 (make-qr-list.mj
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const vs = loadVideoSource();
-  const rows = args.offline ? {} : await fetchRows();
+  const rows = args.offline ? {} : await fetchRows(vs);
 
   const lines = [HEADER.join(",")];
   let filledBooks = 0;
-  for (const level of LEVELS) {
+  for (const { key: level } of vs.LEVELS) {
     for (const month of vs.months) {
       const row = rows[`${level}||${month}`];
       for (const entry of vs.bookLayout(level)) {

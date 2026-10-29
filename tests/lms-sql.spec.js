@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
+import { SUPABASE_SHIM, lastRows } from "./sql-shim.mjs";
 
 // LMS SQL 1 (Phase 3A) checked locally, never against the live project:
 // PGlite (embedded Postgres + pgcrypto) gets a small Supabase look-alike
@@ -19,28 +20,6 @@ const LMS_START = MIGRATION.indexOf(
   "-- ============================================================================\n-- LMS (Phase 3A",
 );
 
-// What a Supabase project has before migration.sql runs.
-const SUPABASE_SHIM = `
-  create role anon nologin noinherit;
-  create role authenticated nologin noinherit;
-  create role service_role nologin noinherit bypassrls;
-  create schema extensions;
-  create extension pgcrypto with schema extensions;
-  create schema auth;
-  create table auth.users (id uuid primary key, email text);
-  create function auth.uid() returns uuid language sql stable as $$
-    select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
-      (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid $$;
-  create schema storage;
-  create table storage.objects (bucket_id text, name text);
-  alter table storage.objects enable row level security;
-  grant usage on schema public, extensions, auth to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
-  set search_path = "$user", public, extensions;
-`;
-
 const ADMIN_UID = "00000000-0000-4000-8000-0000000000ad";
 
 // Live members before the LMS block (one per old grade).
@@ -53,11 +32,6 @@ const OLD_MEMBERS = `
     ('teach2', extensions.crypt('pw-teach2', extensions.gen_salt('bf')), 2),
     ('old!user', extensions.crypt('pw-old', extensions.gen_salt('bf')), 3);
 `;
-
-// The SQL Editor shows the last result that has rows; do the same.
-function lastRows(results) {
-  return [...results].reverse().find((r) => r.rows.length)?.rows ?? [];
-}
 
 async function rows(db, sql) {
   return (await db.query(sql)).rows;

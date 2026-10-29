@@ -33,7 +33,7 @@
 }
 
 /* Per-level colors for the page frame (the board gets them from board.css
-   .level-theme-N). Beginner = Level 1. */
+   .level-theme-<key>). The default is Beginner's. */
 body {
   --level-accent: #ffc800;
   --level-accent-shadow: #d49a00;
@@ -44,7 +44,7 @@ body {
   --content-week-tint: #ffe9a8;
 }
 
-body[data-level="Level 2"] {
+body[data-level="level-1"] {
   --level-accent: #ff4b4b;
   --level-accent-shadow: #d83434;
   --level-accent-soft: #ffe8e8;
@@ -54,7 +54,7 @@ body[data-level="Level 2"] {
   --content-week-tint: #ffcfcf;
 }
 
-body[data-level="Level 3"] {
+body[data-level="level-2"] {
   --level-accent: #1cb0f6;
   --level-accent-shadow: #1899d6;
   --level-accent-soft: #e8f6ff;
@@ -64,7 +64,7 @@ body[data-level="Level 3"] {
   --content-week-tint: #c6e7ff;
 }
 
-body[data-level="Level 4"] {
+body[data-level="level-3"] {
   --level-accent: #ce82ff;
   --level-accent-shadow: #9f55d8;
   --level-accent-soft: #f4e3ff;

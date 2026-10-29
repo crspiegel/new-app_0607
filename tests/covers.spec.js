@@ -14,7 +14,7 @@ function loadVideoSource() {
   const file = path.resolve("video-source.js");
   vm.runInContext(readFileSync(file, "utf8"), context, { filename: file });
   return vm.runInContext(
-    "({ months, bookLayout, coverAssetPath, COVER_EXT })",
+    "({ LEVELS, months, bookLayout, coverAssetPath, COVER_EXT })",
     context,
   );
 }
@@ -24,16 +24,16 @@ test("covers: one static file per book, 70 in all", async ({}, testInfo) => {
   const vs = loadVideoSource();
   expect(vs.COVER_EXT).toBe("jpg"); // what the uploads actually are (sync dry-run)
   const expected = [];
-  for (const level of ["Level 1", "Level 2", "Level 3", "Level 4"]) {
+  for (const { key } of vs.LEVELS) {
     for (const month of vs.months) {
-      for (const entry of vs.bookLayout(level)) {
-        expected.push(vs.coverAssetPath(level, month, entry.book));
+      for (const entry of vs.bookLayout(key)) {
+        expected.push(vs.coverAssetPath(key, month, entry.book));
       }
     }
   }
   expect(expected).toHaveLength(70);
-  expect(expected[0]).toBe("assets/covers/level-1/march/book-1.jpg");
-  expect(expected[69]).toBe("assets/covers/level-4/december/book-2.jpg");
+  expect(expected[0]).toBe("assets/covers/beginner/march/book-1.jpg");
+  expect(expected[69]).toBe("assets/covers/level-3/december/book-2.jpg");
 
   const missing = expected.filter((file) => {
     try {

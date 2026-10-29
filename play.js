@@ -190,15 +190,21 @@ const FETCH_TIMEOUT_MS = 10000;
 // throws on a missing config (offline dev), HTTP error (e.g. 402), network
 // failure or the FETCH_TIMEOUT_MS limit. The row holds every slot of the
 // month; the page only ever uses this book's keys (bookSlotKeys).
+// Until supabase/levels/01-rename.sql has run the row may still carry the old
+// level key, so ONE read asks for both (levelDbKeys) and the new-key row wins.
 async function fetchPageRow(level, month) {
   const base = window.SUPABASE_URL;
   const key = window.SUPABASE_ANON_KEY;
   if (!base || !key) throw new Error("Supabase is not configured");
+  // PostgREST list: a value with a space ("Level 2") must be double-quoted.
+  const levels = levelDbKeys(level)
+    .map((value) => (/^[a-z0-9-]+$/.test(value) ? value : `"${value}"`))
+    .join(",");
   const url =
     `${base}/rest/v1/content_pages` +
-    `?level=eq.${encodeURIComponent(level)}` +
+    `?level=in.${encodeURIComponent(`(${levels})`)}` +
     `&month=eq.${encodeURIComponent(month)}` +
-    "&select=videos,labels";
+    "&select=level,videos,labels";
   const controller = new window.AbortController();
   const timer = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -209,7 +215,8 @@ async function fetchPageRow(level, month) {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const rows = await response.json();
     if (!Array.isArray(rows) || rows.length === 0) return null;
-    return { videos: rows[0].videos || {}, labels: rows[0].labels || {} };
+    const row = rows.find((item) => item.level === level) || rows[0];
+    return { videos: row.videos || {}, labels: row.labels || {} };
   } finally {
     window.clearTimeout(timer);
   }
@@ -645,8 +652,7 @@ function renderBoard() {
   const { level, month, book } = playState.route;
   const entry = bookEntry(level, book);
   const labels = labelsOf();
-  const levelNumber = level.match(/\d+/)[0];
-  boardScreen.className = `screen screen-active level-theme-${levelNumber}`;
+  boardScreen.className = `screen screen-active ${levelThemeClass(level)}`;
   boardScreen.dataset.month = month;
   const number = String(monthNumber(month));
   contentLevelName.textContent = levelLabel(level);

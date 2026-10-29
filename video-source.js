@@ -6,7 +6,9 @@
    Data and pure functions only: no DOM access at the top level, so
    scripts/make-qr-list.mjs can also evaluate this file in Node. */
 
-/* exported months, lessonTypes, weekdays, levelLabel, toolbarButtons,
+/* exported LEVELS, levelLabel, levelFromLegacy, levelFromAny, levelDbKeys,
+   levelThemeClass,
+   months, lessonTypes, weekdays, toolbarButtons,
    allSlotKeys, qrLevelCode, levelFromQrCode, monthNumber, monthFromNumber,
    slotToQr, slotFromQr, slotTitle, qrPath, BOOK_LAYOUT, bookLayout, bookEntry,
    bookSlotKeys, bookToolbarButtons, bookQrPath, bookQrName, bookTitle,
@@ -36,17 +38,57 @@ const lessonTypes = [
 ];
 const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
 
-/* ---- Level display labels ----------------------------------------------
-   Internal keys stay "Level 1".."Level 4" (DB rows, URL hash, data-level
-   attributes all use them) — only the on-screen label is remapped. */
-const LEVEL_LABELS = {
-  "Level 1": "Beginner",
-  "Level 2": "Level 1",
-  "Level 3": "Level 2",
-  "Level 4": "Level 3",
-};
+/* ---- Levels (the ONE definition, 2026-10-29) -----------------------------
+   `key` is the internal value everywhere: DB rows (content_pages,
+   page_backgrounds, teacher_resources), the URL hash (#months/level-1), the
+   data-level attributes, the CSS class level-theme-<key> and file paths.
+   `label` is the on-screen name. `qr` is the student-page token — a PRINT
+   CONTRACT, never change it. `legacy` is the key used until 2026-10 (old
+   "Level 1" was Beginner): read only for old bookmarks and DB rows that
+   supabase/levels/01-rename.sql has not renamed yet. */
+const LEVELS = [
+  { key: "beginner", label: "Beginner", qr: "b", legacy: "Level 1" },
+  { key: "level-1", label: "Level 1", qr: "l1", legacy: "Level 2" },
+  { key: "level-2", label: "Level 2", qr: "l2", legacy: "Level 3" },
+  { key: "level-3", label: "Level 3", qr: "l3", legacy: "Level 4" },
+];
+
+function levelInfo(level) {
+  return LEVELS.find((item) => item.key === level) || null;
+}
+
 function levelLabel(level) {
-  return LEVEL_LABELS[level] || level;
+  const info = levelInfo(level);
+  return info ? info.label : level;
+}
+
+// An old key ("Level 1".."Level 4", any case/spacing) → its new key, else
+// null. A new key is not legacy ("level-1" has a hyphen).
+function levelFromLegacy(value) {
+  const match = String(value == null ? "" : value)
+    .trim()
+    .match(/^level\s*([1-4])$/i);
+  return match ? LEVELS[Number(match[1]) - 1].key : null;
+}
+
+// A stored or linked level in either form → the new key; null if unknown.
+function levelFromAny(value) {
+  return levelInfo(value) ? value : levelFromLegacy(value);
+}
+
+// The values a DB row of this level may still carry: the key and, until
+// supabase/levels/01-rename.sql has run, its old key — for the reads and
+// deletes that must catch both. [] for an unknown level. Remove with the
+// legacy reads in SQL 2 (Phase 3.5).
+function levelDbKeys(level) {
+  const info = levelInfo(level);
+  return info ? [info.key, info.legacy] : [];
+}
+
+// The per-level color class (board.css / styles.css). From the key itself —
+// never a digit inside it ("level-1" is red, not Beginner's yellow).
+function levelThemeClass(level) {
+  return levelInfo(level) ? `level-theme-${level}` : "";
 }
 
 /* ---- Content-page toolbar (per level) ----------------------------------
@@ -57,8 +99,8 @@ function levelLabel(level) {
    kind "video" plays the slot's YouTube/Vimeo URL in the video player;
    kind "game" opens the slot's URL in the game modal. */
 const TOOLBAR_BUTTONS = {
-  // Beginner (internal key "Level 1") — icons unified, no tags (user decision).
-  "Level 1": [
+  // Beginner — icons unified, no tags (user decision).
+  beginner: [
     {
       slot: "opening",
       kind: "video",
@@ -69,7 +111,7 @@ const TOOLBAR_BUTTONS = {
     { slot: "game", kind: "game", label: "Game", icon: "game" },
     { slot: "unit", kind: "video", label: "Unit Song", icon: "music" },
   ],
-  // Level 1-3 (internal keys "Level 2".."Level 4"). `tag` renders the GAME/SONG
+  // Level 1-3. `tag` renders the GAME/SONG
   // corner pill, so default labels drop the redundant suffix — admins fill in
   // per-month book titles via the label editor.
   default: [
@@ -138,7 +180,7 @@ function allSlotKeys(level) {
    book titles live in content_pages.labels (game/song1 = book 1, game2/song2
    = book 2 by convention), covers in content_pages.covers[cover]. */
 const BOOK_LAYOUT = {
-  "Level 1": [
+  beginner: [
     {
       book: 1,
       weeks: [1, 2, 3, 4],
@@ -231,32 +273,23 @@ function coverAssetPath(level, month, book) {
    b = Beginner, l1..l3 = Level 1..3. Months are the on-screen numbers 3..12.
    The parser also accepts the bare digits 1..3 for Level 1..3 (PM's example
    form); generated paths always use l1..l3. The last token is the book (1|2).
-   ⚠ These tokens are a PRINT CONTRACT once the Naver QR codes are registered. */
-const QR_LEVEL_CODES = {
-  "Level 1": "b",
-  "Level 2": "l1",
-  "Level 3": "l2",
-  "Level 4": "l3",
-};
-const QR_LEVEL_ALIASES = { 1: "Level 2", 2: "Level 3", 3: "Level 4" };
-
+   ⚠ These tokens are a PRINT CONTRACT once the Naver QR codes are registered
+   (LEVELS[].qr; tests/levels.spec.js pins all 70 URLs). */
 function qrLevelCode(level) {
-  return QR_LEVEL_CODES[level] || null;
+  const info = levelInfo(level);
+  return info ? info.qr : null;
 }
 
 function levelFromQrCode(code) {
   const wanted = String(code || "").toLowerCase();
-  return (
-    Object.keys(QR_LEVEL_CODES).find(
-      (level) => QR_LEVEL_CODES[level] === wanted,
-    ) ||
-    QR_LEVEL_ALIASES[wanted] ||
-    null
-  );
+  const byCode = LEVELS.find((item) => item.qr === wanted);
+  if (byCode) return byCode.key;
+  // Bare digits 1..3 = Level 1..3 (LEVELS[1..3]).
+  return /^[1-3]$/.test(wanted) ? LEVELS[Number(wanted)].key : null;
 }
 
-// "/q/l2/3/2" — the student page for Level 2 (internal "Level 3") · March ·
-// book 2. null when the level has no such book.
+// "/q/l2/3/2" — the student page for Level 2 · March · book 2. null when the
+// level has no such book.
 function bookQrPath(level, month, book) {
   const entry = bookEntry(level, book);
   const lv = qrLevelCode(level);
