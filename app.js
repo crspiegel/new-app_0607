@@ -1648,27 +1648,29 @@ document.querySelectorAll(".content-v3-type").forEach((button) => {
 
 // The LMS session token rides on ONE Supabase client: this fetch wrapper adds
 // it as `x-lms-token` to Supabase REST requests (RLS reads it through
-// lms_member()) and to signing a teacher-resources download URL (the Storage
-// API hands the header to the storage.objects policy the same way). No token
-// → no header. Auth and every other Storage request are never touched, so
-// the admin (@) login path is unchanged. Never put it in a URL.
+// lms_member()) and to the teacher-resources download Edge Function (which
+// forwards it to the database). No token → no header. Auth, Storage and any
+// other function are never touched, so the admin (@) login path is
+// unchanged. Never put it in a URL.
 let lmsToken = null;
 const SUPABASE_BASE = window.SUPABASE_URL
   ? String(window.SUPABASE_URL).replace(/\/+$/, "")
   : "";
-const LMS_TOKEN_PREFIXES = SUPABASE_BASE
-  ? [
-      `${SUPABASE_BASE}/rest/v1/`,
-      `${SUPABASE_BASE}/storage/v1/object/sign/teacher-resources/`,
-    ]
-  : [];
+const LMS_TOKEN_REST = SUPABASE_BASE ? `${SUPABASE_BASE}/rest/v1/` : "";
+// That one function exactly (a query string is fine; "…-download-v2" is not).
+const LMS_TOKEN_FUNCTION = SUPABASE_BASE
+  ? `${SUPABASE_BASE}/functions/v1/teacher-resource-download`
+  : "";
+function lmsTokenWanted(url) {
+  if (!SUPABASE_BASE) return false;
+  if (url.startsWith(LMS_TOKEN_REST)) return true;
+  const rest = url.slice(LMS_TOKEN_FUNCTION.length);
+  return url.startsWith(LMS_TOKEN_FUNCTION) && (rest === "" || rest[0] === "?");
+}
 function lmsFetch(input, init) {
   const isRequest = input instanceof window.Request;
   const url = isRequest ? input.url : String(input);
-  if (
-    !lmsToken ||
-    !LMS_TOKEN_PREFIXES.some((prefix) => url.startsWith(prefix))
-  ) {
+  if (!lmsToken || !lmsTokenWanted(url)) {
     return window.fetch(input, init);
   }
   const headers = new window.Headers(

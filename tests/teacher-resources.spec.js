@@ -11,6 +11,10 @@ const SUPABASE = /^https:\/\/[^/]+\.supabase\.co\//;
 const BUTTON = "교사 자료실";
 const NEED_LOGIN = "다시 로그인해 주세요.";
 const FAILED = "내려받지 못했어요. 잠시 후 다시 시도해 주세요.";
+const LIMIT =
+  "오늘 다운로드 횟수를 모두 사용했습니다. 내일 다시 시도해 주세요.";
+const NOT_READY = "아직 준비 중이에요.";
+const FN_PATH = "/functions/v1/teacher-resource-download";
 const PLAN_NAME = "2026 Beginner 연간 교육안.pdf";
 const PLAN_PATH = "beginner/plan/1730000000001.pdf";
 const BLANK_PNG = Buffer.from(
@@ -52,17 +56,13 @@ async function stubSupabase(
   {
     role = null,
     files = { [`beginner/plan`]: { name: PLAN_NAME, size: 4404019 } },
-    fileAnswer = (level, slot) =>
-      files[`${level}/${slot}`]
-        ? { path: PLAN_PATH, name: files[`${level}/${slot}`].name }
-        : null,
-    sign = "ok",
+    fn = "ok", // the Edge Function's answer: ok | denied | empty | limit | abort
     setAnswer = () => null,
     clearAnswer = () => null,
     adminLogin = false,
   } = {},
 ) {
-  const sent = { rpc: [], storage: [], tokens: [], downloads: [] };
+  const sent = { rpc: [], storage: [], tokens: [], downloads: [], fn: [] };
   await page.addInitScript(
     ({ role, token, session }) => {
       try {
@@ -105,9 +105,6 @@ async function stubSupabase(
       if (name === "teacher_resources_list") {
         return route.fulfill({ json: listFor(args.p_level, files) });
       }
-      if (name === "teacher_resource_file") {
-        return route.fulfill({ json: fileAnswer(args.p_level, args.p_slot) });
-      }
       if (name === "teacher_resource_set") {
         return route.fulfill({ json: setAnswer(args) });
       }
@@ -115,6 +112,25 @@ async function stubSupabase(
         return route.fulfill({ json: clearAnswer(args) });
       }
       return route.fulfill({ json: null });
+    }
+    // The Edge Function (supabase/functions/teacher-resource-download):
+    // answers like the real one (tests/teacher-resource-download.spec.js).
+    if (pathname === FN_PATH) {
+      const body = request.postDataJSON() || {};
+      sent.fn.push({
+        body,
+        token: lmsToken,
+        authorization: request.headers()["authorization"] ?? null,
+      });
+      if (fn === "abort") return route.abort();
+      const status = { denied: 401, empty: 404, limit: 429 }[fn];
+      if (status) return route.fulfill({ status, json: { error: fn } });
+      const name = files[`${body.level}/${body.slot}`]?.name ?? "file.pdf";
+      return route.fulfill({
+        json: {
+          url: `${url.origin}/storage/v1/object/sign/teacher-resources/${PLAN_PATH}?token=signed-1&download=${encodeURIComponent(name)}`,
+        },
+      });
     }
     if (pathname.startsWith("/auth/v1/token") && adminLogin) {
       adminSignedIn = true;
@@ -143,22 +159,9 @@ async function stubSupabase(
     }
     if (pathname.startsWith("/storage/v1/object/sign/teacher-resources/")) {
       if (request.method() === "POST") {
+        // (나): only the Edge Function signs — a browser POST here is a bug.
         sent.storage.push({ op: "sign", path: pathname, token: lmsToken });
-        if (sign === "abort") return route.abort();
-        if (sign === "deny") {
-          return route.fulfill({
-            status: 400,
-            json: {
-              statusCode: "404",
-              error: "not_found",
-              message: "Object not found",
-            },
-          });
-        }
-        const object = pathname.slice("/storage/v1/object/sign/".length);
-        return route.fulfill({
-          json: { signedURL: `/object/sign/${object}?token=signed-1` },
-        });
+        return route.fulfill({ status: 403, json: { error: "no" } });
       }
       // The signed GET: the browser follows the hidden link here.
       sent.downloads.push({
@@ -230,6 +233,7 @@ test("resources: the button shows for admin, branch and teacher only", async ({
   page,
   browser,
 }) => {
+  test.setTimeout(90000); // five fresh browser sessions in one test
   const visibleFor = async (role) => {
     const context = await browser.newContext({
       viewport: page.viewportSize(),
@@ -416,17 +420,17 @@ test("resources: a download stays in this tab and keeps the Korean name", async 
     "data-screen",
     "resources",
   );
-  // RPC → 60 s signed URL (with the LMS token) → the file, named once-encoded
-  const file = sent.rpc.find((r) => r.name === "teacher_resource_file");
-  expect(file.args).toEqual({ p_level: "beginner", p_slot: "plan" });
-  expect(file.token).toBe(TOKEN);
-  expect(sent.storage).toEqual([
+  // One Edge Function call (level + slot only, with the LMS token) → its
+  // 60 s URL, followed in this tab. The browser itself never signs.
+  expect(sent.fn).toEqual([
     {
-      op: "sign",
-      path: `/storage/v1/object/sign/teacher-resources/${PLAN_PATH}`,
+      body: { level: "beginner", slot: "plan" },
       token: TOKEN,
+      authorization: expect.stringMatching(/^Bearer /),
     },
   ]);
+  expect(sent.storage).toEqual([]);
+  expect(sent.rpc.map((r) => r.name)).not.toContain("teacher_resource_file");
   expect(sent.downloads).toEqual([{ download: PLAN_NAME, token: "signed-1" }]);
   await expect(page.locator("#resourceStatus")).toHaveText("");
 });
@@ -437,9 +441,10 @@ test("resources: failed downloads say so and never leave the page", async ({
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "behaviour only, run once");
   const cases = [
-    [{ fileAnswer: () => null }, NEED_LOGIN],
-    [{ sign: "deny" }, NEED_LOGIN],
-    [{ sign: "abort" }, FAILED],
+    [{ fn: "denied" }, NEED_LOGIN],
+    [{ fn: "limit" }, LIMIT],
+    [{ fn: "empty" }, NOT_READY],
+    [{ fn: "abort" }, FAILED],
   ];
   for (const [options, message] of cases) {
     await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -484,7 +489,34 @@ test("resources: a direct link without permission lands on the month page", asyn
   }
 });
 
-test("resources: the LMS token rides on teacher-resources signing only", async ({
+test("resources: a reload or bookmark reopens the same resource page", async ({
+  page,
+  browser,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "routing only, run once");
+  await stubSupabase(page, { role: "teacher" });
+  await page.goto("/#months/level-2");
+  await page.getByRole("button", { name: BUTTON }).click();
+  await expect(page).toHaveURL(/#resources\/level-2$/);
+  await page.reload();
+  await expect(page).toHaveURL(/#resources\/level-2$/);
+  await expect(page.locator("body")).toHaveAttribute(
+    "data-screen",
+    "resources",
+  );
+  await expect(page.locator("#monthLevelTag")).toHaveText("Level 2");
+  await expect(page.locator("#resourceGrid .res-button")).toHaveCount(3);
+  // a bookmark = a fresh browser session opened on that address
+  const context = await browser.newContext();
+  const tab = await context.newPage();
+  await stubSupabase(tab, { role: "teacher" });
+  await tab.goto("/#resources/level-3");
+  await expect(tab.locator("body")).toHaveAttribute("data-screen", "resources");
+  await expect(tab.locator("#monthLevelTag")).toHaveText("Level 3");
+  await context.close();
+});
+
+test("resources: the LMS token rides on the download function only", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "wrapper only, run once");
@@ -494,6 +526,9 @@ test("resources: the LMS token rides on teacher-resources signing only", async (
   await page.evaluate(async () => {
     const base = window.SUPABASE_URL;
     for (const url of [
+      `${base}/functions/v1/teacher-resource-download`,
+      `${base}/functions/v1/other-function`,
+      `${base}/functions/v1/teacher-resource-download-v2`, // exact name only
       `${base}/storage/v1/object/sign/teacher-resources/beginner/plan/1.pdf`,
       `${base}/storage/v1/object/sign/covers/x.png`,
       `${base}/storage/v1/object/public/covers/x.png`,
@@ -506,9 +541,12 @@ test("resources: the LMS token rides on teacher-resources signing only", async (
     const hit = sent.tokens.find((r) => r.path === path);
     return hit ? hit.token : "missing"; // null = sent without a token
   };
+  expect(tokenOf(FN_PATH)).toBe(TOKEN);
+  expect(tokenOf("/functions/v1/other-function")).toBeNull();
+  expect(tokenOf("/functions/v1/teacher-resource-download-v2")).toBeNull();
   expect(
     tokenOf("/storage/v1/object/sign/teacher-resources/beginner/plan/1.pdf"),
-  ).toBe(TOKEN);
+  ).toBeNull(); // (가) is gone: Storage never sees the LMS token
   expect(tokenOf("/storage/v1/object/sign/covers/x.png")).toBeNull();
   expect(tokenOf("/storage/v1/object/public/covers/x.png")).toBeNull();
   expect(

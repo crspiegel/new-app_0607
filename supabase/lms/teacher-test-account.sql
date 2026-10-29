@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Live teacher test account (role 2, branch hq) — teacher-resources check
 -- ----------------------------------------------------------------------------
--- For the (가) download check: a teacher logs in and downloads one file.
+-- For the download check: a teacher logs in and downloads one file.
 -- Run AFTER the 3A SQL (migration.sql with the "LMS (Phase 3A)" block).
 -- Supabase Dashboard → SQL Editor → New query → paste this whole file → Run.
 --
@@ -51,6 +51,9 @@ select m.id, m.role, b.code as branch, m.active,
   from public.members m
   join public.branches b on b.id = m.branch_id
  where m.id = 'tps-teacher-test';
+
+-- The password must not outlive this script in the session.
+drop table if exists teacher_test_pw;
 
 -- ----------------------------------------------------------------------------
 -- After the check — remove the account (its sessions go with it). Run this

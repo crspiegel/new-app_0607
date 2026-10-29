@@ -17,6 +17,7 @@ const byTableLevel = (a, b) =>
 
 test("levels sql: precheck → rename ×2 → migration re-run", async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  test.setTimeout(120000); // PGlite runs migration.sql 2× + 2 SQL files
   const MIGRATION = read("supabase/migration.sql");
   const PRECHECK = read("supabase/levels/00-precheck.sql");
   const RENAME = read("supabase/levels/01-rename.sql");

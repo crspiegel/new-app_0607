@@ -213,28 +213,16 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
     ).toEqual(["plan", "award"]);
     expect(await list({ token: teacher }, "Level 1")).toEqual([]);
 
-    // --- teacher_resource_file: the path + name, or NULL
-    const file = (who, level, slot) =>
+    // --- (나): no browser-side path to a file any more — the old
+    // teacher_resource_file RPC is gone, and LMS sessions read no Storage
+    // object at all (signing happens in the Edge Function, service role).
+    await expect(
       as(
         db,
-        who,
-        `select public.teacher_resource_file('${level}', '${slot}') as f`,
-      );
-    expect(await file({ token: teacher }, "beginner", "plan")).toEqual([
-      {
-        f: { path: "beginner/plan/1730000000001.pdf", name: "연간교육안.pdf" },
-      },
-    ]);
-    expect(await file({ token: student }, "beginner", "plan")).toEqual([
-      { f: null },
-    ]);
-    expect(await file({}, "beginner", "plan")).toEqual([{ f: null }]);
-    expect(await file({ token: teacher }, "beginner", "award")).toEqual([
-      { f: null },
-    ]);
-
-    // --- Storage read (= signing a URL): admin and LMS role 1/2 only, from
-    // the x-lms-token header the Storage API passes as request.headers.
+        { token: teacher },
+        "select public.teacher_resource_file('beginner', 'plan')",
+      ),
+    ).rejects.toThrow(/does not exist/);
     await db.exec(
       "insert into storage.objects (bucket_id, name) values ('covers', 'level-1/march/book-1')",
     );
@@ -246,27 +234,148 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
           `select count(*)::int as n from storage.objects where bucket_id = '${BUCKET}'`,
         )
       )[0].n;
-    // LMS sessions see only the CURRENT file of each slot (2): never the
-    // replaced …000.pdf nor …009.pdf whose set failed — an orphan left by a
-    // failed Storage remove stays out of reach. Admins see all 4.
-    const names = async (who) =>
+    expect(await visible({ token: teacher })).toBe(0);
+    expect(await visible({ token: branch })).toBe(0);
+    expect(await visible({ token: student })).toBe(0);
+    expect(await visible({})).toBe(0);
+    expect(await visible({ uid: ADMIN_UID }, "authenticated")).toBe(4);
+    expect(await visible({ uid: OTHER_UID }, "authenticated")).toBe(0);
+
+    // --- teacher_resource_issue: the Edge Function's one DB call (service
+    // role). It forwards the caller's x-lms-token header; an admin arrives as
+    // p_admin_uid after the function checked the JWT with Auth. Answers
+    // ok {path, name} for the slot's CURRENT file, or denied / empty / limit.
+    const issue = async (who, level, slot, adminUid = null) =>
       (
         await as(
           db,
-          who,
-          `select name from storage.objects where bucket_id = '${BUCKET}' order by name`,
+          { role: "service_role", ...who },
+          `select public.teacher_resource_issue('${level}', '${slot}', ${
+            adminUid ? `'${adminUid}'` : "null"
+          }) as r`,
         )
-      ).map((r) => r.name);
-    expect(await names({ token: teacher })).toEqual([
-      "beginner/plan/1730000000001.pdf",
-      "level-2/test/1730000000002.xlsx",
-    ]);
-    expect(await visible({ token: branch })).toBe(2);
-    expect(await visible({ token: student })).toBe(0);
-    expect(await visible({})).toBe(0);
-    expect(await visible({ token: "not-a-session" })).toBe(0);
-    expect(await visible({ uid: ADMIN_UID }, "authenticated")).toBe(4);
-    expect(await visible({ uid: OTHER_UID }, "authenticated")).toBe(0);
+      )[0].r;
+    for (const who of [{}, { token: teacher }, admin]) {
+      await expect(
+        as(
+          db,
+          who,
+          "select public.teacher_resource_issue('beginner', 'plan', null)",
+        ),
+      ).rejects.toThrow(/permission denied for function/);
+    }
+    // the current file only — never the replaced …000.pdf
+    expect(await issue({ token: teacher }, "beginner", "plan")).toEqual({
+      status: "ok",
+      path: "beginner/plan/1730000000001.pdf",
+      name: "연간교육안.pdf",
+    });
+    expect(await issue({ token: branch }, "level-2", "test")).toEqual({
+      status: "ok",
+      path: "level-2/test/1730000000002.xlsx",
+      name: "테스트 문제.xlsx",
+    });
+    expect(
+      (await issue({ token: teacher }, "beginner", "plan", ADMIN_UID)).status,
+    ).toBe("ok");
+    expect((await issue({}, "beginner", "plan", ADMIN_UID)).status).toBe("ok");
+    for (const who of [{ token: student }, {}, { token: "not-a-session" }]) {
+      expect(await issue(who, "beginner", "plan")).toEqual({
+        status: "denied",
+      });
+    }
+    expect(await issue({}, "beginner", "plan", OTHER_UID)).toEqual({
+      status: "denied", // signed in, not an admin
+    });
+    for (const [level, slot] of [
+      ["beginner", "award"], // empty slot
+      ["beginner", "test"], // no such slot
+      ["Level 1", "plan"], // old key
+    ]) {
+      expect(await issue({ token: teacher }, level, slot)).toEqual({
+        status: "empty",
+      });
+    }
+    // the issue log: no direct access for anyone
+    for (const who of [{}, { token: teacher }, admin]) {
+      await expect(
+        as(db, who, "select * from public.teacher_resource_downloads"),
+      ).rejects.toThrow(/permission denied/);
+    }
+    const logged = await db.query(`
+      select m.id, d.level, d.slot
+        from public.teacher_resource_downloads d
+        join public.members m on m.member_id = d.member_id
+       order by d.id`);
+    expect(logged.rows).toEqual([
+      { id: "t-teacher", level: "beginner", slot: "plan" },
+      { id: "t-branch", level: "level-2", slot: "test" },
+    ]); // ok issues of LMS members only (not admins, not refusals)
+
+    // --- daily limit: 30 per LMS member per KST day; admins unlimited
+    for (let i = 2; i <= 30; i += 1) {
+      expect((await issue({ token: teacher }, "beginner", "plan")).status).toBe(
+        "ok",
+      );
+    }
+    expect(await issue({ token: teacher }, "beginner", "plan")).toEqual({
+      status: "limit",
+    });
+    expect((await issue({ token: branch }, "beginner", "plan")).status).toBe(
+      "ok",
+    ); // its own count
+    for (let i = 0; i < 35; i += 1) {
+      expect((await issue({}, "beginner", "plan", ADMIN_UID)).status).toBe(
+        "ok",
+      );
+    }
+    // The day is the KST calendar day: a minute before KST midnight is
+    // yesterday, a minute after is today.
+    const kstMidnight =
+      "(date_trunc('day', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul')";
+    await db.exec(`
+      delete from public.teacher_resource_downloads d using public.members m
+       where m.member_id = d.member_id and m.id = 't-teacher';
+      insert into public.teacher_resource_downloads (member_id, level, slot, issued_at)
+      select m.member_id, 'beginner', 'plan', ${kstMidnight} - interval '1 minute'
+        from public.members m, generate_series(1, 30) where m.id = 't-teacher';`);
+    expect((await issue({ token: teacher }, "beginner", "plan")).status).toBe(
+      "ok",
+    ); // 30 yesterday + 1 today
+    await db.exec(`
+      insert into public.teacher_resource_downloads (member_id, level, slot, issued_at)
+      select m.member_id, 'beginner', 'plan', ${kstMidnight} + interval '1 minute'
+        from public.members m, generate_series(1, 29) where m.id = 't-teacher';`);
+    expect(await issue({ token: teacher }, "beginner", "plan")).toEqual({
+      status: "limit",
+    }); // 1 + 29 today
+    // Rows older than 30 days are cleared on the next issue.
+    await db.exec(`
+      insert into public.teacher_resource_downloads (member_id, level, slot, issued_at)
+      select m.member_id, 'beginner', 'plan', now() - interval '31 days'
+        from public.members m where m.id = 't-branch';`);
+    await issue({ token: branch }, "beginner", "plan");
+    expect(
+      (
+        await db.query(
+          "select count(*)::int as n from public.teacher_resource_downloads where issued_at < now() - interval '30 days'",
+        )
+      ).rows[0].n,
+    ).toBe(0);
+    // A deactivated member and a logged-out session are refused.
+    await db.exec(
+      "update public.members set active = false where id = 't-branch'",
+    );
+    expect(await issue({ token: branch }, "beginner", "plan")).toEqual({
+      status: "denied",
+    });
+    await db.exec(
+      "update public.members set active = true where id = 't-branch'",
+    );
+    await as(db, { token: branch }, "select public.lms_logout()");
+    expect(await issue({ token: branch }, "beginner", "plan")).toEqual({
+      status: "denied",
+    });
     // the public covers bucket is untouched
     expect(
       (
@@ -327,6 +436,7 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
 // Re-running resets it (the old one stops working).
 test("teacher resources sql: teacher test account script", async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  test.setTimeout(120000); // PGlite: migration.sql + the script twice
   const SCRIPT = readFileSync(
     path.resolve("supabase/lms/teacher-test-account.sql"),
     "utf8",
@@ -339,8 +449,13 @@ test("teacher resources sql: teacher test account script", async ({}, testInfo) 
 
     const run = async () => {
       const results = await db.exec(SCRIPT);
-      const rows = results[results.length - 1].rows;
+      const rows = [...results].reverse().find((r) => r.rows.length).rows;
       expect(rows).toHaveLength(1);
+      // the password does not outlive the script in the session
+      expect(
+        (await db.query("select to_regclass('pg_temp.teacher_test_pw') as t"))
+          .rows[0].t,
+      ).toBeNull();
       const { password, ...rest } = rows[0];
       expect(rest).toEqual({
         id: "tps-teacher-test",

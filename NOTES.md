@@ -984,22 +984,28 @@ level, book, slot)`)에서만.
   로그인 확인이 끝나면 resolve) 뒤에 자료페이지로 가거나 `#months/<key>`로 주소를 바꾼다 — 금지 화면이 한 순간도 안 보임.
   ⚠ 뒤 스크립트가 app.js의 초기화 흐름에 기대야 하면 타이밍 말고 이런 Promise를 쓴다(첫 await가 마이크로태스크로 끝나면
   뒤 스크립트가 아직 실행 전일 수 있다).
-- **다운로드 = Content-Disposition 방식(PM 결정).** RPC `teacher_resource_file` → `createSignedUrl(path, 60)` → URL 뒤에
-  `&download=<encodeURIComponent(원래 이름)>`를 **직접** 붙여 같은 탭의 숨은 `<a>`(target 없음) 클릭. 응답이 attachment라
-  페이지가 그대로다(새 탭·이동·CORS 없음). ⚠ supabase-js `createSignedUrl(…, { download })`는 이름을 **두 번 인코딩**한다
-  (`URLSearchParams` 뒤 `encodeURI`) → 옵션을 쓰지 말 것.
-- `lmsFetch`는 REST 외에 `…/storage/v1/object/sign/teacher-resources/`에만 `x-lms-token`을 붙인다. Storage API가 요청 헤더를
-  `request.headers`로 Postgres에 넘겨 `storage.objects` 정책의 `lms_member()`가 읽는다(소스 확인, 공식 문서 없음 — 설계
-  문서 B4). 운영 사전 요청이 `x-lms-token`을 허용함을 2026-10-29 확인.
+- **다운로드 = Edge Function `teacher-resource-download`(PM 결정 (나), 2026-10-29).** 브라우저는 `{level, slot}`만 보내고
+  (`sb.functions.invoke`), 함수가 관리자(JWT → `/auth/v1/user`) 또는 LMS(`x-lms-token`을 DB로 전달)를 판정 → service role로
+  `teacher_resource_issue`(현재 파일·하루 30회) → service role로 **60초 고정** 서명 → `&download=<이름 1회 인코딩>`을 붙인
+  URL을 돌려준다. 페이지는 그 URL을 같은 탭의 숨은 `<a>`(target 없음)로 연다 — attachment 응답이라 페이지 그대로.
+  ⚠ (가)(브라우저가 직접 서명)는 버렸다: 만료를 클라이언트가 정할 수 있어 오래가는 링크가 퍼지면 미캐시 이그레스가 샌다.
+  ⚠ supabase-js `createSignedUrl(…, { download })`는 이름을 **두 번 인코딩**한다 — 함수에서도 옵션 대신 직접 붙인다.
+- `lmsFetch`는 REST 외에 `…/functions/v1/teacher-resource-download`에만 `x-lms-token`을 붙인다 — 그 이름 **정확히**(뒤에
+  `?`만 허용, `…-download-v2`는 안 붙음, 보안 재검토). Storage에는 안 붙음.
+- ⚠ 전체 QA(3기기 병렬)에서는 PGlite SQL 테스트·브라우저 컨텍스트를 여러 개 여는 테스트가 기본 30초를 넘길 수 있다 →
+  그런 테스트만 `test.setTimeout`을 늘린다(기대값은 그대로). 0픽셀 기준선 흔들림도 부하에서 더 잦다 — 재실행으로 판정.
+  LMS 세션은 Storage 객체를 전혀 읽을 수 없다(anon 읽기 정책 없음).
+- 함수는 한 파일·import 없음(대시보드 편집기에 붙여넣기, `supabase/functions/README.md`). Node 24가 `.ts`를 그대로 불러오므로
+  `createHandler(env, fetch)`를 가짜 fetch로 테스트한다(`tests/teacher-resource-download.spec.js`). `Deno.serve`는
+  `globalThis.Deno`가 있을 때만.
+- 하루 한도: `teacher_resource_downloads`(RLS·정책 0·권한 회수, 함수 전용)에 성공한 발급만 기록, KST 자정 기준
+  (`date_trunc('day', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul'`), 회원별 advisory lock으로 동시 요청도
+  30을 못 넘는다, 30일 지난 행은 발급 때 삭제. 관리자는 기록·제한 없음.
 - ⚠ **supabase-js는 `File`/`Blob` 업로드를 multipart로 보내 `contentType` 옵션이 무시된다** — 버킷 MIME 제한은 파일 자체의
   type을 보는데 일부 PC는 xlsx type이 빈 값이다 → `await file.arrayBuffer()` + 확장자로 정한 `contentType`으로 올린다.
 - 교체 순서: 새 객체 업로드 → RPC `teacher_resource_set`(이전 경로 반환) → 이전 객체 삭제. set 실패면 새 객체를 지워 되돌림.
   삭제는 RPC `teacher_resource_clear` → 객체 삭제. 관리자 삭제 확인은 대화상자 대신 같은 버튼 2번(4초).
-- **LMS 읽기 정책은 "현재 파일"만**(`teacher_resource_is_current(name)`, 보안 검토 반영) — Storage 삭제가 실패해 남은 고아
-  파일은 선생님이 목록·서명할 수 없다(관리자만 보임).
-- ⚠ **(가)의 한계: 서명 만료(60초)는 클라이언트가 정한다.** 토큰을 꺼낸 선생님은 `expiresIn`을 크게 줘 오래가는 링크를 만들
-  수 있다(만료값은 요청 본문이라 Postgres 정책이 볼 수 없음). 서버 강제가 필요하면 (나) Edge Function. 같은 칸에 다시 올리면
-  옛 객체가 지워져 옛 링크는 죽는다.
+- Storage 삭제가 실패해 남은 고아 파일은 아무 선생님도 받을 수 없다 — 함수가 표가 가리키는 현재 파일만 서명한다.
 - 운영 선생님 테스트 계정 SQL은 비밀번호를 **서버가 만들어 결과 표에만** 보여 준다 — 문장에 비밀번호 리터럴을 넣으면 오류 로그·
   `pg_stat_statements`·SQL Editor 기록에 남을 수 있다.
 - 폰에서는 월 페이지 제목이 원래 **왼쪽 정렬**이다 → 버튼은 제목 아래 같은 왼쪽 선. ≥768은 제목 줄 오른쪽 끝(absolute,

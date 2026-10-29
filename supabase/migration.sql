@@ -967,10 +967,13 @@ notify pgrst, 'reload schema';
 -- (lms_member). Level keys are the NEW keys: beginner · level-1..3.
 -- Slots: plan (월간.연간교육안) · award (상장) · test (테스트, level-2/3 only).
 -- Admins upload / replace / delete. Admins and LMS role 1 (branch) / 2
--- (teacher) list and download through 60-second signed URLs: the Storage API
--- passes the x-lms-token header to Postgres as request.headers, so the
--- storage.objects read policy can ask lms_member() (checked live 2026-10-29:
--- the Storage CORS preflight allows x-lms-token). Nobody reads the table
+-- (teacher) list the slots and download through the Edge Function
+-- supabase/functions/teacher-resource-download (PM decision 2026-10-29, (나)):
+-- it calls teacher_resource_issue() with the service role (the caller's
+-- x-lms-token forwarded, or an admin uid it verified), then signs a URL that
+-- expires after 60 seconds — fixed on the server, so no long-lived link can be
+-- made from the browser. LMS members are limited to 30 issues per KST day.
+-- Browsers never read Storage objects of this bucket, nor the tables
 -- directly — RPCs only.
 -- ============================================================================
 
@@ -1039,21 +1042,86 @@ as $$
    order by s.ord;
 $$;
 
--- One slot's file for a download: {"path", "name"}, or NULL (empty slot or
--- not allowed). The client then asks Storage for a 60-second signed URL.
-create or replace function public.teacher_resource_file(p_level text, p_slot text)
+-- Issue log for the daily download limit: one row per URL issued to an LMS
+-- member (admins are not limited and not logged). RLS on, no policies, no
+-- grants — only teacher_resource_issue() (service role) reads and writes it.
+-- Rows older than 30 days are deleted by the same function.
+create table if not exists public.teacher_resource_downloads (
+  id        bigint generated always as identity primary key,
+  member_id uuid not null references public.members (member_id) on delete cascade,
+  level     text not null,
+  slot      text not null,
+  issued_at timestamptz not null default now()
+);
+create index if not exists teacher_resource_downloads_member_idx
+  on public.teacher_resource_downloads (member_id, issued_at);
+create index if not exists teacher_resource_downloads_issued_idx
+  on public.teacher_resource_downloads (issued_at);
+alter table public.teacher_resource_downloads enable row level security;
+revoke all on public.teacher_resource_downloads from anon, authenticated;
+
+-- The Edge Function's one DB call (service role only). Who: the caller's
+-- x-lms-token (forwarded by the function; lms_member() checks session,
+-- member and branch are active) with role 1 / 2, or p_admin_uid — an admin
+-- the function verified with Auth. What: the slot's CURRENT file only.
+-- Answers {"status":"ok","path","name"} | {"status":"denied"} |
+-- {"status":"empty"} | {"status":"limit"} (30 per member per KST day).
+create or replace function public.teacher_resource_issue(
+  p_level text, p_slot text, p_admin_uid uuid default null
+)
 returns jsonb
-language sql
-stable
+language plpgsql
+volatile
 security definer
 set search_path = public, extensions
 as $$
-  select jsonb_build_object('path', r.storage_path, 'name', r.file_name)
+declare
+  v_admin  boolean := p_admin_uid is not null
+                      and exists (select 1 from public.admins a where a.user_id = p_admin_uid);
+  v_member uuid;
+  v_role   smallint;
+  v_path   text;
+  v_name   text;
+  v_today  timestamptz := date_trunc('day', now() at time zone 'Asia/Seoul')
+                          at time zone 'Asia/Seoul';
+begin
+  if not v_admin then
+    select m.member_id, m.role into v_member, v_role
+      from public.lms_member() m
+     limit 1;
+    -- coalesce: a NULL role must deny, never slip through as NULL.
+    if v_member is null or not coalesce(v_role in (1, 2), false) then
+      return jsonb_build_object('status', 'denied');
+    end if;
+  end if;
+
+  select r.storage_path, r.file_name into v_path, v_name
     from public.teacher_resources r
-   where r.level = p_level
-     and r.slot = p_slot
-     and public.teacher_resources_allowed();
+   where r.level = p_level and r.slot = p_slot;
+  if v_path is null then
+    return jsonb_build_object('status', 'empty');
+  end if;
+
+  if not v_admin then
+    delete from public.teacher_resource_downloads
+     where issued_at < now() - interval '30 days';
+    -- One member at a time, so parallel requests cannot pass the limit.
+    perform pg_advisory_xact_lock(7302, hashtext(v_member::text));
+    if (select count(*) from public.teacher_resource_downloads d
+         where d.member_id = v_member and d.issued_at >= v_today) >= 30 then
+      return jsonb_build_object('status', 'limit');
+    end if;
+    insert into public.teacher_resource_downloads (member_id, level, slot)
+    values (v_member, p_level, p_slot);
+  end if;
+
+  return jsonb_build_object('status', 'ok', 'path', v_path, 'name', v_name);
+end;
 $$;
+
+-- (가) leftovers, never run live but dropped on purpose: browsers no longer
+-- get a file path or read the bucket.
+drop function if exists public.teacher_resource_file(text, text);
 
 -- Admin: point a slot at an object that was just uploaded. Returns the
 -- REPLACED object's path (the client deletes it from Storage), or NULL.
@@ -1124,37 +1192,19 @@ create policy teacher_resources_admin_all on storage.objects
     and name ~ '^(beginner|level-1|level-2|level-3)/(plan|award|test)/[0-9]{13}\.(pdf|xlsx|xls)$'
     and (name !~ '/test/' or name ~ '^level-[23]/'));
 
--- Is this object the CURRENT file of a slot? A replaced or cleared file whose
--- Storage removal failed (an orphan) answers false. Used by the policy below
--- (anon needs EXECUTE); it only says yes/no about an ASCII timestamp path.
-create or replace function public.teacher_resource_is_current(p_name text)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public, extensions
-as $$
-  select exists (select 1 from public.teacher_resources r
-                  where r.storage_path = p_name);
-$$;
-
--- An LMS branch / teacher session (the x-lms-token header) may read = get a
--- signed URL — for current files only. Read only: no insert / update /
--- delete policy for anon.
+-- No Storage read policy for LMS sessions (anon): the Edge Function signs
+-- with the service role. Dropped by name so a database that ran the (가)
+-- draft loses it too.
 drop policy if exists teacher_resources_lms_read on storage.objects;
-create policy teacher_resources_lms_read on storage.objects
-  for select to anon
-  using (bucket_id = 'teacher-resources'
-         and public.teacher_resource_is_current(name)
-         and exists (select 1 from public.lms_member() m where m.role in (1, 2)));
+drop function if exists public.teacher_resource_is_current(text);
 
--- Grants: the helper is internal; list/file are public RPCs (they answer
--- nothing to the wrong caller); set/clear are for signed-in admins.
+-- Grants: the helper is internal; list is a public RPC (it answers nothing
+-- to the wrong caller); set/clear are for signed-in admins; issue is for the
+-- Edge Function (service role) only.
 revoke execute on function public.teacher_resources_allowed() from public, anon, authenticated;
-revoke execute on function public.teacher_resource_is_current(text) from public, authenticated;
-grant execute on function public.teacher_resource_is_current(text) to anon;  -- in the policy
 grant execute on function public.teacher_resources_list(text) to anon, authenticated;
-grant execute on function public.teacher_resource_file(text, text) to anon, authenticated;
+revoke execute on function public.teacher_resource_issue(text, text, uuid) from public, anon, authenticated;
+grant execute on function public.teacher_resource_issue(text, text, uuid) to service_role;
 revoke execute on function public.teacher_resource_set(text, text, text, text, bigint) from public, anon;
 revoke execute on function public.teacher_resource_clear(text, text) from public, anon;
 grant execute on function public.teacher_resource_set(text, text, text, text, bigint) to authenticated;

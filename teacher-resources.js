@@ -17,14 +17,14 @@
    Files live in the PRIVATE Storage bucket "teacher-resources" (10 MB, PDF /
    xlsx / xls); the table is reached only through RPCs (supabase/migration.sql
    "Teacher resources"), which answer nothing to anyone else. A download asks
-   teacher_resource_file for the object path + original name, then Storage for
-   a 60-second signed URL (lmsFetch adds the LMS token to that one request —
-   the storage.objects policy reads it), and follows the URL in THIS tab with
-   the name appended as `download=`: the Storage API answers with
-   Content-Disposition: attachment, so the browser saves the file and the page
-   stays (no new tab, no navigation, no CORS needed).
-   ⚠ supabase-js createSignedUrl's own `download` option encodes the name
-   twice (URLSearchParams, then encodeURI) — the name is appended here once. */
+   the Edge Function teacher-resource-download (supabase/functions/) with just
+   {level, slot} — lmsFetch adds the LMS token, supabase-js the admin's JWT.
+   The function decides who may, picks the slot's current file, counts the
+   daily limit (30 per LMS member per KST day) and returns a URL that expires
+   after 60 seconds (fixed on the server) with the original name already in
+   it as `download=`. This page follows it in THIS tab: the Storage API
+   answers with Content-Disposition: attachment, so the browser saves the file
+   and the page stays (no new tab, no navigation, no CORS needed). */
 
 const RES_BUCKET = "teacher-resources";
 const RES_MAX_BYTES = 10 * 1024 * 1024; // = the bucket's file_size_limit
@@ -38,11 +38,16 @@ const RES_TYPES = {
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   xls: "application/vnd.ms-excel",
 };
+const RES_FUNCTION = "teacher-resource-download";
 const RES_MSG = {
   needLogin: "다시 로그인해 주세요.",
   failed: "내려받지 못했어요. 잠시 후 다시 시도해 주세요.",
+  limit: "오늘 다운로드 횟수를 모두 사용했습니다. 내일 다시 시도해 주세요.",
+  notReady: "아직 준비 중이에요.",
   listFailed: "자료 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
 };
+// The function's refusals → what the teacher reads (anything else: failed).
+const RES_STATUS_MSG = { 401: "needLogin", 404: "notReady", 429: "limit" };
 
 const teacherResBtn = document.querySelector("#teacherResBtn");
 const resourceBackBtn = document.querySelector("#resourceBackBtn");
@@ -155,31 +160,17 @@ async function downloadResource(level, slot, button) {
   button.dataset.busy = "1";
   setResourceStatus("");
   try {
-    const { data: file, error } = await sb.rpc("teacher_resource_file", {
-      p_level: level,
-      p_slot: slot,
+    const { data, error } = await sb.functions.invoke(RES_FUNCTION, {
+      body: { level, slot },
     });
-    if (error) {
-      setResourceStatus(RES_MSG.failed);
+    if (error || !data || typeof data.url !== "string") {
+      // An HTTP refusal carries its Response in error.context; a network or
+      // relay failure has none.
+      const status = error && error.context && error.context.status;
+      setResourceStatus(RES_MSG[RES_STATUS_MSG[status] || "failed"]);
       return;
     }
-    if (!file || !file.path) {
-      setResourceStatus(RES_MSG.needLogin);
-      return;
-    }
-    const { data, error: signError } = await sb.storage
-      .from(RES_BUCKET)
-      .createSignedUrl(file.path, 60);
-    if (signError || !data || !data.signedUrl) {
-      // An HTTP answer (400 "Object not found" = not allowed) vs. no answer.
-      setResourceStatus(
-        signError && signError.status ? RES_MSG.needLogin : RES_MSG.failed,
-      );
-      return;
-    }
-    followDownload(
-      `${data.signedUrl}&download=${encodeURIComponent(file.name)}`,
-    );
+    followDownload(data.url);
   } catch {
     setResourceStatus(RES_MSG.failed);
   } finally {
@@ -371,8 +362,8 @@ async function uploadResource(level, slot, file) {
     if (old) {
       const { error: rmError } = await bucket.remove([old]);
       if (rmError) {
-        // The old object is no longer any slot's file: the storage policy
-        // keeps it out of every teacher's reach (teacher_resource_is_current).
+        // The old object is no longer any slot's file, so the download
+        // function never signs it (teacher_resource_issue: current files only).
         setTeacherResStatus(
           "올렸어요. (이전 파일은 저장소에서 지우지 못했지만, 선생님은 새 파일만 받을 수 있어요.)",
         );

@@ -349,7 +349,11 @@ Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼), 3.3 착수 
       `supabase/lms/teacher-test-account.sql`(비밀번호는 자리표시자).
 - [x] 클라이언트: `teacher-resources.js`(새 classic script), `app.js` 연결(화면·해시·`canSeeTeacherResources`·
       `craAuthReady`·`lmsFetch`가 서명 요청에만 토큰), `index.html`, `styles.css`.
-- [ ] 운영(사용자): B SQL → 선생님 테스트 계정 → (가) 확인 2(실제 다운로드) → 푸시 → 실제 파일 업로드 → 아이폰 사파리 확인.
+- [x] 멈춤 3 PM 결정: 다운로드를 (나) Edge Function `teacher-resource-download`로(60초 서버 고정, `teacher_resource_issue`
+      service role 전용), 하루 30회/LMS 회원(KST, 관리자 무제한, `teacher_resource_downloads`). 테스트:
+      `tests/teacher-resource-download.spec.js`(함수, 가짜 fetch) + SQL·화면 테스트 갱신. 배포 절차 `supabase/functions/README.md`.
+- [ ] 운영(사용자): 설계 문서 "최종 운영 순서"(3A → 3A만 푸시 → 테스트 계정 → 함수 배포 → 다운로드 확인 → A+B 푸시 →
+      levels SQL → 파일 업로드·아이폰 확인·테스트 계정 삭제).
 
 ## Phase 4 — R4 '선생님자료실' 헤더 버튼 — **취소 (2026-10-29)**
 
