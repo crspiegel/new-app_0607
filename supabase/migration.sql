@@ -971,7 +971,7 @@ notify pgrst, 'reload schema';
 -- supabase/functions/teacher-resource-download (PM decision 2026-10-29, (나)):
 -- it calls teacher_resource_issue() with the service role (the caller's
 -- x-lms-token forwarded, or an admin uid it verified), then signs a URL that
--- expires after 60 seconds — fixed on the server, so no long-lived link can be
+-- expires after 15 seconds — fixed on the server, so no long-lived link can be
 -- made from the browser. LMS members are limited to 30 issues per KST day.
 -- Browsers never read Storage objects of this bucket, nor the tables
 -- directly — RPCs only.

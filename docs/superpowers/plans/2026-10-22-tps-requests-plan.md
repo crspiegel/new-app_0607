@@ -340,7 +340,7 @@ Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼), 3.3 착수 
 
 설계·결정: `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`. 레벨별 월 선택 페이지 제목 줄 오른쪽에
 '교사 자료실'(관리자·LMS role 1·2만) → 그 레벨 자료페이지(= 월 페이지의 "자료 모드", 3~12월 버튼 자리에 다운로드 2~3개) →
-비공개 Storage 버킷 `teacher-resources`(10MB, PDF·xlsx·xls)의 60초 서명 URL을 같은 탭에서 엶. 관리자 '배너' 탭에 10칸 업로드.
+비공개 Storage 버킷 `teacher-resources`(10MB, PDF·xlsx·xls)의 15초 서명 URL을 같은 탭에서 엶. 관리자 '배너' 탭에 10칸 업로드.
 
 - [x] 테스트 먼저: `tests/teacher-resources-sql.spec.js`(버킷·표 직접 접근 차단·RPC 권한 5종 호출자·CHECK·Storage 정책·
       선생님 테스트 계정 SQL), `tests/teacher-resources.spec.js`(버튼 노출·로그인/로그아웃 즉시 반영·위치·자료페이지 4개·
@@ -349,7 +349,7 @@ Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼), 3.3 착수 
       `supabase/lms/teacher-test-account.sql`(비밀번호는 자리표시자).
 - [x] 클라이언트: `teacher-resources.js`(새 classic script), `app.js` 연결(화면·해시·`canSeeTeacherResources`·
       `craAuthReady`·`lmsFetch`가 서명 요청에만 토큰), `index.html`, `styles.css`.
-- [x] 멈춤 3 PM 결정: 다운로드를 (나) Edge Function `teacher-resource-download`로(60초 서버 고정, `teacher_resource_issue`
+- [x] 멈춤 3 PM 결정: 다운로드를 (나) Edge Function `teacher-resource-download`로(15초 서버 고정 — 보안 재검토 M1, `teacher_resource_issue`
       service role 전용), 하루 30회/LMS 회원(KST, 관리자 무제한, `teacher_resource_downloads`). 테스트:
       `tests/teacher-resource-download.spec.js`(함수, 가짜 fetch) + SQL·화면 테스트 갱신. 배포 절차 `supabase/functions/README.md`.
 - [ ] 운영(사용자): 설계 문서 "최종 운영 순서"(3A → 3A만 푸시 → 테스트 계정 → 함수 배포 → 다운로드 확인 → A+B 푸시 →

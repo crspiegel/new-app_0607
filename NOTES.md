@@ -986,7 +986,7 @@ level, book, slot)`)에서만.
   뒤 스크립트가 아직 실행 전일 수 있다).
 - **다운로드 = Edge Function `teacher-resource-download`(PM 결정 (나), 2026-10-29).** 브라우저는 `{level, slot}`만 보내고
   (`sb.functions.invoke`), 함수가 관리자(JWT → `/auth/v1/user`) 또는 LMS(`x-lms-token`을 DB로 전달)를 판정 → service role로
-  `teacher_resource_issue`(현재 파일·하루 30회) → service role로 **60초 고정** 서명 → `&download=<이름 1회 인코딩>`을 붙인
+  `teacher_resource_issue`(현재 파일·하루 30회) → service role로 **15초 고정** 서명 → `&download=<이름 1회 인코딩>`을 붙인
   URL을 돌려준다. 페이지는 그 URL을 같은 탭의 숨은 `<a>`(target 없음)로 연다 — attachment 응답이라 페이지 그대로.
   ⚠ (가)(브라우저가 직접 서명)는 버렸다: 만료를 클라이언트가 정할 수 있어 오래가는 링크가 퍼지면 미캐시 이그레스가 샌다.
   ⚠ supabase-js `createSignedUrl(…, { download })`는 이름을 **두 번 인코딩**한다 — 함수에서도 옵션 대신 직접 붙인다.

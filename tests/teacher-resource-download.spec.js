@@ -153,7 +153,7 @@ test("download fn: bad method / body / nobody signed in → refused, no DB call"
   expect(calls).toEqual([]);
 });
 
-test("download fn: an LMS teacher gets a 60-second URL named once-encoded", async () => {
+test("download fn: an LMS teacher gets a 15-second URL named once-encoded", async () => {
   const { handler, calls } = fakeSupabase();
   const res = await handler(
     post(
@@ -176,7 +176,7 @@ test("download fn: an LMS teacher gets a 60-second URL named once-encoded", asyn
 
   // anon key in Authorization → no Auth lookup; the RPC runs as the service
   // role with the caller's token forwarded; signing as the service role with
-  // the FIXED 60 s (the client's expiresIn is ignored).
+  // the FIXED 15 s (the client's expiresIn is ignored).
   expect(calls.map((c) => new URL(c.url).pathname)).toEqual([
     "/rest/v1/rpc/teacher_resource_issue",
     `/storage/v1/object/sign/teacher-resources/${PATH}`,
@@ -196,7 +196,7 @@ test("download fn: an LMS teacher gets a 60-second URL named once-encoded", asyn
   expect(sign.headers.get("authorization")).toBe(
     `Bearer ${ENV.SUPABASE_SERVICE_ROLE_KEY}`,
   );
-  expect(sign.body).toEqual({ expiresIn: 60 });
+  expect(sign.body).toEqual({ expiresIn: 15 });
 });
 
 test("download fn: an admin is checked with Auth and passed as p_admin_uid", async () => {

@@ -28,14 +28,15 @@ Doc map → `CLAUDE.md`, gotchas → `NOTES.md`, session detail → `.claude/WOR
     Decisions → review §4.9, tasks → plan 3.1/3.2. **Push only after the user ran the SQL** + PM "푸시".
     **Next:** 3.3~3.5 (incl. admin "unlock"). Phase 4 (R4) **cancelled** → B below.
 - **A levels + B teacher resources (`2026-10-29`)** — design
-  `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`. **Both done locally, NOT live.**
+  `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`. **Both done locally, NOT live**
+  (`5ab7d30` A, `54bd131` + `87e98f4` B, `fbbbbaa` .gitignore, M1 signed URL 15 s). **Next:** ops step 1 (3A precheck)
+  → step 2 (`migration.sql` in full).
   A (`5ab7d30`): one `LEVELS` table, keys `beginner`/`level-1..3`, old hashes rewritten, old DB keys
   still read. **`supabase/levels/01-rename.sql` only AFTER the A push.** B: '교사 자료실' (admin + LMS
   role 1/2) → month page in resources mode → private bucket; download via Edge Function
-  `teacher-resource-download` (60 s fixed, 30/day; user deploys — `supabase/functions/README.md`).
+  `teacher-resource-download` (15 s fixed, 30/day; user deploys — `supabase/functions/README.md`).
   Ops order: design doc "최종 운영 순서" (3A-only push = `git push origin fe991f8:master`).
-- **Naver QR registration (user):** 70 codes from `qr/qr-list.csv` (`play.tps-education.com`). TPS
-  still to move its songs to its own Vimeo (`vimeo.com/<id>` in the admin screen).
+- **User:** Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own Vimeo (`vimeo.com/<id>` in admin).
 - **Home hero cast** — stage 1 rejected by the PM on real devices (`2026-10-21`); only on the local
   branch `hero-cast-v1` (`1e7f059`, `dc27a21`, not on origin). Stage 2 = AI video, awaiting a PM brief.
 

@@ -253,7 +253,7 @@ Menu button requirements:
 - Buttons (fixed names): Beginner, Level 1 → 월간.연간교육안 · 상장; Level 2, Level 3 → 월간.연간교육안 ·
   상장 · 테스트 (10 slots). A slot without a file is a grey, disabled "준비 중" button.
 - One file per slot (PDF / xlsx / xls, 10 MB max) in the private Storage bucket `teacher-resources`.
-  A download is a 60-second signed URL (expiry fixed on the server) issued by the Edge Function
+  A download is a 15-second signed URL (expiry fixed on the server) issued by the Edge Function
   `teacher-resource-download` and opened in the same tab (the file is saved, the page stays).
 - Limit: 30 downloads per LMS member per day (KST); admins unlimited. Over the limit the page says
   "오늘 다운로드 횟수를 모두 사용했습니다. 내일 다시 시도해 주세요."

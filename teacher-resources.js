@@ -21,7 +21,7 @@
    {level, slot} — lmsFetch adds the LMS token, supabase-js the admin's JWT.
    The function decides who may, picks the slot's current file, counts the
    daily limit (30 per LMS member per KST day) and returns a URL that expires
-   after 60 seconds (fixed on the server) with the original name already in
+   after 15 seconds (fixed on the server) with the original name already in
    it as `download=`. This page follows it in THIS tab: the Storage API
    answers with Content-Disposition: attachment, so the browser saves the file
    and the page stays (no new tab, no navigation, no CORS needed). */

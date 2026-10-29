@@ -31,7 +31,7 @@
 
 | 부분        | 내용                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 함수        | `supabase/functions/teacher-resource-download/index.ts` 한 파일(import 없음). CORS 허용 출처 5개(운영 www·apex, vercel.app, 로컬 127.0.0.1·localhost:5173), OPTIONS 204, `x-lms-token` 허용. `{level, slot}` 형식 검사 → 관리자 = `Authorization` JWT를 `/auth/v1/user`로 확인한 id, LMS = `x-lms-token`을 DB로 전달 → service role로 `teacher_resource_issue` → service role로 **60초 고정** 서명(요청의 `expiresIn` 무시) → `&download=<이름 1회 인코딩>` URL. 응답·오류에 키 없음 |
+| 함수        | `supabase/functions/teacher-resource-download/index.ts` 한 파일(import 없음). CORS 허용 출처 5개(운영 www·apex, vercel.app, 로컬 127.0.0.1·localhost:5173), OPTIONS 204, `x-lms-token` 허용. `{level, slot}` 형식 검사 → 관리자 = `Authorization` JWT를 `/auth/v1/user`로 확인한 id, LMS = `x-lms-token`을 DB로 전달 → service role로 `teacher_resource_issue` → service role로 **15초 고정** 서명(요청의 `expiresIn` 무시) → `&download=<이름 1회 인코딩>` URL. 응답·오류에 키 없음 |
 | DB          | `teacher_resource_issue(p_level, p_slot, p_admin_uid)` — **service_role만 실행**. 관리자 또는 `lms_member()` role 1·2(세션·회원·지사 활성) / 현재 파일만 / LMS는 KST 하루 30회(회원별 advisory lock) → 기록. `teacher_resource_downloads`(회원 id·level·slot·발급 시각): RLS·정책 0·권한 회수, 30일 지난 행은 발급 때 삭제                                                                                                                                                           |
 | 제거        | LMS용 `storage.objects` 읽기 정책 `teacher_resources_lms_read`, RPC `teacher_resource_file`, 도우미 `teacher_resource_is_current` — `drop … if exists`(재실행 안전). 관리자 업로드·삭제 정책은 유지                                                                                                                                                                                                                                                                                  |
 | 클라이언트  | `sb.functions.invoke("teacher-resource-download", {level, slot})` → 받은 URL을 같은 탭 숨은 `<a>`로. 401 → "다시 로그인해 주세요.", 404 → "아직 준비 중이에요.", 429 → 한도 문구, 그 외 → "내려받지 못했어요…". `lmsFetch` 토큰 대상: REST + 이 함수 주소(Storage 서명에는 더 이상 안 붙음)                                                                                                                                                                                          |
@@ -52,16 +52,21 @@
 
 ### 보안 재검토 (rls-security-reviewer, 멈춤 4) — 치명·높음 없음
 
-| #    | 등급 | 지적                                                                                                                     | 처리                                                                                                  |
-| ---- | ---- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| M1   | 중   | 한도는 "발급" 기준 — 받은 URL 하나는 60초 동안 몇 번이든 GET 가능(악의적 선생님이 병렬 요청하면 이그레스 증폭)           | **PM 결정 필요.** 60초는 PM 값이라 유지. 추천: 15초로 단축(링크는 받자마자 같은 탭에서 열리므로 충분) |
-| L1   | 낮   | `v_role not in (1,2)`가 NULL이면 거부를 빠져나감(지금은 `role` NOT NULL이라 불가)                                        | **수정** — `not coalesce(v_role in (1, 2), false)`                                                    |
-| L2   | 낮   | 본문 검사가 `String()` 변환 — 배열 `["beginner"]`도 통과                                                                 | **수정** — `typeof … === "string"` + 테스트                                                           |
-| L3   | 낮   | `lmsFetch` 주소 비교에 경계 없음(`…-download-v2`에도 토큰)                                                               | **수정** — 함수 주소 정확히(뒤에 `?`만 허용) + 테스트                                                 |
-| L4   | 낮   | 운영 함수가 localhost 출처 허용                                                                                          | 유지(PM: 로컬 dev 허용). 인증이 쿠키가 아닌 헤더라 다른 로컬 페이지가 토큰을 얻을 수 없음             |
-| L5   | 낮   | 실패 요청에 속도 제한 없음(호출 한도만 소모, 유출 없음)                                                                  | 유지 — 보고만                                                                                         |
-| L6   | 낮   | 테스트 계정 비밀번호가 임시 표에 세션 동안 남음                                                                          | **수정** — 스크립트 끝에서 임시 표 삭제 + 테스트                                                      |
-| 정보 | —    | KST 자정 앞뒤 30+30회(스펙대로), 서명 실패도 1회로 셈(닫힌 실패), 관리자 무기록, 30일 정리 비용 무시 가능, 낡은 주석 2곳 | 낡은 주석 **수정**, 나머지 그대로                                                                     |
+| #    | 등급 | 지적                                                                                                                     | 처리                                                                                            |
+| ---- | ---- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| M1   | 중   | 한도는 "발급" 기준 — 받은 URL 하나는 만료 전까지 몇 번이든 GET 가능(악의적 선생님이 병렬 요청하면 이그레스 증폭)         | **PM 승인 → 15초로 단축(반영).** 링크는 받자마자 같은 탭에서 열리므로 충분. 아래 "M1 반영" 참고 |
+| L1   | 낮   | `v_role not in (1,2)`가 NULL이면 거부를 빠져나감(지금은 `role` NOT NULL이라 불가)                                        | **수정** — `not coalesce(v_role in (1, 2), false)`                                              |
+| L2   | 낮   | 본문 검사가 `String()` 변환 — 배열 `["beginner"]`도 통과                                                                 | **수정** — `typeof … === "string"` + 테스트                                                     |
+| L3   | 낮   | `lmsFetch` 주소 비교에 경계 없음(`…-download-v2`에도 토큰)                                                               | **수정** — 함수 주소 정확히(뒤에 `?`만 허용) + 테스트                                           |
+| L4   | 낮   | 운영 함수가 localhost 출처 허용                                                                                          | 유지(PM: 로컬 dev 허용). 인증이 쿠키가 아닌 헤더라 다른 로컬 페이지가 토큰을 얻을 수 없음       |
+| L5   | 낮   | 실패 요청에 속도 제한 없음(호출 한도만 소모, 유출 없음)                                                                  | 유지 — 보고만                                                                                   |
+| L6   | 낮   | 테스트 계정 비밀번호가 임시 표에 세션 동안 남음                                                                          | **수정** — 스크립트 끝에서 임시 표 삭제 + 테스트                                                |
+| 정보 | —    | KST 자정 앞뒤 30+30회(스펙대로), 서명 실패도 1회로 셈(닫힌 실패), 관리자 무기록, 30일 정리 비용 무시 가능, 낡은 주석 2곳 | 낡은 주석 **수정**, 나머지 그대로                                                               |
+
+**M1 반영 (PM 승인, 2026-10-29):** 서명 URL 만료 = **15초**, 서버 고정 그대로(`EXPIRES_IN`, 요청의 `expiresIn` 무시).
+
+- 15초는 다운로드 **시작** 기준이라 큰 파일도 도중에 끊기지 않는다.
+- 남는 위험(받은 URL 하나로 15초 안에 반복 다운로드)은 하루 30회(발급 기준) + 파일 10MB 상한으로 막는다.
 
 확인된 것: 만료·객체를 호출자가 못 바꿈, `p_admin_uid` 위조 불가(service_role만 실행), 관리자 판정은 Auth가 서명·만료·세션 확인,
 `x-lms-token`은 형식 검사 후 DB 전달만(권한 상승 없음), 한도는 회원 단위·advisory lock, 응답·오류에 키 없음, LMS 세션은 Storage
@@ -98,13 +103,13 @@
 
 ### 보안 검토 (rls-security-reviewer, 멈춤 3)
 
-| #   | 지적                                                                                                                                  | 처리                                                                                                                                                                                                             |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | 60초는 클라이언트가 정한다 — 토큰을 꺼낸 선생님이 `expiresIn`을 크게 줘 몇 년짜리 링크를 만들 수 있고, 로그아웃·계정 정지 뒤에도 유효 | **PM 결정 필요.** (가)는 서버가 만료를 강제할 수 없다(만료값은 요청 본문 — Postgres로 안 넘어옴). 멈춤 1 비교에서 놓친 점. 완화: 관리자가 같은 칸에 다시 올리면 새 경로가 되고 옛 객체가 지워져 옛 링크가 죽는다 |
-| 2   | 교체·삭제 뒤 Storage 삭제가 실패한 고아 파일을 role 1·2가 계속 목록·서명 가능                                                         | **수정함.** 읽기 정책에 `teacher_resource_is_current(name)` 추가 — 표가 가리키는 현재 파일만. 테스트로 고정                                                                                                      |
-| 3   | 테스트 계정 SQL의 비밀번호 리터럴이 오류 로그·쿼리 통계에 남을 수 있음                                                                | **수정함.** 서버가 무작위 비밀번호를 만들어 결과에만 표시                                                                                                                                                        |
-| 4   | 공개 저장소에 아이디가 있는 운영 계정                                                                                                 | 운영 순서에 "확인 직후 삭제" 명시                                                                                                                                                                                |
-| 5   | 일반 Auth 사용자 + LMS 토큰이면 목록은 보이나 서명은 실패                                                                             | 닫힌 실패 — 그대로                                                                                                                                                                                               |
+| #   | 지적                                                                                                                                       | 처리                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 만료 시간은 클라이언트가 정한다 — 토큰을 꺼낸 선생님이 `expiresIn`을 크게 줘 몇 년짜리 링크를 만들 수 있고, 로그아웃·계정 정지 뒤에도 유효 | **PM 결정 필요.** (가)는 서버가 만료를 강제할 수 없다(만료값은 요청 본문 — Postgres로 안 넘어옴). 멈춤 1 비교에서 놓친 점. 완화: 관리자가 같은 칸에 다시 올리면 새 경로가 되고 옛 객체가 지워져 옛 링크가 죽는다 |
+| 2   | 교체·삭제 뒤 Storage 삭제가 실패한 고아 파일을 role 1·2가 계속 목록·서명 가능                                                              | **수정함.** 읽기 정책에 `teacher_resource_is_current(name)` 추가 — 표가 가리키는 현재 파일만. 테스트로 고정                                                                                                      |
+| 3   | 테스트 계정 SQL의 비밀번호 리터럴이 오류 로그·쿼리 통계에 남을 수 있음                                                                     | **수정함.** 서버가 무작위 비밀번호를 만들어 결과에만 표시                                                                                                                                                        |
+| 4   | 공개 저장소에 아이디가 있는 운영 계정                                                                                                      | 운영 순서에 "확인 직후 삭제" 명시                                                                                                                                                                                |
+| 5   | 일반 Auth 사용자 + LMS 토큰이면 목록은 보이나 서명은 실패                                                                                  | 닫힌 실패 — 그대로                                                                                                                                                                                               |
 
 ---
 
@@ -347,7 +352,7 @@ section#monthScreen.screen.level-theme-N
 - **새 탭·페이지 이동 없음**: 서명 URL을 `fetch` → Blob → `<a download="원래 이름">` 클릭(같은 탭, 오류는
   전부 잡힘, 한글 파일 이름을 브라우저가 그대로 씀). 대안(Storage GET에 CORS가 없을 때): 서명 URL에
   `&download=<encodeURIComponent(이름)>`를 직접 붙여 같은 탭 링크 클릭(첨부 응답이라 이동하지 않음).
-  ⚠ supabase-js `createSignedUrl(path, 60, { download })`는 파일 이름을 **두 번 인코딩**한다(B4 근거) → 쓰지 않는다.
+  ⚠ supabase-js `createSignedUrl(path, 15, { download })`는 파일 이름을 **두 번 인코딩**한다(B4 근거) → 쓰지 않는다.
 
 ### B3. 관리자 '배너' 메뉴에 추가할 섹션
 
@@ -444,7 +449,7 @@ contentType=확장자로 결정)` → RPC `teacher_resource_set` (이전 경로�
 -- (lms_member). Level keys are the NEW keys: beginner · level-1..3.
 -- Slots: plan (월간.연간교육안) · award (상장) · test (테스트, level-2/3 only).
 -- Admins upload / replace / delete. Admins and LMS role 1 (branch) / 2
--- (teacher) list and download through 60-second signed URLs. Nobody reads
+-- (teacher) list and download through 15-second signed URLs. Nobody reads
 -- the table directly — RPCs only.
 -- ============================================================================
 
@@ -513,7 +518,7 @@ as $$
 $$;
 
 -- One slot's file for a download: {"path", "name"}, or NULL (empty slot or
--- not allowed). The client then asks Storage for a 60-second signed URL.
+-- not allowed). The client then asks Storage for a 15-second signed URL.
 create or replace function public.teacher_resource_file(p_level text, p_slot text)
 returns jsonb
 language sql
@@ -621,7 +626,7 @@ notify pgrst, 'reload schema';
 
 (나)를 고를 경우 추가: `supabase/functions/teacher-resource-url/index.ts`(저장소에 원본, 사용자가 대시보드에 붙여넣기).
 요청 `{level, slot}` → 호출자의 `Authorization`·`x-lms-token`을 그대로 붙여 `rpc/teacher_resource_file` 호출(판정은
-DB) → 결과가 있으면 service role로 `POST /storage/v1/object/sign/teacher-resources/<path>` `{expiresIn: 60}` →
+DB) → 결과가 있으면 service role로 `POST /storage/v1/object/sign/teacher-resources/<path>` `{expiresIn: 15}` →
 `signedURL + '&download=' + encodeURIComponent(name)` 반환. CORS 허용 출처: `https://www.cambridgereading.com`,
 `https://cambridgereading.com`, `https://new-app0607.vercel.app`, 로컬 `http://127.0.0.1:5173`. 허용 헤더에 `x-lms-token`.
 위 `teacher_resources_lms_read` 정책은 빼고, 클라이언트 `lmsFetch`는 넓히지 않는다.

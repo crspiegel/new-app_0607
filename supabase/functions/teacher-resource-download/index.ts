@@ -5,7 +5,7 @@
 // The ONLY way to a teacher-resources file: the browser posts {level, slot};
 // this function decides who is asking, lets the database pick the slot's
 // current file and count the daily limit (teacher_resource_issue, service
-// role), then signs a Storage URL that expires after 60 seconds — fixed here,
+// role), then signs a Storage URL that expires after 15 seconds — fixed here,
 // never taken from the request — with the original file name as download=.
 //
 // Who may: an admin (Supabase Auth user in public.admins — the JWT in
@@ -23,7 +23,7 @@
 // ============================================================================
 
 const BUCKET = "teacher-resources";
-const EXPIRES_IN = 60; // seconds — fixed on the server
+const EXPIRES_IN = 15; // seconds — fixed on the server
 const ALLOWED_ORIGINS = [
   "https://www.cambridgereading.com",
   "https://cambridgereading.com",

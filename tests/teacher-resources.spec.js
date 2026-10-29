@@ -421,7 +421,7 @@ test("resources: a download stays in this tab and keeps the Korean name", async 
     "resources",
   );
   // One Edge Function call (level + slot only, with the LMS token) → its
-  // 60 s URL, followed in this tab. The browser itself never signs.
+  // 15 s URL, followed in this tab. The browser itself never signs.
   expect(sent.fn).toEqual([
     {
       body: { level: "beginner", slot: "plan" },
