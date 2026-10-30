@@ -595,6 +595,46 @@ test("play board: the cover paints from the static asset, placeholder on 404", a
   );
 });
 
+// board.css lifts the level line beside the teacher page's Back/Next row;
+// this page has no such row, so on PC and tablets the line sat 10px inside
+// the brand line (2026-10-30). play.css leaves the teacher 페이지2's gap.
+test("play board: the level line clears the brand line at every width", async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== "desktop", "one project, by viewport");
+  await mockContent(page);
+  await page.goto("/play.html?l=b&m=3&b=1");
+  await expect(page.locator("#play")).toHaveAttribute("data-state", "board");
+  const gaps = {};
+  for (const [w, h] of [
+    [1920, 1080],
+    [1366, 900],
+    [1180, 820],
+    [812, 375],
+    [768, 1024],
+    [375, 812],
+  ]) {
+    await page.setViewportSize({ width: w, height: h });
+    gaps[`${w}x${h}`] = await page.evaluate(() => {
+      const brand = document.querySelector(".play-brand");
+      const banner = document.querySelector(".content-level-banner");
+      return Math.round(
+        banner.getBoundingClientRect().top -
+          brand.getBoundingClientRect().bottom,
+      );
+    });
+  }
+  // Teacher 페이지2: 40 PC, 42 tablet portrait, 40 landscape. Phones: as before.
+  expect(gaps).toEqual({
+    "1920x1080": 40,
+    "1366x900": 40,
+    "1180x820": 40,
+    "812x375": 40,
+    "768x1024": 42,
+    "375x812": 20,
+  });
+});
+
 test("play: route variants", async ({ page }) => {
   await mockContent(page, [LEVEL2_ROW]);
   for (const query of [

@@ -154,6 +154,41 @@ button {
   font-weight: 400;
 }
 
+/* The teacher home page's colors (styles.css .brand-adventures), not its gray
+   subpage logo. */
+.brand-adventures {
+  color: #f0643f;
+  font-family: "Cherry Bomb One", var(--font-display);
+  font-size: 33px;
+  font-weight: 400;
+}
+
+/* ---- Level line under the brand line (768px and up) -------------------
+   board.css lifts the level+month line (PC −30px, tablets −28/−26px) to line
+   it up with the teacher page's Back/Next row. This page has no such row, so
+   the lift pushed the line up into the brand line. Leave the teacher 페이지2's
+   air above it instead: section padding-top + the empty header's margin +
+   this = 40px (PC), 42px (tablet portrait), 40px (tablet landscape).
+   margin-bottom stays board.css's, so the gap to the toolbar is the teacher's
+   too. Phones (767px and down) never had the lift and are left alone. */
+@media (min-width: 768px) {
+  #contentScreen .content-level-banner {
+    margin-top: 22px; /* 12 + 8 + 22 = 42 */
+  }
+}
+
+@media (min-width: 1181px) {
+  #contentScreen .content-level-banner {
+    margin-top: 20px; /* 12 + 8 + 20 = 40 */
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1180px) and (orientation: landscape) {
+  #contentScreen .content-level-banner {
+    margin-top: 24px; /* 10 + 6 + 24 = 40 */
+  }
+}
+
 /* ---- Footer: one line, no links --------------------------------------- */
 .play-footer {
   flex: 0 0 auto;
