@@ -146,3 +146,169 @@ test("lms sql: precheck → migration ×2 → verify-3a, no trace", async ({}, t
     await db.close();
   }
 });
+
+// Found on the live project (2026-10-30), in no file or commit of this repo:
+// a members.profile jsonb column and a 5-argument create_member overload
+// (extra p_profile with a default), added by hand before 3A. A 4-argument
+// call then has two candidates → 42725 "is not unique" (verify-3a row 114;
+// PGRST203 for the admin tab's named-argument rpc). Copied as reported,
+// grants included (PUBLIC + authenticated + service_role, no anon).
+const LIVE_ONLY = `
+  alter table public.members add column profile jsonb default '{}'::jsonb;
+  CREATE OR REPLACE FUNCTION public.create_member(p_id text, p_password text, p_grade smallint,
+    p_display_name text DEFAULT NULL::text, p_profile jsonb DEFAULT '{}'::jsonb)
+   RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public', 'extensions'
+  AS $function$
+    begin
+      if not public.is_admin() then raise exception 'not authorized'; end if;
+      if p_grade not in (1,2,3) then raise exception 'grade must be 1, 2 or 3'; end if;
+      if p_id !~ '^[!-~]{4,}$' or p_password !~ '^[!-~]{4,}$' then
+        raise exception 'id/password must be >= 4 printable-ASCII chars (no spaces, no Korean)';
+      end if;
+      insert into public.members (id, password_hash, grade, display_name, profile)
+      values (p_id, crypt(p_password, gen_salt('bf')), p_grade, p_display_name,
+              coalesce(p_profile, '{}'::jsonb))
+      on conflict (id) do update
+        set password_hash = excluded.password_hash, grade = excluded.grade,
+            display_name = excluded.display_name, profile = excluded.profile,
+            active = true;
+    end; $function$;
+  revoke all on function public.create_member(text, text, smallint, text, jsonb) from anon;
+`;
+const LIVE_ONLY_FN = "create_member(text,text,smallint,text,jsonb)";
+
+test("lms sql: live-only create_member overload → 42725 → fix SQL → verify-3a passes", async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  test.setTimeout(180000); // PGlite: migration.sql + verify-3a twice
+  const db = new PGlite({ extensions: { pgcrypto } });
+  const verify = async () => lastRows(await db.exec(VERIFY));
+  // the admin tab's call: four named arguments (app.js "회원 저장")
+  const adminTabSave = `begin; set local role authenticated;
+    select set_config('request.jwt.claims', '{"sub":"${ADMIN_UID}"}', true);
+    select public.create_member(p_id => 'zz-v-tab', p_password => 'tabpw1',
+      p_grade => 3::smallint, p_display_name => null);
+    select count(*)::int as n from public.members where id = 'zz-v-tab';`;
+  const catalog = `
+    select p.oid::regprocedure::text as fn, p.proacl::text as acl, md5(p.prosrc) as src
+      from pg_proc p where p.pronamespace = 'public'::regnamespace
+    union all
+    select 'column ' || attname, format_type(atttypid, atttypmod), null
+      from pg_attribute where attrelid = 'public.members'::regclass and attnum > 0
+       and not attisdropped
+    order by 1`;
+  try {
+    await db.exec(SUPABASE_SHIM);
+    await db.exec(MIGRATION.slice(0, LMS_START));
+    await db.exec(OLD_MEMBERS);
+    await db.exec(LIVE_ONLY);
+    await db.exec(MIGRATION); // what the user ran on 2026-10-29 ("Success")
+
+    // the live grants, entry for entry
+    const acl = await rows(
+      db,
+      `select p.oid::regprocedure::text as fn,
+              array(select unnest(p.proacl)::text order by 1) as acl
+         from pg_proc p where p.proname = 'create_member' order by 1`,
+    );
+    const LIVE_ACL = [
+      "=X/postgres",
+      "authenticated=X/postgres",
+      "postgres=X/postgres",
+      "service_role=X/postgres",
+    ];
+    expect(acl).toEqual([
+      { fn: "create_member(text,text,smallint,text)", acl: LIVE_ACL },
+      { fn: LIVE_ONLY_FN, acl: LIVE_ACL },
+    ]);
+
+    // --- RED: the live result, row for row
+    const red = await verify();
+    expect(red).toHaveLength(116);
+    expect(red[0]).toMatchObject({
+      no: 0,
+      area: "SUMMARY",
+      actual: "114 / 115",
+      pass: false,
+    });
+    const broken = red.filter((r) => r.no > 0 && r.pass !== true);
+    expect(broken).toHaveLength(1);
+    expect(broken[0]).toMatchObject({ no: 114, area: "ERROR", pass: false });
+    expect(broken[0].actual).toBe(
+      "42725 function public.create_member(unknown, unknown, smallint, unknown) is not unique",
+    );
+    expect(red[115]).toMatchObject({
+      no: 115,
+      area: "trace",
+      actual: "branches=0 members=0 classes=0 attempts=0",
+      pass: true,
+    });
+    await expect(db.exec(`${adminTabSave} rollback;`)).rejects.toThrow(
+      /is not unique/,
+    );
+    await db.exec("rollback");
+
+    // --- the fix: one DROP, nothing else written
+    const FIX = read("supabase/lms/fix-create-member-overload.sql");
+    const code = FIX.replace(/--.*$/gm, "").replace(/'(?:[^']|'')*'/g, "''");
+    expect(code.match(/\bdrop\b/gi)).toHaveLength(1);
+    expect(code).toMatch(
+      /drop function if exists public\.create_member\(text, text, smallint, text, jsonb\);/i,
+    );
+    expect(code).not.toMatch(
+      /\b(cascade|insert|update|delete|merge|create|alter|grant|revoke|truncate|set_config|copy|call|do)\b/i,
+    );
+
+    // its result table, read before the DROP: both overloads → both false
+    const report = FIX.slice(FIX.indexOf("with left_over"));
+    expect(lastRows(await db.exec(report))).toEqual([
+      {
+        no: 1,
+        create_member: "create_member(text, text, smallint, text)",
+        pass: false,
+      },
+      {
+        no: 2,
+        create_member: "create_member(text, text, smallint, text, jsonb)",
+        pass: false,
+      },
+    ]);
+
+    const before = await rows(db, catalog);
+    const RESULT = [
+      {
+        no: 1,
+        create_member: "create_member(text, text, smallint, text)",
+        pass: true,
+      },
+    ];
+    expect(lastRows(await db.exec(FIX))).toEqual(RESULT);
+    expect(lastRows(await db.exec(FIX))).toEqual(RESULT); // re-run safe
+    // only that overload is gone: the repo function (grants, body),
+    // members.profile and every other function are as they were
+    expect(await rows(db, catalog)).toEqual(
+      before.filter((r) => r.fn !== LIVE_ONLY_FN),
+    );
+    expect(before.some((r) => r.fn === LIVE_ONLY_FN)).toBe(true);
+    expect(before).toContainEqual({
+      fn: "column profile",
+      acl: "jsonb",
+      src: null,
+    });
+
+    // --- GREEN
+    const green = await verify();
+    const failed = green.filter((r) => r.pass !== true);
+    expect(failed, JSON.stringify(failed, null, 1)).toEqual([]);
+    expect(green).toHaveLength(116);
+    expect(green[0]).toMatchObject({ area: "SUMMARY", actual: "115 / 115" });
+    expect(green[115]).toMatchObject({
+      area: "trace",
+      actual: "branches=0 members=0 classes=0 attempts=0",
+    });
+    expect(lastRows(await db.exec(`${adminTabSave} rollback;`))).toEqual([
+      { n: 1 },
+    ]);
+  } finally {
+    await db.close();
+  }
+});

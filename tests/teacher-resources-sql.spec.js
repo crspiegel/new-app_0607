@@ -503,3 +503,117 @@ test("teacher resources sql: teacher test account script", async ({}, testInfo) 
     await db.close();
   }
 });
+
+// supabase/lms/verify-teacher-resources.sql — the read-only catalog check the
+// user runs on the live project after migration.sql (verify-3a.sql does not
+// look at this block). Every row must pass on a fresh migration, and each
+// kind of drift must turn exactly its own row false.
+test("teacher resources sql: read-only verify script", async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  test.setTimeout(120000);
+  const SCRIPT = readFileSync(
+    path.resolve("supabase/lms/verify-teacher-resources.sql"),
+    "utf8",
+  );
+  // read-only: no writing keyword outside comments and string literals
+  const code = SCRIPT.replace(/--.*$/gm, "").replace(/'(?:[^']|'')*'/g, "''");
+  expect(code).not.toMatch(
+    /\b(insert|update|delete|merge|create|drop|alter|grant|revoke|truncate|set_config|begin|commit|into|copy|call|do|set|lock|notify|nextval|setval|pg_advisory\w*)\b/i,
+  );
+  const db = new PGlite({ extensions: { pgcrypto } });
+  try {
+    await db.exec(SUPABASE_SHIM);
+    await db.exec(MIGRATION);
+    const rowsOf = (results) =>
+      [...results].reverse().find((r) => r.rows.length).rows;
+
+    const fresh = rowsOf(await db.exec(SCRIPT));
+    expect(fresh[0]).toMatchObject({ no: 0, area: "SUMMARY", pass: true });
+    expect(fresh.filter((r) => r.pass === false)).toEqual([]);
+    expect(fresh.filter((r) => r.pass === null).map((r) => r.area)).toEqual([
+      "info",
+    ]);
+
+    // One drift at a time, rolled back: the rows that turn false.
+    const failing = async (drift) => {
+      const rows = rowsOf(
+        await db.exec(`begin; ${drift}; ${SCRIPT}; rollback;`),
+      );
+      expect(rows[0]).toMatchObject({ no: 0, area: "SUMMARY", pass: false });
+      return rows
+        .filter((r) => r.no > 0 && r.pass === false)
+        .map((r) => r.check);
+    };
+    const DIRECT =
+      "teacher_resources: no direct access for anon / authenticated";
+    const ONE_BUCKET = "storage.objects policies not tied to one bucket";
+    const OTHER_FN = "no other public function touches teacher resources";
+    const cases = [
+      [
+        `update storage.buckets set public = true where id = '${BUCKET}'`,
+        ["teacher-resources bucket is private"],
+      ],
+      ["grant select on public.teacher_resources to anon", [DIRECT]],
+      [
+        "grant select (file_name) on public.teacher_resources to anon",
+        [DIRECT],
+      ],
+      [
+        "grant execute on function public.teacher_resource_issue(text, text, uuid) to anon",
+        ["teacher_resource_issue: Edge Function (service role) only"],
+      ],
+      [
+        `alter policy teacher_resources_admin_all on storage.objects
+           using (bucket_id = '${BUCKET}')`,
+        ["teacher_resources_admin_all: for all, to authenticated, admins only"],
+      ],
+      [
+        "create policy zz_any on storage.objects for select to anon using (true)",
+        [ONE_BUCKET],
+      ],
+      [
+        `create policy zz_not_covers on storage.objects for select to anon
+           using (bucket_id <> 'covers')`,
+        [ONE_BUCKET],
+      ],
+      [
+        `create policy zz_or on storage.objects for select to anon
+           using (bucket_id = 'covers' or true)`,
+        [ONE_BUCKET],
+      ],
+      [
+        "alter table storage.objects disable row level security",
+        [
+          "RLS is on for storage.objects and storage.buckets (tables with it off)",
+        ],
+      ],
+      [
+        `create policy zz_bucket on storage.buckets for update to authenticated
+           using (true)`,
+        ["no browser policy can change a bucket (storage.buckets)"],
+      ],
+      [
+        `create function public.teacher_resource_file(text, text) returns jsonb
+           language sql as $$ select null::jsonb $$`,
+        ["(가) leftovers are gone", OTHER_FN],
+      ],
+      [
+        `create function public.zz_peek() returns setof text language sql
+           as $$ select file_name from public.teacher_resources $$`,
+        [OTHER_FN],
+      ],
+      [
+        `create view public.zz_resources_v as
+           select * from public.teacher_resources`,
+        ["no view reads the two tables"],
+      ],
+    ];
+    for (const [drift, expected] of cases) {
+      expect(await failing(drift), drift).toEqual(expected);
+    }
+    // and nothing stayed behind
+    expect(rowsOf(await db.exec(SCRIPT))[0].pass).toBe(true);
+  } finally {
+    await db.close();
+  }
+});

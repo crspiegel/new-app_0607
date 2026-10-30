@@ -221,6 +221,13 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   members 직접 쓰기가 `permission denied for function lms_norm_id`).
 - ⚠ `current_setting('request.headers', true)`는 한 번 설정·되돌린 세션에서 NULL이 아니라 `''`를 돌려준다 →
   `nullif(…, '')` 후 `::json`. 안 하면 `invalid input syntax for type json`.
+- 운영 REST 헤더(2026-10-29 `lms_probe_headers` 탐침): `cf-connecting-ip`·`x-forwarded-for` = 실제 접속 IP, `x-real-ip` 없음.
+  ⚠ 요청에 `CF-Connecting-IP`를 넣으면 Cloudflare가 엣지에서 **403 `error code: 1000`**(PostgREST까지 안 감) → 위조 시험은
+  헤더를 한 요청에 하나씩. 이 거절이 `lms_client_ip()`가 `cf-connecting-ip`만 믿는 근거다.
+- ⚠ **운영 DB에 저장소에 없는 객체가 있었다(2026-10-30 발견):** `members.profile` jsonb 열 + `create_member`
+  5인자 오버로드(`p_profile jsonb default …`). 기본값 있는 인자를 붙인 오버로드는 기존 4인자 호출을 모호하게 만든다
+  (SQL `42725 … is not unique`, REST `PGRST203`) → `create or replace`는 시그니처가 다르면 덮어쓰지 않고 하나를 더 만든다.
+  정리 = `supabase/lms/fix-create-member-overload.sql`(그 오버로드만 DROP). 열은 3.5에서 결정(D28).
 - `classes` ↔ `class_members` 정책이 서로를 조회하면 재귀 오류 → SECURITY DEFINER 도우미 함수로 끊는다.
 - 로그인 실패를 예외로 돌려주지 않는다(`lms_login`은 항상 jsonb) — 예외는 실패 카운터 증가까지 롤백한다.
 - ⚠ **`members.id`가 아직 pk(전역 유일)라 3.5 전에는 같은 아이디를 두 지사에 만들 수 없다** — 동명이인 테스트는

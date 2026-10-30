@@ -15,6 +15,7 @@ export const SUPABASE_SHIM = `
   create table storage.buckets (
     id text primary key, name text not null, public boolean default false,
     file_size_limit bigint, allowed_mime_types text[]);
+  alter table storage.buckets enable row level security;
   create table storage.objects (bucket_id text, name text);
   alter table storage.objects enable row level security;
   grant usage on schema storage to anon, authenticated, service_role;

@@ -22,20 +22,20 @@ Doc map → `CLAUDE.md`, gotchas → `NOTES.md`, session detail → `.claude/WOR
   - **Phase 1, 2A, 2B — live** (`b6bb29e`, `1167b85`..`00f4bad`; detail in the archive): game URLs in
     weekday slots, shared board files + exact pixel baseline, student page = one book (70 QR, static
     covers). **iPhone real-device check is the user's.**
-  - **Phase 3A — done locally, NOT live** (`2026-10-23`..`24`): SQL 1 = `migration.sql` "LMS (Phase 3A)"
-    block + `supabase/lms/` (precheck, verify, run order), `npm run test:sql`; 3.2 login client
-    (`lms_login`, branch choice, `cra_lms`, fetch wrapper adds `x-lms-token`, grade-3 block gone).
-    Decisions → review §4.9, tasks → plan 3.1/3.2. **Push only after the user ran the SQL** + PM "푸시".
-    **Next:** 3.3~3.5 (incl. admin "unlock"). Phase 4 (R4) **cancelled** → B below.
+  - **Phase 3A — SQL live (`2026-10-29`), client NOT pushed** (`2026-10-23`..`24`): SQL 1 = `migration.sql`
+    "LMS (Phase 3A)" block + `supabase/lms/` (precheck, verify, run order), `npm run test:sql`; 3.2 login
+    client (`lms_login`, branch choice, `cra_lms`, fetch wrapper adds `x-lms-token`, grade-3 block gone).
+    Decisions → review §4.9, tasks → plan 3.1/3.2. **Next:** 3.3~3.5 (3.5 adds: live-only `members.profile`,
+    old admin RPCs' PUBLIC execute). Phase 4 (R4) **cancelled** → B.
 - **A levels + B teacher resources (`2026-10-29`)** — design
-  `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`. **Both done locally, NOT live**
-  (`5ab7d30` A, `54bd131` + `87e98f4` B, `fbbbbaa` .gitignore, M1 signed URL 15 s). **Next:** ops step 1 (3A precheck)
-  → step 2 (`migration.sql` in full).
-  A (`5ab7d30`): one `LEVELS` table, keys `beginner`/`level-1..3`, old hashes rewritten, old DB keys
+  `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`. **Code NOT live** (`5ab7d30` A,
+  `54bd131` + `87e98f4` B, `fbbbbaa` .gitignore, `01f682b` M1 15 s); B's SQL ran with 3A.
+  **3A ops done `2026-10-30`** (`supabase/lms/README.md`; a live-only `create_member` overload dropped).
+  Next = PM "푸시" → 3A only: `git push origin fe991f8:master` (design doc "최종 운영 순서").
+  A: one `LEVELS` table, keys `beginner`/`level-1..3`, old hashes rewritten, old DB keys
   still read. **`supabase/levels/01-rename.sql` only AFTER the A push.** B: '교사 자료실' (admin + LMS
   role 1/2) → month page in resources mode → private bucket; download via Edge Function
   `teacher-resource-download` (15 s fixed, 30/day; user deploys — `supabase/functions/README.md`).
-  Ops order: design doc "최종 운영 순서" (3A-only push = `git push origin fe991f8:master`).
 - **User:** Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own Vimeo (`vimeo.com/<id>` in admin).
 - **Home hero cast** — stage 1 rejected by the PM on real devices (`2026-10-21`); only on the local
   branch `hero-cast-v1` (`1e7f059`, `dc27a21`, not on origin). Stage 2 = AI video, awaiting a PM brief.
