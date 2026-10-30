@@ -29,6 +29,8 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 - `git push` first failed with **403** because the HTTPS credential helper cached the wrong
   account. Fixed with **`gh auth setup-git`** (gh is now the github.com credential helper using
   the crspiegel token). Pushes work now.
+- ⚠ **푸시 전 gh 활성 계정을 `crspiegel`로 전환한다(2026-10-30, D30).** git 자격 도우미 = gh인데 이 PC의 평소 활성
+  계정은 다른 계정이다 → `gh auth switch -h github.com -u crspiegel` → `gh auth status` 확인 → `git push` → `gh auth switch`로 복귀.
 - The device-auth login flow (`vercel login`, `gh auth login`) reuses the **browser session** —
   log the wrong account out of the site in the browser first, or it re-authorizes the wrong one.
 - **Vercel CLI `--global-config` 폴더를 배포 폴더 안에 두면 토큰이 업로드되어 공개된다**
@@ -216,6 +218,9 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 - ⚠ **SQL Editor는 마지막 결과 표 하나만 보여 준다.** 점검·검증 SQL은 select 한 개로 표를 만든다.
   `verify-3a.sql`은 함수 안 서브트랜잭션에서 테스트하고 일부러 예외(`LMS_VERIFY_ROLLBACK`)를 던져 전부 되돌린 뒤
   결과(plpgsql 변수에 모아 둔 것)를 낸다 + 바깥 `begin … rollback`. 테스트 데이터 이름은 `zz-v…`·`검증지사…`.
+- ⚠ **SQL Editor의 마지막 select는 앞 문장이 만든 임시 표를 못 봤다**(2026-10-30 `teacher-test-account.sql` `42P01`, PGlite는
+  연결 1개라 못 잡음) → 사용자가 돌릴 SQL은 **한 문장**(CTE)으로. 단 한 문장 안에서는 모두 시작 시점 데이터를 봐서 **트리거가
+  바꾼 결과가 안 보인다**(지워진 세션도 셈) → 결과 칸 이름을 실제 뜻대로(`sessions_ended`).
 - ⚠ **RLS 정책 안 함수는 조회하는 역할의 EXECUTE가 필요하다**(`lms_member()`를 anon에서 revoke하면 정책이 권한
   오류). **인덱스 식 함수는 행을 쓰는 역할의 EXECUTE를 검사한다**(`lms_norm_id`를 authenticated에서 빼면 관리자
   members 직접 쓰기가 `permission denied for function lms_norm_id`).

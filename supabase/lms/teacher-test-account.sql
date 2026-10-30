@@ -5,6 +5,10 @@
 -- Run AFTER the 3A SQL (migration.sql with the "LMS (Phase 3A)" block).
 -- Supabase Dashboard → SQL Editor → New query → paste this whole file → Run.
 --
+-- ONE statement on purpose (no temp table, no DO block): on the live project
+-- (2026-10-30) the SQL Editor's last select did not see a temp table made by
+-- an earlier statement (42P01 relation "teacher_test_pw" does not exist).
+--
 -- Nobody types a password: the server makes a random 12-character one and
 -- shows it ONCE in the result row. It is never part of the statement text,
 -- so it cannot end up in the SQL Editor history, an error log or the query
@@ -12,48 +16,41 @@
 -- a document, a chat or a commit.
 --
 -- Login ID: tps-teacher-test (no "@", so the site logs it in as an LMS member).
--- Re-running makes a NEW password (the old one stops working), re-activates
--- the account and ends its sessions.
--- Result: one row — id, role 2, branch hq, active, sessions 0, password.
+-- Re-running makes a NEW password (the old one stops working) and
+-- re-activates the account. The new password also ends all of the account's
+-- sessions: trigger members_lms_compat (migration.sql) deletes a member's
+-- sessions whenever its password hash changes.
+-- Result: one row — id, role 2, branch hq, active, sessions_ended, password.
+-- sessions_ended = the sessions the account had when the run began, all ended
+-- by the new password (0 on the first run). One statement sees the tables as
+-- they were when it began, so it cannot show what is left afterwards (0).
+-- No branch hq (3A SQL not run yet) → 0 rows, nothing written.
 -- ⚠ The ID is public (this repo is public): remove the account as soon as the
 -- check is done — see the bottom of this file.
 -- ============================================================================
-create temp table if not exists teacher_test_pw (pw text) on commit preserve rows;
-truncate teacher_test_pw;
-
-do $$
-declare
-  v_id text := 'tps-teacher-test';
-  v_pw text := rtrim(translate(encode(extensions.gen_random_bytes(9), 'base64'),
-                               '+/', '-_'), '=');
-  v_hq uuid;
-begin
-  select b.id into v_hq from public.branches b where b.code = 'hq';
-  if v_hq is null then
-    raise exception 'Branch hq not found — run the 3A SQL (migration.sql) first.';
-  end if;
+with pw as (
+  select rtrim(translate(encode(extensions.gen_random_bytes(9), 'base64'),
+                         '+/', '-_'), '=') as v
+),
+up as (
   insert into public.members (id, password_hash, grade, role, branch_id, display_name, active)
-  values (v_id, extensions.crypt(v_pw, extensions.gen_salt('bf')), 2, 2, v_hq, '테스트 선생님', true)
+  select 'tps-teacher-test', extensions.crypt(pw.v, extensions.gen_salt('bf')),
+         2, 2, b.id, '테스트 선생님', true
+    from pw cross join public.branches b
+   where b.code = 'hq'
   on conflict (id) do update
     set password_hash = excluded.password_hash,
-        grade         = 2,
-        role          = 2,
-        branch_id     = excluded.branch_id,
-        active        = true;
-  insert into teacher_test_pw values (v_pw);
-end
-$$;
-
-select m.id, m.role, b.code as branch, m.active,
+        grade = 2, role = 2,
+        branch_id = excluded.branch_id,
+        active = true
+  returning member_id, id, role, branch_id, active
+)
+select up.id, up.role, b.code as branch, up.active,
        (select count(*) from public.lms_sessions s
-         where s.member_id = m.member_id)::int as sessions,
-       (select pw from teacher_test_pw) as password
-  from public.members m
-  join public.branches b on b.id = m.branch_id
- where m.id = 'tps-teacher-test';
-
--- The password must not outlive this script in the session.
-drop table if exists teacher_test_pw;
+         where s.member_id = up.member_id)::int as sessions_ended,
+       pw.v as password
+  from up cross join pw
+  join public.branches b on b.id = up.branch_id;
 
 -- ----------------------------------------------------------------------------
 -- After the check — remove the account (its sessions go with it). Run this

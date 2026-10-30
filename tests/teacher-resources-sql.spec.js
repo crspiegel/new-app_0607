@@ -433,38 +433,67 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
 // account for the download check. Nobody types a password: the server makes
 // a random one and shows it ONCE in the result row, so it is never part of
 // the statement text (SQL Editor history, error logs, pg_stat_statements).
-// Re-running resets it (the old one stops working).
+// Re-running resets it (the old one stops working) and ends its sessions.
+const TEST_ACCOUNT_SCRIPT = readFileSync(
+  path.resolve("supabase/lms/teacher-test-account.sql"),
+  "utf8",
+);
+const TEST_ACCOUNT_SESSIONS =
+  "select count(*)::int as n from public.lms_sessions s join public.members m on m.member_id = s.member_id where m.id = 'tps-teacher-test'";
+
+// Live 2026-10-30: the SQL Editor's last select did not see the temp table an
+// earlier statement made (42P01), and PGlite's one connection hid that. Keep
+// the script ONE statement with no temp table.
+test("teacher resources sql: teacher test account script is one statement", async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  const code = TEST_ACCOUNT_SCRIPT.replace(/--.*$/gm, "").replace(
+    /'(?:[^']|'')*'/g,
+    "''",
+  );
+  expect(code).not.toMatch(/\btemp(orary)?\b|\$\$/i);
+  expect(code.split(";").filter((s) => s.trim())).toHaveLength(1);
+});
+
 test("teacher resources sql: teacher test account script", async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
-  test.setTimeout(120000); // PGlite: migration.sql + the script twice
-  const SCRIPT = readFileSync(
-    path.resolve("supabase/lms/teacher-test-account.sql"),
-    "utf8",
-  );
-  expect(SCRIPT).not.toMatch(/CHANGE-ME|v_pw text := '/);
+  test.setTimeout(120000); // PGlite: migration.sql + the script three times
+  const SCRIPT = TEST_ACCOUNT_SCRIPT;
+  expect(SCRIPT).not.toMatch(/CHANGE-ME/);
+  expect(SCRIPT).toMatch(/extensions\.gen_random_bytes\(9\)/);
   const db = new PGlite({ extensions: { pgcrypto } });
   try {
     await db.exec(SUPABASE_SHIM);
     await db.exec(MIGRATION);
 
-    const run = async () => {
+    // no branch hq → 0 rows and nothing written
+    const noHq = await db.exec(`begin;
+      update public.branches set code = 'zz-no-hq' where code = 'hq';
+      ${SCRIPT};
+      rollback;`);
+    expect(noHq[2].rows).toEqual([]);
+    expect(
+      (
+        await db.query(
+          "select count(*)::int as n from public.members where id = 'tps-teacher-test'",
+        )
+      ).rows[0].n,
+    ).toBe(0);
+
+    const run = async (ended = 0) => {
       const results = await db.exec(SCRIPT);
       const rows = [...results].reverse().find((r) => r.rows.length).rows;
       expect(rows).toHaveLength(1);
-      // the password does not outlive the script in the session
-      expect(
-        (await db.query("select to_regclass('pg_temp.teacher_test_pw') as t"))
-          .rows[0].t,
-      ).toBeNull();
       const { password, ...rest } = rows[0];
       expect(rest).toEqual({
         id: "tps-teacher-test",
         role: 2,
         branch: "hq",
         active: true,
-        sessions: 0,
+        sessions_ended: ended,
       });
       expect(password).toMatch(/^[A-Za-z0-9_-]{12}$/);
+      // the new password ended every session of the account
+      expect((await db.query(TEST_ACCOUNT_SESSIONS)).rows[0].n).toBe(0);
       return password;
     };
     const login = async (pw) =>
@@ -499,6 +528,9 @@ test("teacher resources sql: teacher test account script", async ({}, testInfo) 
         )
       ).map((r) => r.slot),
     ).toEqual(["plan", "award", "test"]);
+    // re-run while logged in: the row counts the 1 session it ended, 0 left
+    expect((await db.query(TEST_ACCOUNT_SESSIONS)).rows[0].n).toBe(1);
+    await run(1);
   } finally {
     await db.close();
   }

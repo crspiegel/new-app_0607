@@ -50,8 +50,12 @@ SQL Editor는 마지막 결과 표만 보여 준다. 여기 SQL 파일은 모두
 - **아무도 비밀번호를 입력하지 않는다.** 서버가 12자 무작위 비밀번호를 만들어 결과 표의 `password` 칸에 **한 번만**
   보여 준다. SQL 문장에 비밀번호가 없으므로 SQL Editor 기록·오류 로그·쿼리 통계에 남지 않는다(보안 검토 반영).
   그 자리에서 확인에만 쓰고 파일·문서·채팅·커밋에 옮기지 않는다.
-- 기대 결과: 표 1줄 `tps-teacher-test | 2 | hq | true | 0 | (비밀번호)`. 다시 실행하면 새 비밀번호(이전 것은 무효)·
-  재활성화·세션 종료.
+- **한 문장**이다(임시 표·DO 블록 없음). 운영 첫 실행(10/30)에서 임시 표 방식은 SQL Editor의 마지막 select가 그 표를 못
+  봐서 `42P01 relation "teacher_test_pw" does not exist`로 실패했다 → 한 문장으로 고침(로컬 PGlite는 연결이 1개라 못 잡음).
+- 기대 결과: 표 1줄 `tps-teacher-test | 2 | hq | true | 0 | (비밀번호)`(5번째 칸 `sessions_ended`). 지사 `hq`가 없으면
+  0행이고 아무것도 쓰지 않는다. 다시 실행하면 새 비밀번호(이전 것은 무효)·재활성화·세션 종료(트리거
+  `members_lms_compat`) — 이때 `sessions_ended`는 끝낸 세션 수다(한 문장은 실행 전 상태를 보므로 "남은 수"가 아님).
+- 운영 결과(10/30, 한 문장 SQL): 1행 `tps-teacher-test | 2 | hq | true | 0`.
 - ⚠ 아이디가 공개 저장소에 있다 → **확인이 끝나면 바로** 파일 맨 아래 한 줄
   (`delete from public.members where id = 'tps-teacher-test';`)만 따로 실행해 지운다.
 - 대안: 관리자 화면 '회원' 탭에서 등급 2로 만들어도 role 2·hq가 된다.
