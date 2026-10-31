@@ -5,6 +5,55 @@
 > updated to the current `D:\_TPS` root). The live, short status now lives in `PROJECT_MEMORY.md`.
 > Read this only when you need past history, rationale, or old session logs.
 
+## Entries moved out of PROJECT_MEMORY.md (`2026-10-31`, verbatim)
+
+> Moved to keep PROJECT_MEMORY.md under 6,000. Live state then: `8176966` live (pushed `2026-10-31`).
+> PROJECT_MEMORY.md now holds a short summary of each block below.
+
+- **TPS requests (10/20 meeting), 5 items** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`
+  (errata, recommendations, PM decisions §6) + plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`.
+  - **Phase 1, 2A, 2B — live** (`b6bb29e`, `1167b85`..`00f4bad`; detail in the archive): game URLs in
+    weekday slots, shared board files + exact pixel baseline, student page = one book (70 QR, static
+    covers). **iPhone real-device check is the user's.**
+  - **Phase 3A — SQL live (`2026-10-29`), client live (`2026-10-30`, `fe991f8`)** (`2026-10-23`..`24`): SQL 1 = `migration.sql`
+    "LMS (Phase 3A)" block + `supabase/lms/` (precheck, verify, run order), `npm run test:sql`; 3.2 login
+    client (`lms_login`, branch choice, `cra_lms`, fetch wrapper adds `x-lms-token`, grade-3 block gone).
+    Decisions → review §4.9, tasks → plan 3.1/3.2. **Next:** 3.3~3.5 (3.5 adds: live-only `members.profile`,
+    old admin RPCs' PUBLIC execute). Phase 4 (R4) **cancelled** → B.
+- **A levels + B teacher resources (`2026-10-29`)** — design
+  `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`. **A+B live (`16a3d3e`, pushed
+  `2026-10-30`)** (`5ab7d30` A, `54bd131` + `87e98f4` B, `fbbbbaa` .gitignore, `01f682b` M1 15 s, `268eb0a`
+  3A ops + `create_member` overload fix, `16a3d3e` test-account fix). B's SQL ran with 3A; the
+  Edge Function is deployed and the download check passed (`2026-10-30`; `tps-teacher-test` kept for the iPhone).
+  A: one `LEVELS` table, keys `beginner`/`level-1..3`, old hashes rewritten, old DB keys
+  still read. **levels rename live (`2026-10-31`):** `00` → `01-rename` (one DO statement, PM D31) → `00` = 55 rows all
+  `new`; CHECKs `content_pages_level_key`, `page_backgrounds_level_key` made; admin saves allowed again. B: '교사 자료실'
+  (admin + LMS role 1/2) → month page in resources mode → private bucket; download via Edge Function
+  `teacher-resource-download` (15 s fixed, 30/day; `supabase/functions/README.md`). Then: real files,
+  iPhone Safari, delete the test account (design doc "최종 운영 순서" 8).
+- **Student page (`play.html`) header fix (`2026-10-31`)** — "Reading" logo word styled like the main logo;
+  the level line no longer rides up into the brand line from 768px up (gap = teacher 페이지2). `play.css` only.
+  **Live `2026-10-31`** (pushed `16a3d3e..8176966`, live `play.css` = local); user's PC check of `/q/b/4/1` pending.
+- **Home hero cast** — stage 1 rejected by the PM on real devices (`2026-10-21`); only on the local
+  branch `hero-cast-v1` (`1e7f059`, `dc27a21`, not on origin). Stage 2 = AI video, awaiting a PM brief.
+
+### Backlog (as it stood in PROJECT_MEMORY.md, moved `2026-10-31`)
+
+1. V3 (Mon-Fri calendar) as the default `#content/...` route? 2. Responsive + a11y QA pass.
+2. 1366×768-and-below no-scroll on 페이지2 (only if asked). 4. Font FOUT (last).
+3. (확인 필요) `tests/smoke.spec.js` "editor: 영상 URL input…" intermittent (tablet) — not fixed.
+
+### Open questions (확인 필요, may be stale)
+
+- Delete `contentScreenV2`, or keep it? `2026-08-05` admin background re-placement — done?
+
+### Resume checklist (covered by `CLAUDE.md` + the PROJECT_MEMORY.md header)
+
+1. Check "⏳ In-progress work" above, then the top of `.claude/WORKLOG.md`.
+2. Skim `NOTES.md` for gotchas and `PRODUCT_SPEC.md` / `DESIGN.md` for the task's constraints.
+3. Session end ("세션 종료" / `/session-close`): WORKLOG entry + update this file + new gotchas in
+   `NOTES.md`. No commit/push unless the user asks.
+
 ## Entries moved out of PROJECT_MEMORY.md (`2026-10-29`, verbatim)
 
 - **Phase 1 R1 — live** (`b6bb29e`, `2026-10-22`): a `GAME_HOSTS` URL in a weekday slot opens the

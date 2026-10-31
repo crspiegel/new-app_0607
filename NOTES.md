@@ -31,6 +31,10 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   the crspiegel token). Pushes work now.
 - ⚠ **푸시 전 gh 활성 계정을 `crspiegel`로 전환한다(2026-10-30, D30).** git 자격 도우미 = gh인데 이 PC의 평소 활성
   계정은 다른 계정이다 → `gh auth switch -h github.com -u crspiegel` → `gh auth status` 확인 → `git push` → `gh auth switch`로 복귀.
+- ⚠ **PowerShell 5.1은 따옴표·공백이 든 인자를 네이티브 명령에 쪼개 넘긴다(2026-10-31).** `gh api … --jq '… "…" …'`가
+  `accepts 1 arg(s), received 5`로 실패(배포 상태 폴링 3분 헛돎). `--jq` 대신 `gh api … | ConvertFrom-Json`으로 읽는다.
+  커밋 메시지는 파일로 `git commit -F`. 새 명령은 반복문에 넣기 전에 한 번 실행해 본다. 배포 상태 = GitHub 커밋 상태
+  `repos/<저장소>/commits/<sha>/status`(context `Vercel`, 저장소 주소는 PROJECT_MEMORY "Infrastructure").
 - The device-auth login flow (`vercel login`, `gh auth login`) reuses the **browser session** —
   log the wrong account out of the site in the browser first, or it re-authorizes the wrong one.
 - **Vercel CLI `--global-config` 폴더를 배포 폴더 안에 두면 토큰이 업로드되어 공개된다**
@@ -223,6 +227,11 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   운영에서 두 번 성공). 사용자가 돌릴 SQL은 **한 문장**(CTE)으로 쓰면 어느 경우든 안전하다. 단 한 문장 안에서는 모두
   시작 시점 데이터를 봐서 **트리거가 바꾼 결과가 안 보인다**(지워진 세션도 셈) → 결과 칸 이름을 실제 뜻대로
   (`sessions_ended`). 사용자 안내문에는 늘 **"Run 전에 편집기를 클릭해 선택 해제"**를 넣는다.
+- **ALTER(제약 등)까지 한 번에 해야 하면 한 문장 = `do $$ … $$` 블록**(CTE에는 ALTER를 못 넣음, 2026-10-31
+  `supabase/levels/01-rename.sql`, PM 승인). 결과 표가 없으니 확인은 읽기 전용 점검 SQL을 다시 돌린다. 블록 바깥 줄이 걸린
+  선택은 문법 오류지만 **안쪽 줄만 선택되면 보통 SQL로 실행된다** → 선택 해제는 여전히 필수, 안쪽만 돌아도 무해하게 짠다.
+  "남은 값 확인 → raise"는 CHECK 추가 **앞**에 둔다(뒤면 CHECK 위반 오류가 먼저 나 문구가 흐려짐). 재실행 무변화가 필요하면
+  제약은 없을 때만 추가(지웠다 다시 만들면 oid가 바뀜).
 - ⚠ **RLS 정책 안 함수는 조회하는 역할의 EXECUTE가 필요하다**(`lms_member()`를 anon에서 revoke하면 정책이 권한
   오류). **인덱스 식 함수는 행을 쓰는 역할의 EXECUTE를 검사한다**(`lms_norm_id`를 authenticated에서 빼면 관리자
   members 직접 쓰기가 `permission denied for function lms_norm_id`).
