@@ -441,9 +441,10 @@ const TEST_ACCOUNT_SCRIPT = readFileSync(
 const TEST_ACCOUNT_SESSIONS =
   "select count(*)::int as n from public.lms_sessions s join public.members m on m.member_id = s.member_id where m.id = 'tps-teacher-test'";
 
-// Live 2026-10-30: the SQL Editor's last select did not see the temp table an
-// earlier statement made (42P01), and PGlite's one connection hid that. Keep
-// the script ONE statement with no temp table.
+// Live 2026-10-30: the temp-table version failed at its last select (42P01).
+// Cause not confirmed (editor behaviour, or only part of the text selected),
+// and PGlite does not reproduce it. Keep the script ONE statement with no temp
+// table — safe either way.
 test("teacher resources sql: teacher test account script is one statement", async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
   const code = TEST_ACCOUNT_SCRIPT.replace(/--.*$/gm, "").replace(

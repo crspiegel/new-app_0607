@@ -39,16 +39,16 @@
 
 ### 최종 운영 순서 (멈춤 4 — 이것이 최신)
 
-| 순서 | 누가          | 무엇                                                                                                                                                                                 | 확인                                                       |
-| ---- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| 1    | 사용자·작업자 | 3A 1~5단계(`supabase/lms/README.md`). 2단계 = 지금의 `migration.sql` 전체(3A + 교사 자료실 블록, 추가만 — 3A precheck·verify 기대값 불변, `test:sql`로 확인)                         | 3A 기대값 그대로. 버킷 `teacher-resources` 비공개·10MB     |
-| 2    | PM            | **3A만 푸시: `git push origin fe991f8:master`** (그냥 `git push`는 A·B까지 나감)                                                                                                     | 회원 로그인·관리자 로그인                                  |
-| 3    | 사용자        | `supabase/lms/teacher-test-account.sql` 실행 → 결과 표의 비밀번호는 5번에만 사용                                                                                                     | 표 1줄 `tps-teacher-test │ 2 │ hq │ true │ 0 │ (비밀번호)` |
-| 4    | 사용자        | Edge Function 배포(`supabase/functions/README.md` 1~6단계)                                                                                                                           | 함수 목록에 `teacher-resource-download`                    |
-| 5    | 사용자        | 다운로드 확인 — 로컬 `npm.cmd run dev` + 콘솔 `craDevLive(true)`: 관리자로 작은 PDF 업로드 → 테스트 계정으로 다운로드 → 학생·비로그인은 버튼 없음. (작업자 OPTIONS 1회는 PM 승인 시) | 같은 탭 저장·한글 이름. 실패하면 6번 전에 멈추고 보고      |
-| 6    | PM            | A+B 푸시(`git push`)                                                                                                                                                                 | 운영 새 주소(`#months/beginner`)로 내용 그대로             |
-| 7    | 사용자        | `supabase/levels/00-precheck.sql` → `01-rename.sql` → 00 재실행 — **6번 뒤에만**                                                                                                     | 옛 키 `after = 0`, 모두 `new`                              |
-| 8    | 사용자        | 실제 파일 10개 업로드, 아이폰 사파리 실기기 다운로드, 테스트 계정 삭제(파일 맨 아래 한 줄), 월 1회 Usage(이그레스)                                                                   |                                                            |
+| 순서 | 누가          | 무엇                                                                                                                                                                                 | 확인                                                        |
+| ---- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| 1    | 사용자·작업자 | 3A 1~5단계(`supabase/lms/README.md`). 2단계 = 지금의 `migration.sql` 전체(3A + 교사 자료실 블록, 추가만 — 3A precheck·verify 기대값 불변, `test:sql`로 확인)                         | 3A 기대값 그대로. 버킷 `teacher-resources` 비공개·10MB      |
+| 2    | PM            | **3A만 푸시: `git push origin fe991f8:master`** (그냥 `git push`는 A·B까지 나감)                                                                                                     | 회원 로그인·관리자 로그인                                   |
+| 3    | 사용자        | `supabase/lms/teacher-test-account.sql` 실행 → 결과 표의 비밀번호는 5번에만 사용                                                                                                     | 표 1줄 `tps-teacher-test │ 2 │ hq │ true │ 0 │ (비밀번호)`  |
+| 4    | 사용자        | Edge Function 배포(`supabase/functions/README.md` 1~6단계)                                                                                                                           | 함수 목록에 `teacher-resource-download`                     |
+| 5    | 사용자        | 다운로드 확인 — 로컬 `npm.cmd run dev` + 콘솔 `craDevLive(true)`: 관리자로 작은 PDF 업로드 → 테스트 계정으로 다운로드 → 학생·비로그인은 버튼 없음. (작업자 OPTIONS 1회는 PM 승인 시) | 같은 탭 저장·한글 이름. 실패하면 6번 전에 멈추고 보고       |
+| 6    | PM            | A+B 푸시(`git push`)                                                                                                                                                                 | 운영 새 주소(`#months/beginner`)로 내용 그대로              |
+| 7    | 사용자        | `supabase/levels/00-precheck.sql` → `01-rename.sql`(한 문장 DO 블록) → 00 재실행 — **6번 뒤에만**                                                                                    | 01은 결과 표 없음(`No rows returned`), 00 재실행 모두 `new` |
+| 8    | 사용자        | 실제 파일 10개 업로드, 아이폰 사파리 실기기 다운로드, 테스트 계정 삭제(파일 맨 아래 한 줄), 월 1회 Usage(이그레스)                                                                   |                                                             |
 
 ### 보안 재검토 (rls-security-reviewer, 멈춤 4) — 치명·높음 없음
 
@@ -86,16 +86,16 @@
 
 ### 최종 운영 순서 (멈춤 3 — ⚠ 멈춤 4 표로 대체됨)
 
-| 순서 | 누가          | 무엇                                                                                                                                                                             | 확인                                                       |
-| ---- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 1    | 사용자·작업자 | 3A 1~5단계(`supabase/lms/README.md`). 2단계는 지금의 `migration.sql` 전체 — 맨 끝 B 블록도 함께 실행된다(추가만, 3A precheck·verify 기대값 불변 — `test:sql`로 확인)             | 3A 기대값 그대로. 버킷 `teacher-resources` 비공개·10MB     |
-| 2    | PM            | **3A만 푸시:** `git push origin fe991f8:master`(3A 마지막 커밋까지만 — 그냥 `git push`면 A·B까지 나간다)                                                                         | 회원 로그인·관리자 로그인                                  |
-| 3    | 사용자        | B SQL — 1에서 이미 실행됐으면 생략(아니면 `migration.sql` 전체 재실행, 재실행 안전)                                                                                              | `Success`                                                  |
-| 4    | 사용자        | 보완 d: `supabase/lms/teacher-test-account.sql` 실행 → 결과 표의 비밀번호로 5번 확인(아무것도 입력하지 않음)                                                                     | 표 1줄 `tps-teacher-test │ 2 │ hq │ true │ 0 │ (비밀번호)` |
-| 5    | 사용자        | (가) 확인 2 — 로컬 개발 서버(`npm.cmd run dev`) + 콘솔 `craDevLive(true)` 후 새로고침: 관리자로 작은 PDF 1개 업로드(배너 탭) → 로그아웃 → `tps-teacher-test`로 로그인해 다운로드 | 같은 탭에서 저장, 한글 이름. 학생·비로그인은 버튼 없음     |
-| 6    | PM            | A+B 푸시(`git push`)                                                                                                                                                             | 운영 새 주소(`#months/beginner`)로 내용 그대로             |
-| 7    | 사용자        | 보완 b: `supabase/levels/00-precheck.sql` → `01-rename.sql` → 00 재실행 — **6번 뒤에만**                                                                                         | 옛 키 `after = 0`, 모두 `new`                              |
-| 8    | 사용자        | 실제 파일 업로드(10칸), 아이폰 사파리 실기기 다운로드 확인, (5번이 끝나면 바로) 테스트 계정 삭제(파일 맨 아래 한 줄), 월 1회 Usage(이그레스) 확인                                |                                                            |
+| 순서 | 누가          | 무엇                                                                                                                                                                             | 확인                                                        |
+| ---- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 1    | 사용자·작업자 | 3A 1~5단계(`supabase/lms/README.md`). 2단계는 지금의 `migration.sql` 전체 — 맨 끝 B 블록도 함께 실행된다(추가만, 3A precheck·verify 기대값 불변 — `test:sql`로 확인)             | 3A 기대값 그대로. 버킷 `teacher-resources` 비공개·10MB      |
+| 2    | PM            | **3A만 푸시:** `git push origin fe991f8:master`(3A 마지막 커밋까지만 — 그냥 `git push`면 A·B까지 나간다)                                                                         | 회원 로그인·관리자 로그인                                   |
+| 3    | 사용자        | B SQL — 1에서 이미 실행됐으면 생략(아니면 `migration.sql` 전체 재실행, 재실행 안전)                                                                                              | `Success`                                                   |
+| 4    | 사용자        | 보완 d: `supabase/lms/teacher-test-account.sql` 실행 → 결과 표의 비밀번호로 5번 확인(아무것도 입력하지 않음)                                                                     | 표 1줄 `tps-teacher-test │ 2 │ hq │ true │ 0 │ (비밀번호)`  |
+| 5    | 사용자        | (가) 확인 2 — 로컬 개발 서버(`npm.cmd run dev`) + 콘솔 `craDevLive(true)` 후 새로고침: 관리자로 작은 PDF 1개 업로드(배너 탭) → 로그아웃 → `tps-teacher-test`로 로그인해 다운로드 | 같은 탭에서 저장, 한글 이름. 학생·비로그인은 버튼 없음      |
+| 6    | PM            | A+B 푸시(`git push`)                                                                                                                                                             | 운영 새 주소(`#months/beginner`)로 내용 그대로              |
+| 7    | 사용자        | 보완 b: `supabase/levels/00-precheck.sql` → `01-rename.sql`(한 문장 DO 블록) → 00 재실행 — **6번 뒤에만**                                                                        | 01은 결과 표 없음(`No rows returned`), 00 재실행 모두 `new` |
+| 8    | 사용자        | 실제 파일 업로드(10칸), 아이폰 사파리 실기기 다운로드 확인, (5번이 끝나면 바로) 테스트 계정 삭제(파일 맨 아래 한 줄), 월 1회 Usage(이그레스) 확인                                |                                                             |
 
 - 5번에서 (가)가 안 되면(선생님 다운로드가 "다시 로그인해 주세요") 6번 전에 멈추고 보고 → (나) Edge Function으로 전환.
 - 6번 전이라도 B 코드는 B SQL(1·3번)이 먼저 있어야 한다 — 없으면 선생님에게 "자료 목록을 불러오지 못했어요"만 보인다
@@ -195,7 +195,7 @@ const LEVELS = [
 | ② 코드 호환만 (DB 옛 값 영구 유지) | 코드가 DB 경계에서 새 키↔옛 키 변환                                                         | 운영 작업 0                                | DB에 옛 이름이 영원히 남는다(이번 작업의 목적과 반대). 새 표(`teacher_resources`)와 체계가 섞임 |
 | **③ 호환 읽기 + 값 변경 (추천)**   | 코드: 읽을 때 옛 값·새 값 둘 다 받고(새 키 행 우선), 쓸 때는 새 키만 → 푸시 → SQL로 값 변경 | **공백 0**, DB 최종 상태 깔끔, 재실행 안전 | SQL 1회 + 호환 코드 ~30줄(나중에 삭제)                                                          |
 
-**배포 순서(③):** 코드 푸시 → 운영 확인 → 사용자가 `supabase/levels/01-rename.sql` 실행 → `02` 결과 확인.
+**배포 순서(③):** 코드 푸시 → 운영 확인 → 사용자가 `supabase/levels/01-rename.sql` 실행 → `00-precheck.sql` 재실행으로 확인.
 **SQL을 먼저 실행하면 안 된다**(옛 코드가 새 값을 못 읽어 빈 화면). 01에 넣는 CHECK 제약이 이후 옛 키 쓰기를
 막아 준다(순서 실수 시 조용한 오염 대신 저장 오류로 드러남). 호환 코드는 SQL 확인 뒤 별도 커밋으로 지운다.
 
@@ -216,64 +216,24 @@ select t.tbl as "table", t.level, count(*)::int as rows,
 ```
 
 ```sql
--- supabase/levels/01-rename.sql — 코드(A) 운영 반영 '후'에만. 한 트랜잭션, 재실행 안전.
--- 옛 키 행을 새 키로 옮긴다. 새 코드가 이미 같은 페이지를 새 키로 저장했다면(그 사이 관리자 편집)
--- 새 키 행이 이기고 옛 행은 지운다. 두 번째 실행은 옮길 행이 없어 아무것도 바꾸지 않는다.
-begin;
-
-create temp table lv_map (old text primary key, new text not null unique) on commit drop;
-insert into lv_map values
-  ('Level 1', 'beginner'), ('Level 2', 'level-1'), ('Level 3', 'level-2'), ('Level 4', 'level-3');
-
-create temp table lv_before on commit drop as
-select tbl, level, count(*)::int as n
-  from (select 'content_pages' as tbl, level from public.content_pages
-        union all select 'page_backgrounds', level from public.page_backgrounds) t
- group by tbl, level;
-
--- 1) 새 키 행이 이미 있는 옛 행 = 낡은 사본 → 삭제
-delete from public.content_pages o using lv_map m
- where o.level = m.old
-   and exists (select 1 from public.content_pages n where n.level = m.new and n.month = o.month);
-delete from public.page_backgrounds o using lv_map m
- where o.level = m.old
-   and exists (select 1 from public.page_backgrounds n
-                where n.level = m.new and n.page = o.page and n.month = o.month);
-
--- 2) 나머지 옛 행 → 새 키 (CASE 한 번, 옛·새 값이 겹치지 않으므로 pk 충돌 없음)
-update public.content_pages set level = case level
-  when 'Level 1' then 'beginner' when 'Level 2' then 'level-1'
-  when 'Level 3' then 'level-2'  when 'Level 4' then 'level-3' end
- where level in ('Level 1', 'Level 2', 'Level 3', 'Level 4');
-update public.page_backgrounds set level = case level
-  when 'Level 1' then 'beginner' when 'Level 2' then 'level-1'
-  when 'Level 3' then 'level-2'  when 'Level 4' then 'level-3' end
- where level in ('Level 1', 'Level 2', 'Level 3', 'Level 4');
-
--- 3) 이후 옛 키·오타 저장을 막는다 (재실행 안전: drop if exists → add)
-alter table public.content_pages drop constraint if exists content_pages_level_key;
-alter table public.content_pages add constraint content_pages_level_key
-  check (level in ('beginner', 'level-1', 'level-2', 'level-3'));
-alter table public.page_backgrounds drop constraint if exists page_backgrounds_level_key;
-alter table public.page_backgrounds add constraint page_backgrounds_level_key
-  check (level in ('beginner', 'level-1', 'level-2', 'level-3'));
-
--- 4) 결과 표: 표·레벨별 실행 전/후 행 수 (옛 키는 after = 0 이어야 함)
-select coalesce(b.tbl, a.tbl) as "table", coalesce(b.level, a.level) as level,
-       coalesce(b.n, 0) as before, coalesce(a.n, 0) as after
-  from lv_before b
-  full join (select tbl, level, count(*)::int as n
-               from (select 'content_pages' as tbl, level from public.content_pages
-                     union all select 'page_backgrounds', level from public.page_backgrounds) t
-              group by tbl, level) a
-    on a.tbl = b.tbl and a.level = b.level
- order by 1, 2;
-
-commit;
+-- supabase/levels/01-rename.sql — 코드(A) 운영 반영 '후'에만. 한 문장(DO 블록, PM D31 · 2026-10-31 개정):
+-- 임시 표·begin·commit·결과 표 없음 → 전부 되거나 전부 안 된다. 원문은 저장소 파일.
+do $$
+declare
+  v_left text;
+begin
+  -- 1) 새 키 행이 이미 있는 옛 행 = 낡은 사본 → 삭제 (새 키 행이 이긴다)
+  -- 2) 나머지 옛 행 → 새 키 (CASE 한 번, 옛·새 값이 겹치지 않으므로 pk 충돌 없음)
+  -- 3) 새 키 4개가 아닌 값이 남았으면 raise exception 'Level rename stopped, nothing was changed. …'
+  --    → 1)·2)까지 전부 취소. CHECK보다 앞에 둔다(CHECK가 먼저면 CHECK 위반 오류가 먼저 나 뜻이 흐려짐).
+  -- 4) CHECK 2개(content_pages_level_key · page_backgrounds_level_key) — 없을 때만 추가
+end
+$$;
 ```
 
-기대: 옛 키 4줄은 `after = 0`, 새 키 줄의 `after` = 해당 옛 키 `before`(+그 사이 새로 생긴 행). 두 번째 실행은
-`before = after`. (`02` 확인 쿼리는 00-precheck와 같으므로 00을 다시 실행해 "old" 줄이 없는지 본다.)
+기대: 결과 표 없음(`Success. No rows returned`). 확인은 **00-precheck 재실행** — 모든 줄 `new`, 표별 합계 = 실행
+전(첫 00) 합계 − 낡은 사본 수. 성공 뒤 두 번째 실행은 오류 없이 아무것도 바꾸지 않는다(옮길 행 없음, CHECK는 이미 있으면
+그대로). 운영(2026-10-31): 00 재실행 55줄 전부 `new`, CHECK 2개 생성.
 
 ### A5. 호환 읽기(③) 구현 요점
 
@@ -635,15 +595,15 @@ DB) → 결과가 있으면 service role로 `POST /storage/v1/object/sign/teache
 
 PGlite(`npm run test:sql`, 시뮬레이션 — 셰임에 `storage.buckets`·`storage.objects` 열 추가):
 
-| #   | 확인                                                                                                                                                                                                          |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | migration.sql 전체 2회 실행 성공(재실행 안전), 버킷 행 1개(비공개·52428800·MIME 3개), 3A verify 전 행 pass 유지                                                                                               |
-| 2   | anon·authenticated가 `teacher_resources` 직접 select/insert → 거부(42501)                                                                                                                                     |
-| 3   | `teacher_resources_list`: 비로그인 0행, role 3 0행, role 1·2·관리자 → Beginner/Level 1 2행, Level 2/3 3행, 잘못된 레벨 0행                                                                                    |
-| 4   | `teacher_resource_file`: 같은 권한 규칙, 빈 칸 NULL                                                                                                                                                           |
-| 5   | `teacher_resource_set/clear`: 비관리자 42501, 관리자 성공, 교체 시 이전 경로 반환, Beginner `test` 칸·잘못된 경로·Storage에 없는 객체 → 거부                                                                  |
-| 6   | `storage.objects` 정책(헤더를 `request.headers`로 흉내): role 1·2 토큰 → 자료 객체 select 가능, role 3·무토큰 → 0행, 관리자 → insert 가능(올바른 경로)·잘못된 경로 거부, 비관리자 authenticated → insert 거부 |
-| 7   | A `01-rename.sql`: 옛 키 → 새 키, 새 키가 먼저 있으면 새 키 행 유지, 결과 표 before/after, 2회차 무변화, CHECK가 옛 키 쓰기 거부                                                                              |
+| #   | 확인                                                                                                                                                                                                                                            |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | migration.sql 전체 2회 실행 성공(재실행 안전), 버킷 행 1개(비공개·52428800·MIME 3개), 3A verify 전 행 pass 유지                                                                                                                                 |
+| 2   | anon·authenticated가 `teacher_resources` 직접 select/insert → 거부(42501)                                                                                                                                                                       |
+| 3   | `teacher_resources_list`: 비로그인 0행, role 3 0행, role 1·2·관리자 → Beginner/Level 1 2행, Level 2/3 3행, 잘못된 레벨 0행                                                                                                                      |
+| 4   | `teacher_resource_file`: 같은 권한 규칙, 빈 칸 NULL                                                                                                                                                                                             |
+| 5   | `teacher_resource_set/clear`: 비관리자 42501, 관리자 성공, 교체 시 이전 경로 반환, Beginner `test` 칸·잘못된 경로·Storage에 없는 객체 → 거부                                                                                                    |
+| 6   | `storage.objects` 정책(헤더를 `request.headers`로 흉내): role 1·2 토큰 → 자료 객체 select 가능, role 3·무토큰 → 0행, 관리자 → insert 가능(올바른 경로)·잘못된 경로 거부, 비관리자 authenticated → insert 거부                                   |
+| 7   | A `01-rename.sql`: 한 문장 DO 블록(임시 표·begin·commit 없음), 옛 키 → 새 키, 새 키가 먼저 있으면 새 키 행 유지, 결과 표 없음(확인은 00 재실행), 새 키가 아닌 값이 남으면 오류로 전부 취소, 2회차 무변화(CHECK 그대로), CHECK가 옛 키 쓰기 거부 |
 
 PGlite로 **불가능**한 것과 확인 방법:
 

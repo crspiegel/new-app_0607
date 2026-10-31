@@ -5,9 +5,11 @@
 -- Run AFTER the 3A SQL (migration.sql with the "LMS (Phase 3A)" block).
 -- Supabase Dashboard → SQL Editor → New query → paste this whole file → Run.
 --
--- ONE statement on purpose (no temp table, no DO block): on the live project
--- (2026-10-30) the SQL Editor's last select did not see a temp table made by
--- an earlier statement (42P01 relation "teacher_test_pw" does not exist).
+-- ONE statement on purpose (no temp table, no DO block): the first live run
+-- (2026-10-30), a temp-table version, failed at its last select (42P01
+-- relation "teacher_test_pw" does not exist). Cause not confirmed (editor
+-- behaviour, or only part of the text selected); one statement is safe either
+-- way.
 --
 -- Nobody types a password: the server makes a random 12-character one and
 -- shows it ONCE in the result row. It is never part of the statement text,

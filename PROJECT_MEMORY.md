@@ -11,8 +11,8 @@ Doc map → `CLAUDE.md`, gotchas → `NOTES.md`, session detail → `.claude/WOR
 - Backend = **Supabase** (Auth + Postgres + Storage) via the CDN UMD build — no framework, no build.
   Reads public (anon key), **writes admin-only via RLS** (`is_admin()`).
 - Live: admin content manager, login + 3 member grades, background editor, hero banner carousel,
-  game modal, per-level toolbars (Beginner 4 buttons, Level 1-3 six). Level keys: code (A) =
-  `beginner`, `level-1..3`; DB rows stay `"Level 1".."Level 4"` (read as old keys) until `01-rename` (⏳ A below).
+  game modal, per-level toolbars (Beginner 4 buttons, Level 1-3 six). Level keys = `beginner`, `level-1..3` in
+  code **and DB** (`01-rename` live `2026-10-31`, CHECK on both tables); old-key compat reads go in SQL 2 (3.5).
 - The Next.js/Capacitor rebuild is out of scope (`PLATFORM_ROADMAP.md`).
 
 ## ⏳ In-progress work
@@ -33,13 +33,14 @@ Doc map → `CLAUDE.md`, gotchas → `NOTES.md`, session detail → `.claude/WOR
   3A ops + `create_member` overload fix, `16a3d3e` test-account fix). B's SQL ran with 3A; the
   Edge Function is deployed and the download check passed (`2026-10-30`; `tps-teacher-test` kept for the iPhone).
   A: one `LEVELS` table, keys `beginner`/`level-1..3`, old hashes rewritten, old DB keys
-  still read. **Next: `supabase/levels/00` → `01-rename` → `00`** (no content/background saves in between). B: '교사 자료실'
+  still read. **levels rename live (`2026-10-31`):** `00` → `01-rename` (one DO statement, PM D31) → `00` = 55 rows all
+  `new`; CHECKs `content_pages_level_key`, `page_backgrounds_level_key` made; admin saves allowed again. B: '교사 자료실'
   (admin + LMS role 1/2) → month page in resources mode → private bucket; download via Edge Function
   `teacher-resource-download` (15 s fixed, 30/day; `supabase/functions/README.md`). Then: real files,
   iPhone Safari, delete the test account (design doc "최종 운영 순서" 8).
 - **Student page (`play.html`) header fix (`2026-10-31`)** — "Reading" logo word styled like the main logo;
   the level line no longer rides up into the brand line from 768px up (gap = teacher 페이지2). `play.css` only.
-  Push is asked separately, after the levels step.
+  Committed `4113c48`, **not pushed** — live still shows the old header (seen `2026-10-31`).
 - **User:** Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own Vimeo (`vimeo.com/<id>` in admin).
 - **Home hero cast** — stage 1 rejected by the PM on real devices (`2026-10-21`); only on the local
   branch `hero-cast-v1` (`1e7f059`, `dc27a21`, not on origin). Stage 2 = AI video, awaiting a PM brief.
