@@ -13,7 +13,10 @@
 --     RPC, so password hashes never leave the database.
 --   • LMS (block "LMS (Phase 3A)" near the end): branches, roles 1-3, classes,
 --     token sessions (lms_login / lms_session / lms_logout) and RLS through
---     lms_member(). Added beside the old member RPCs, which still work.
+--     lms_member().
+--   • LMS (block "LMS (Phase 3B)" after it): primary key members.member_id,
+--     role-based management RPCs (branches, members, classes, unlock, bulk)
+--     for the top admin and LMS roles 1-2; the old admin member RPCs are gone.
 -- ============================================================================
 
 -- pgcrypto → crypt() + gen_salt('bf') for bcrypt password hashing.
@@ -154,95 +157,11 @@ begin
 end;
 $$;
 
--- Create or update a member. Admin-only. Enforces the account-format rule:
--- >= 4 chars, printable ASCII only (no Korean / no spaces), case-sensitive.
-create or replace function public.create_member(
-  p_id text, p_password text, p_grade smallint, p_display_name text default null
-)
-returns void
-language plpgsql
-security definer
--- crypt()/gen_salt() are in the `extensions` schema on Supabase (see above).
-set search_path = public, extensions
-as $$
-begin
-  if not public.is_admin() then
-    raise exception 'not authorized';
-  end if;
-  if p_grade not in (1, 2, 3) then
-    raise exception 'grade must be 1, 2 or 3';
-  end if;
-  if p_id !~ '^[!-~]{4,}$' or p_password !~ '^[!-~]{4,}$' then
-    raise exception 'id/password must be >= 4 printable-ASCII chars (no spaces, no Korean)';
-  end if;
-  insert into public.members (id, password_hash, grade, display_name)
-  values (p_id, crypt(p_password, gen_salt('bf')), p_grade, p_display_name)
-  on conflict (id) do update
-    set password_hash = excluded.password_hash,
-        grade         = excluded.grade,
-        display_name  = excluded.display_name,
-        active        = true;
-end;
-$$;
-
--- Activate / deactivate a member. Admin-only.
-create or replace function public.set_member_active(p_id text, p_active boolean)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  if not public.is_admin() then
-    raise exception 'not authorized';
-  end if;
-  update public.members set active = p_active where id = p_id;
-end;
-$$;
-
--- Edit an existing member's grade (permission) and/or password. Admin-only.
--- p_password is OPTIONAL: pass NULL (or blank) to keep the current password and
--- change only the grade; pass a new value to also reset the password (re-hashed
--- the same bcrypt way as create_member). Does NOT change the id or active flag.
-create or replace function public.update_member(
-  p_id text, p_grade smallint, p_password text default null
-)
-returns void
-language plpgsql
-security definer
--- crypt()/gen_salt() live in the `extensions` schema on Supabase.
-set search_path = public, extensions
-as $$
-begin
-  if not public.is_admin() then
-    raise exception 'not authorized';
-  end if;
-  if p_grade not in (1, 2, 3) then
-    raise exception 'grade must be 1, 2 or 3';
-  end if;
-  if p_password is not null and p_password <> '' then
-    if p_password !~ '^[!-~]{4,}$' then
-      raise exception 'password must be >= 4 printable-ASCII chars (no spaces, no Korean)';
-    end if;
-    update public.members
-      set grade = p_grade,
-          password_hash = crypt(p_password, gen_salt('bf'))
-      where id = p_id;
-  else
-    update public.members
-      set grade = p_grade
-      where id = p_id;
-  end if;
-  if not found then
-    raise exception 'member % not found', p_id;
-  end if;
-end;
-$$;
-
--- anon needs ONLY the login verifier — revoke the admin RPCs from anon.
-revoke all on function public.create_member(text, text, smallint, text) from anon;
-revoke all on function public.set_member_active(text, boolean) from anon;
-revoke all on function public.update_member(text, smallint, text) from anon;
+-- The old admin member RPCs create_member / update_member / set_member_active
+-- were defined here until Phase 3B (2026-11-01, decision D42). They are gone
+-- (not just unused): keeping them here would bring them back on every re-run
+-- of this file. The "LMS (Phase 3B)" block below drops them on databases that
+-- still have them; its lms_member_* RPCs replace them.
 
 -- ---------------------------------------------------------------------------
 -- Storage policies for the "covers" bucket
@@ -304,10 +223,11 @@ create policy backgrounds_admin_write on storage.objects
 -- ============================================================================
 -- LMS (Phase 3A, 2026-10-23) — branches · members(role) · classes · sessions
 -- ----------------------------------------------------------------------------
--- ADD-ONLY and safe to re-run. Nothing above this line changes: the old member
--- RPCs (verify_member_login / create_member / update_member /
--- set_member_active), members.id (pk) and members.grade keep working until
--- SQL 2 (Phase 3.5) removes them.
+-- ADD-ONLY and safe to re-run. Written when the old member RPCs
+-- (verify_member_login / create_member / update_member / set_member_active),
+-- members.id (pk) and members.grade still worked. Since Phase 3B the old admin
+-- RPCs are gone and the pk is member_id (block "LMS (Phase 3B)" below);
+-- verify_member_login and grade stay until SQL 2 (Phase 3.5).
 --
 -- Auth model (spec §4.2 (다')): members are NOT Supabase Auth users. lms_login()
 -- checks the bcrypt hash and returns a random session token ONCE; the browser
@@ -378,14 +298,14 @@ begin
   if new.branch_id is null then
     select b.id into new.branch_id from public.branches b where b.code = 'hq';
   end if;
-  if new.role is null then
+  -- Only an old-style row (grade, no role) gets the D13 mapping. Since 3B
+  -- grade may be NULL: a row with neither stays NULL and the NOT NULL on role
+  -- refuses it (it used to become a teacher silently), and a later grade
+  -- change no longer moves role (the old admin tab that wrote grade is gone).
+  if new.role is null and new.grade is not null then
     new.role := case when new.grade = 3 then 3 else 2 end;
   end if;
   if tg_op = 'UPDATE' then
-    if new.grade is distinct from old.grade
-       and new.role is not distinct from old.role then
-      new.role := case when new.grade = 3 then 3 else 2 end;
-    end if;
     if new.password_hash is distinct from old.password_hash then
       new.password_changed_at := now();
       delete from public.lms_sessions s where s.member_id = old.member_id;
@@ -418,7 +338,7 @@ create unique index if not exists members_login_per_branch_key
 create unique index if not exists members_branch_account_key
   on public.members (public.lms_norm_id(id)) where role = 1;
 
--- Classes. Write policies arrive in Phase 3.3; for now admin all + LMS read.
+-- Classes. Admin all + LMS read; LMS roles write only through the Phase 3B RPCs.
 create table if not exists public.classes (
   id         uuid primary key default gen_random_uuid(),
   branch_id  uuid not null references public.branches (id),
@@ -633,6 +553,14 @@ $$;
 --       correct password; call again with p_branch_id)
 --     {status:'invalid'}            unknown ID and wrong password look the same
 --     {status:'locked', retry_after_sec}
+--   Since 3B (2026-11-01, security review H1/H2) the same ID can exist in
+--   several branches and LMS staff set passwords, so failures also count per
+--   ACCOUNT: every account that was compared and did not match gets a failure
+--   on its own key 'm:<member_id>' (5 a day → 10-minute lock, like the ID
+--   key), and a locked account is not compared at all. Else the owner of a
+--   same-ID account could test guesses at another branch's account without
+--   ever failing ('ok' for its own account vs 'choose' when the guess also
+--   opens the other one). With p_branch_id only that branch is compared.
 -- ---------------------------------------------------------------------------
 create or replace function public.lms_login(
   p_login_id text, p_password text, p_branch_id uuid default null
@@ -656,6 +584,11 @@ declare
   v_hits   jsonb := '[]'::jsonb;
   v_hit    jsonb;
   v_token  text;
+  v_lock   int;
+  v_wait_m int;
+  v_locked int := 0;
+  v_miss   uuid[] := '{}';
+  v_mid    uuid;
   r        record;
 begin
   -- Housekeeping (no pg_cron needed).
@@ -673,7 +606,8 @@ begin
     return jsonb_build_object('status', 'locked', 'retry_after_sec', v_wait);
   end if;
 
-  -- Every active member of an active branch with this ID, in any branch.
+  -- Every active member of an active branch with this ID (in p_branch_id only,
+  -- when given).
   for r in
     select m.member_id, m.password_hash, m.role, m.display_name,
            b.id as branch_id, b.name as branch_name
@@ -682,11 +616,23 @@ begin
      where public.lms_norm_id(m.id) = v_norm
        and m.active
        and b.active
+       and (p_branch_id is null or b.id = p_branch_id)
      order by b.name
   loop
     v_seen := v_seen + 1;
+    -- Locked by its own failures → not compared (same bcrypt cost, so the
+    -- answer time does not tell).
+    select ceil(extract(epoch from a.locked_until - now()))::int into v_lock
+      from public.login_attempts a
+     where a.key = 'm:' || r.member_id and a.locked_until > now();
+    if v_lock is not null then
+      perform extensions.crypt(v_pw, extensions.gen_salt('bf'));
+      v_locked := v_locked + 1;
+      v_wait_m := greatest(coalesce(v_wait_m, 1), v_lock);
+      continue;
+    end if;
     begin
-      v_ok := r.password_hash = crypt(v_pw, r.password_hash);
+      v_ok := r.password_hash = extensions.crypt(v_pw, r.password_hash);
     exception when others then
       v_ok := false;  -- not a bcrypt hash (e.g. typed in by hand) = no match
     end;
@@ -694,33 +640,40 @@ begin
       v_hits := v_hits || jsonb_build_array(jsonb_build_object(
         'member_id', r.member_id, 'role', r.role, 'display_name', r.display_name,
         'branch_id', r.branch_id, 'branch_name', r.branch_name));
+    else
+      v_miss := v_miss || r.member_id;
     end if;
   end loop;
   if v_seen = 0 then
-    perform crypt(v_pw, gen_salt('bf'));  -- same cost as a real check (no ID oracle)
+    perform extensions.crypt(v_pw, extensions.gen_salt('bf'));  -- same cost as a real check (no ID oracle)
   end if;
-  v_all := jsonb_array_length(v_hits);  -- before narrowing to p_branch_id
+  v_all := jsonb_array_length(v_hits);
 
-  if p_branch_id is not null then
-    select coalesce(jsonb_agg(h), '[]'::jsonb) into v_hits
-      from jsonb_array_elements(v_hits) h
-     where (h ->> 'branch_id')::uuid = p_branch_id;
-  end if;
+  -- Each compared account that did not match counts on its own key — also
+  -- when another account with this ID matched (H1).
+  foreach v_mid in array v_miss loop
+    perform public.lms_note_failure('m:' || v_mid, 5, interval '1 day');
+  end loop;
 
-  if jsonb_array_length(v_hits) = 0 then
+  if v_all = 0 then
+    if v_seen > 0 and v_locked = v_seen then
+      return jsonb_build_object('status', 'locked', 'retry_after_sec', v_wait_m);
+    end if;
     perform public.lms_note_failure(v_id_key, 5, interval '1 day');
     perform public.lms_note_failure(v_ip_key, 30, interval '10 minutes');
     return jsonb_build_object('status', 'invalid');
   end if;
 
-  -- The password was right. Clear this ID's failure count only when it opened
-  -- EVERY account with this ID — else the owner of one same-ID account could
-  -- wipe the failures aimed at another one and guess forever.
+  -- The password was right: clear the matching accounts' own keys. Clear this
+  -- ID's shared key only when it opened every account compared — else the
+  -- owner of one same-ID account could wipe failures aimed at another.
+  delete from public.login_attempts
+   where key in (select 'm:' || (h ->> 'member_id') from jsonb_array_elements(v_hits) h);
   if v_all = v_seen then
     delete from public.login_attempts where key = v_id_key;
   end if;
 
-  if jsonb_array_length(v_hits) > 1 then
+  if v_all > 1 then
     return jsonb_build_object('status', 'choose', 'branches',
       (select jsonb_agg(jsonb_build_object(
                 'branch_id', h -> 'branch_id', 'branch_name', h -> 'branch_name')
@@ -729,7 +682,7 @@ begin
   end if;
 
   v_hit := v_hits -> 0;
-  v_token := rtrim(translate(encode(gen_random_bytes(32), 'base64'), '+/', '-_'), '=');
+  v_token := rtrim(translate(encode(extensions.gen_random_bytes(32), 'base64'), '+/', '-_'), '=');
   insert into public.lms_sessions (token_hash, member_id, expires_at, last_seen_at)
   values (public.lms_token_hash(v_token), (v_hit ->> 'member_id')::uuid,
           now() + interval '30 days', now());
@@ -800,6 +753,8 @@ $$;
 -- legacy hq accounts only, the same throttle as lms_login (a locked ID or IP
 -- gets NULL), and a dummy bcrypt for unknown IDs. Before this it was an
 -- unthrottled password check open to anon for every account.
+-- Since 3B it also honours the account's own key 'm:<member_id>' (see
+-- lms_login): locked → NULL without comparing; a failure counts there too.
 create or replace function public.verify_member_login(p_id text, p_password text)
 returns smallint
 language plpgsql
@@ -813,6 +768,7 @@ declare
   v_ip     text := public.lms_client_ip();
   v_id_key text;
   v_ip_key text;
+  v_mid    uuid;
   v_hash   text;
   v_grade  smallint;
   v_ok     boolean := false;
@@ -823,15 +779,21 @@ begin
     return null;
   end if;
 
-  select m.password_hash, m.grade into v_hash, v_grade
+  select m.member_id, m.password_hash, m.grade into v_mid, v_hash, v_grade
     from public.members m
     join public.branches b on b.id = m.branch_id
    where m.id = p_id and m.active and b.active and b.code = 'hq';
+  if v_mid is not null and exists (
+       select 1 from public.login_attempts a
+        where a.key = 'm:' || v_mid and a.locked_until > now()) then
+    perform extensions.crypt(v_pw, extensions.gen_salt('bf'));
+    return null;
+  end if;
   if v_hash is null then
-    perform crypt(v_pw, gen_salt('bf'));
+    perform extensions.crypt(v_pw, extensions.gen_salt('bf'));
   else
     begin
-      v_ok := v_hash = crypt(v_pw, v_hash);
+      v_ok := v_hash = extensions.crypt(v_pw, v_hash);
     exception when others then
       v_ok := false;
     end;
@@ -840,8 +802,12 @@ begin
   if not v_ok then
     perform public.lms_note_failure(v_id_key, 5, interval '1 day');
     perform public.lms_note_failure(v_ip_key, 30, interval '10 minutes');
+    if v_mid is not null then
+      perform public.lms_note_failure('m:' || v_mid, 5, interval '1 day');
+    end if;
     return null;
   end if;
+  delete from public.login_attempts where key = 'm:' || v_mid;
   -- same rule as lms_login: clear only when this is the one account with the ID
   if (select count(*) from public.members m
        where public.lms_norm_id(m.id) = v_norm and m.active) = 1 then
@@ -868,7 +834,7 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- LMS row level security (spec §4.4; write policies for LMS roles = 3.3)
+-- LMS row level security (spec §4.4; LMS roles write through the 3B RPCs)
 -- ---------------------------------------------------------------------------
 alter table public.branches       enable row level security;
 alter table public.classes        enable row level security;
@@ -959,6 +925,1081 @@ grant execute on function public.lms_managed_class_ids() to anon, authenticated;
 -- Make PostgREST (the REST API) see the new RPCs right away.
 notify pgrst, 'reload schema';
 -- ==== end LMS (Phase 3A) ====
+
+-- ============================================================================
+-- LMS (Phase 3B, 2026-11-01) — role-based management (3.3) + bulk (3.4)
+-- ----------------------------------------------------------------------------
+-- Safe to re-run. Needs the "LMS (Phase 3A)" block above. Decisions D41–D47
+-- (spec §4.9); checked by supabase/lms/verify-3b.sql, live state first by
+-- supabase/lms/00-precheck-3b.sql.
+--
+-- • D41 primary key members.id → members.member_id. A login ID stays unique
+--   per branch (members_login_per_branch_key) and a branch account's ID
+--   across all branches (members_branch_account_key), so the same ID may now
+--   exist in two branches.
+-- • D42 the old admin RPCs create_member / update_member / set_member_active
+--   are dropped; members.grade may be NULL (new accounts set role only).
+--   verify_member_login and grade go in SQL 2 (3.5).
+-- • D45 every management RPC is SECURITY DEFINER and takes its caller from the
+--   request: the top admin (Auth JWT → is_admin()) or an LMS member
+--   (x-lms-token → lms_member()). The caller's role and branch override the
+--   input. Nobody, a caller out of scope, or a target it may not see → error
+--   42501. Every other outcome is jsonb {status: ok | invalid (field) |
+--   duplicate (suggestion) | not_found | error | too_many}.
+-- • LMS roles get no direct write on members / classes / class_members: all
+--   of it goes through these RPCs, the one place that checks D45.
+-- ============================================================================
+
+-- D41: swap the primary key once (later runs see member_id and skip). The
+-- unique index on member_id that the foreign keys already use becomes the key
+-- itself, so no foreign key is touched. No CASCADE: if anything still pointed
+-- at members(id), the drop fails and nothing changes (precheck row 7).
+do $$
+declare
+  v_name text;
+  v_def  text;
+begin
+  select c.conname, pg_get_constraintdef(c.oid) into v_name, v_def
+    from pg_constraint c
+   where c.conrelid = 'public.members'::regclass and c.contype = 'p';
+  if v_def is distinct from 'PRIMARY KEY (member_id)' then
+    if v_name is not null then
+      execute format('alter table public.members drop constraint %I', v_name);
+    end if;
+    alter table public.members
+      add constraint members_member_id_key primary key using index members_member_id_key;
+  end if;
+end;
+$$;
+-- The old key also kept id NOT NULL — keep it so on every Postgres version.
+alter table public.members alter column id set not null;
+
+-- D42: new accounts carry role only.
+alter table public.members alter column grade drop not null;
+drop function if exists public.create_member(text, text, smallint, text);
+drop function if exists public.create_member(text, text, smallint, text, jsonb);  -- live-only (D27)
+drop function if exists public.update_member(text, smallint, text);
+drop function if exists public.set_member_active(text, boolean);
+
+-- D47: deactivating a member ends its sessions at once, whoever does it. (A
+-- new password already does — members_lms_compat.)
+create or replace function public.lms_members_end_sessions()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if old.active and not new.active then
+    delete from public.lms_sessions s where s.member_id = old.member_id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists members_lms_end_sessions on public.members;
+create trigger members_lms_end_sessions
+  before update of active on public.members
+  for each row execute function public.lms_members_end_sessions();
+
+-- ---------------------------------------------------------------------------
+-- 3B helpers (internal — not callable by anon/authenticated, see grants)
+-- ---------------------------------------------------------------------------
+
+-- Who is calling: the top admin (Auth JWT) or a signed-in LMS member
+-- (x-lms-token). No row = nobody (anon without a valid session, or an Auth
+-- user who is not an admin).
+create or replace function public.lms_caller()
+returns table (is_admin boolean, member_id uuid, role smallint, branch_id uuid)
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select true, null::uuid, null::smallint, null::uuid
+   where public.is_admin()
+  union all
+  select false, m.member_id, m.role, m.branch_id
+    from public.lms_member() m
+   where not public.is_admin();
+$$;
+
+-- D44 rules, checked only when an ID or password is set (logins still accept
+-- older ones): ID ^[0-9a-z가-힣._-]{2,20}$ on the normalized ID; password
+-- ^[\x21-\x7E]{4,10}$ written as [!-~] (printable ASCII, no space).
+create or replace function public.lms_id_rule_ok(p text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(p ~ '^[0-9a-z가-힣._-]{2,20}$', false);
+$$;
+
+create or replace function public.lms_pw_rule_ok(p text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(p ~ '^[!-~]{4,10}$', false);
+$$;
+
+-- D44: may an account of p_role in branch p_branch NOT use this normalized ID?
+-- Taken = any member of that branch, or a branch account (role 1) anywhere;
+-- for a branch account also any member anywhere. p_except = the member being
+-- renamed.
+create or replace function public.lms_id_taken(
+  p_norm text, p_role int, p_branch uuid, p_except uuid default null
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select exists (
+    select 1 from public.members m
+     where public.lms_norm_id(m.id) = p_norm
+       and m.member_id is distinct from p_except
+       and (m.branch_id = p_branch or m.role = 1 or p_role = 1));
+$$;
+
+-- The next free suffix for a taken ID: 김민준 → 김민준2, 김민준3 … (≤ 20 chars).
+create or replace function public.lms_id_suggest(
+  p_norm text, p_role int, p_branch uuid, p_except uuid default null
+)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+  n    int;
+  cand text;
+begin
+  for n in 2 .. 999 loop
+    cand := left(p_norm, 20 - length(n::text)) || n;
+    if public.lms_id_rule_ok(cand)
+       and not public.lms_id_taken(cand, p_role, p_branch, p_except) then
+      return cand;
+    end if;
+  end loop;
+  return null;
+end;
+$$;
+
+-- D45/D46: may the caller manage this member?
+--   'edit'   (name, login ID, password, active): admin → anyone; branch account
+--            → teachers and students of its branch; teacher → students of the
+--            classes it teaches.
+--   'unlock' the same, but a branch account may unlock anyone of its branch.
+create or replace function public.lms_can_manage_member(p_member_id uuid, p_kind text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select coalesce((
+    select case
+      when c.is_admin then true
+      when c.role = 1 then t.branch_id = c.branch_id
+                       and (t.role in (2, 3) or p_kind = 'unlock')
+      when c.role = 2 then t.role = 3 and t.branch_id = c.branch_id
+                       and exists (select 1 from public.class_members cm
+                                     join public.classes k on k.id = cm.class_id
+                                    where cm.member_id = t.member_id
+                                      and k.teacher_id = c.member_id)
+      else false
+    end
+      from public.lms_caller() c
+      cross join public.members t
+     where t.member_id = p_member_id), false);
+$$;
+
+-- D45: may the caller manage this class? admin → any; branch account → the
+-- classes of its branch; teacher → the classes it teaches.
+create or replace function public.lms_can_manage_class(p_class_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select coalesce((
+    select case
+      when c.is_admin then true
+      when c.role = 1 then k.branch_id = c.branch_id
+      when c.role = 2 then k.branch_id = c.branch_id and k.teacher_id = c.member_id
+      else false
+    end
+      from public.lms_caller() c
+      cross join public.classes k
+     where k.id = p_class_id), false);
+$$;
+
+-- D45: the roles the caller may create — admin 1-3, branch account 2-3,
+-- teacher 3 (students only).
+create or replace function public.lms_can_create_role(p_role int)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select coalesce((
+    select case
+      when c.is_admin then p_role in (1, 2, 3)
+      when c.role = 1 then p_role in (2, 3)
+      when c.role = 2 then p_role = 3
+      else false
+    end
+      from public.lms_caller() c), false);
+$$;
+
+-- Make one account once the caller's rights are checked (lms_member_create,
+-- lms_bulk_create_members): ID / password / name rules and D44; with
+-- p_auto_suffix a taken ID becomes the suggested one. The ID is stored
+-- normalized. Internal — never callable from the API.
+create or replace function public.lms_member_insert(
+  p_login_id text, p_password text, p_role int, p_display_name text,
+  p_branch uuid, p_auto_suffix boolean default false
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_id   text := public.lms_norm_id(p_login_id);
+  v_name text := nullif(btrim(p_display_name), '');
+  v_sug  text;
+  v_mid  uuid;
+begin
+  if not public.lms_id_rule_ok(v_id) then
+    return jsonb_build_object('status', 'invalid', 'field', 'login_id');
+  end if;
+  if not public.lms_pw_rule_ok(p_password) then
+    return jsonb_build_object('status', 'invalid', 'field', 'password');
+  end if;
+  if length(v_name) > 40 then
+    return jsonb_build_object('status', 'invalid', 'field', 'display_name');
+  end if;
+  -- One account-ID write at a time: the branch-account rule is no index, so
+  -- two calls could otherwise both take the same free ID.
+  perform pg_advisory_xact_lock(7303, 0);
+  if public.lms_id_taken(v_id, p_role, p_branch) then
+    v_sug := public.lms_id_suggest(v_id, p_role, p_branch);
+    if not coalesce(p_auto_suffix, false) or v_sug is null then
+      return jsonb_build_object('status', 'duplicate', 'suggestion', v_sug);
+    end if;
+    v_id := v_sug;
+  end if;
+  insert into public.members
+    (id, password_hash, role, branch_id, display_name, active, password_changed_at)
+  values (v_id, extensions.crypt(p_password, extensions.gen_salt('bf')), p_role, p_branch, v_name, true, now())
+  returning member_id into v_mid;
+  return jsonb_build_object('status', 'ok', 'member_id', v_mid, 'login_id', v_id);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Branches (D45: top admin only — create, rename, deactivate; no delete)
+-- ---------------------------------------------------------------------------
+create or replace function public.lms_branch_create(p_name text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_name text := nullif(btrim(p_name), '');
+  v_id   uuid;
+begin
+  if not exists (select 1 from public.lms_caller() c where c.is_admin) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if v_name is null or length(v_name) > 40 then
+    return jsonb_build_object('status', 'invalid', 'field', 'name');
+  end if;
+  if exists (select 1 from public.branches b where lower(b.name) = lower(v_name)) then
+    return jsonb_build_object('status', 'duplicate', 'field', 'name');
+  end if;
+  insert into public.branches (code, name)
+  values ('b-' || encode(extensions.gen_random_bytes(6), 'hex'), v_name)
+  returning id into v_id;
+  return jsonb_build_object('status', 'ok', 'branch_id', v_id);
+end;
+$$;
+
+-- Rename and/or (de)activate. Switching a branch off signs its members out
+-- now (D47); lms_member() already refuses members of an inactive branch.
+create or replace function public.lms_branch_update(
+  p_branch_id uuid, p_name text default null, p_active boolean default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  b      record;
+  v_name text;
+begin
+  if not exists (select 1 from public.lms_caller() c where c.is_admin) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  select * into b from public.branches x where x.id = p_branch_id;
+  if not found then
+    return jsonb_build_object('status', 'not_found');
+  end if;
+  if p_name is not null then
+    v_name := nullif(btrim(p_name), '');
+    if v_name is null or length(v_name) > 40 then
+      return jsonb_build_object('status', 'invalid', 'field', 'name');
+    end if;
+    if exists (select 1 from public.branches x
+                where lower(x.name) = lower(v_name) and x.id <> p_branch_id) then
+      return jsonb_build_object('status', 'duplicate', 'field', 'name');
+    end if;
+  end if;
+  update public.branches x
+     set name = coalesce(v_name, x.name), active = coalesce(p_active, x.active)
+   where x.id = p_branch_id;
+  if b.active and p_active is false then
+    delete from public.lms_sessions s
+     using public.members m
+     where m.member_id = s.member_id and m.branch_id = p_branch_id;
+  end if;
+  return jsonb_build_object('status', 'ok');
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Members (D45 rows 2-4, D47)
+-- ---------------------------------------------------------------------------
+
+-- The members the caller may see, without password_hash (D14 — still no
+-- direct select on members for LMS roles): admin → everyone (or one branch);
+-- branch account → teachers and students of its branch; teacher → students of
+-- its branch (class_ids: only the classes it teaches). locked /
+-- lock_retry_sec = the login lock on the ID or on the account itself (D46).
+create or replace function public.lms_member_list(p_branch_id uuid default null)
+returns table (
+  member_id uuid, login_id text, display_name text, role smallint, branch_id uuid,
+  branch_name text, active boolean, class_ids uuid[], locked boolean,
+  lock_retry_sec int, last_login_at timestamptz, created_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+#variable_conflict use_column
+declare
+  c record;
+begin
+  select * into c from public.lms_caller();
+  if not found or not (c.is_admin or c.role in (1, 2)) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  return query
+    select m.member_id, m.id, m.display_name, m.role, m.branch_id, b.name, m.active,
+           array(select cm.class_id from public.class_members cm
+                   join public.classes k on k.id = cm.class_id
+                  where cm.member_id = m.member_id
+                    and (c.role is distinct from 2 or k.teacher_id = c.member_id)
+                  order by cm.class_id),
+           coalesce(l.until > now(), false),
+           case when l.until > now()
+                then greatest(ceil(extract(epoch from l.until - now()))::int, 1) end,
+           m.last_login_at, m.created_at
+      from public.members m
+      join public.branches b on b.id = m.branch_id
+      cross join lateral (
+        select max(a.locked_until) as until
+          from public.login_attempts a
+         where a.key in ('id:' || left(public.lms_norm_id(m.id), 64), 'm:' || m.member_id)) l
+     where case when c.is_admin then p_branch_id is null or m.branch_id = p_branch_id
+                when c.role = 1 then m.branch_id = c.branch_id and m.role in (2, 3)
+                else m.branch_id = c.branch_id and m.role = 3 end
+     order by b.name, m.role, m.id;
+end;
+$$;
+
+-- Before a bulk upload (§4.5): would these IDs be free for p_role? Answers
+-- only for the caller's own branch (an LMS caller's p_branch_id is ignored —
+-- no ID enumeration in other branches, §4.8); branch-account IDs count
+-- everywhere (D44). Rows in input order: ok | duplicate (+ suggestion) | invalid.
+create or replace function public.lms_check_login_ids(
+  p_ids text[], p_role int default 3, p_branch_id uuid default null
+)
+returns table (input text, login_id text, status text, suggestion text)
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+  c        record;
+  v_branch uuid;
+  v        text;
+begin
+  select * into c from public.lms_caller();
+  if not found or not public.lms_can_create_role(p_role) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if coalesce(array_length(p_ids, 1), 0) > 500 then
+    raise exception 'at most 500 IDs per call' using errcode = '22023';
+  end if;
+  if c.is_admin then
+    v_branch := p_branch_id;
+    if v_branch is null then
+      raise exception 'p_branch_id is required' using errcode = '22023';
+    end if;
+  else
+    v_branch := c.branch_id;
+  end if;
+  foreach v in array coalesce(p_ids, '{}'::text[]) loop
+    input := v;
+    login_id := public.lms_norm_id(v);
+    suggestion := null;
+    if not public.lms_id_rule_ok(login_id) then
+      status := 'invalid';
+    elsif public.lms_id_taken(login_id, p_role, v_branch) then
+      status := 'duplicate';
+      suggestion := public.lms_id_suggest(login_id, p_role, v_branch);
+    else
+      status := 'ok';
+    end if;
+    return next;
+  end loop;
+end;
+$$;
+
+-- Create one account (D45 row 3). An LMS caller's own branch always wins over
+-- p_branch_id; the top admin must name an existing branch.
+create or replace function public.lms_member_create(
+  p_login_id text, p_password text, p_role int,
+  p_display_name text default null, p_branch_id uuid default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  c        record;
+  v_branch uuid;
+begin
+  select * into c from public.lms_caller();
+  if not found or not public.lms_can_create_role(p_role) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if c.is_admin then
+    select b.id into v_branch from public.branches b where b.id = p_branch_id;
+    if v_branch is null then
+      return jsonb_build_object('status', 'invalid', 'field', 'branch');
+    end if;
+  else
+    v_branch := c.branch_id;
+  end if;
+  return public.lms_member_insert(p_login_id, p_password, p_role, p_display_name, v_branch);
+end;
+$$;
+
+-- Change login ID, name, password and/or active (D45 row 4). NULL = keep;
+-- a blank name clears it. A new password or deactivation ends the member's
+-- sessions (triggers). All rules are checked before anything is written.
+create or replace function public.lms_member_update(
+  p_member_id uuid, p_login_id text default null, p_display_name text default null,
+  p_password text default null, p_active boolean default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  t      record;
+  v_id   text;
+  v_name text;
+begin
+  if not public.lms_can_manage_member(p_member_id, 'edit') then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  select * into t from public.members m where m.member_id = p_member_id;
+  if p_login_id is not null then
+    v_id := public.lms_norm_id(p_login_id);
+    if not public.lms_id_rule_ok(v_id) then
+      return jsonb_build_object('status', 'invalid', 'field', 'login_id');
+    end if;
+  end if;
+  if p_password is not null and not public.lms_pw_rule_ok(p_password) then
+    return jsonb_build_object('status', 'invalid', 'field', 'password');
+  end if;
+  if p_display_name is not null then
+    v_name := nullif(btrim(p_display_name), '');
+    if length(v_name) > 40 then
+      return jsonb_build_object('status', 'invalid', 'field', 'display_name');
+    end if;
+  end if;
+  if v_id is not null and v_id is distinct from public.lms_norm_id(t.id) then
+    perform pg_advisory_xact_lock(7303, 0);
+    if public.lms_id_taken(v_id, t.role, t.branch_id, t.member_id) then
+      return jsonb_build_object('status', 'duplicate',
+        'suggestion', public.lms_id_suggest(v_id, t.role, t.branch_id, t.member_id));
+    end if;
+  end if;
+  update public.members m
+     set id            = coalesce(v_id, m.id),
+         display_name  = case when p_display_name is not null then v_name else m.display_name end,
+         password_hash = case when p_password is not null
+                              then extensions.crypt(p_password, extensions.gen_salt('bf')) else m.password_hash end,
+         active        = coalesce(p_active, m.active)
+   where m.member_id = p_member_id;
+  return jsonb_build_object('status', 'ok');
+end;
+$$;
+
+-- D47: only the top admin deletes (sessions, class rows and download log go
+-- with the member; a class it taught keeps no teacher).
+create or replace function public.lms_member_delete(p_member_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not exists (select 1 from public.lms_caller() c where c.is_admin) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  delete from public.members m where m.member_id = p_member_id;
+  if not found then
+    return jsonb_build_object('status', 'not_found');
+  end if;
+  return jsonb_build_object('status', 'ok');
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Classes (D45 rows 5-6). A class's teacher and students belong to its branch.
+-- ---------------------------------------------------------------------------
+
+-- Admin: any branch (named), any teacher of it. Branch account: its branch,
+-- any of its teachers. Teacher: its branch, itself as the teacher.
+create or replace function public.lms_class_create(
+  p_name text, p_teacher_id uuid default null, p_branch_id uuid default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  c         record;
+  v_name    text := nullif(btrim(p_name), '');
+  v_branch  uuid;
+  v_teacher uuid;
+  v_id      uuid;
+begin
+  select * into c from public.lms_caller();
+  if not found or not (c.is_admin or c.role in (1, 2)) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if c.is_admin then
+    select b.id into v_branch from public.branches b where b.id = p_branch_id;
+    if v_branch is null then
+      return jsonb_build_object('status', 'invalid', 'field', 'branch');
+    end if;
+    v_teacher := p_teacher_id;
+  elsif c.role = 1 then
+    v_branch := c.branch_id;
+    v_teacher := p_teacher_id;
+  else
+    v_branch := c.branch_id;
+    v_teacher := c.member_id;
+  end if;
+  if v_name is null or length(v_name) > 40 then
+    return jsonb_build_object('status', 'invalid', 'field', 'name');
+  end if;
+  if v_teacher is not null and not exists (
+       select 1 from public.members t
+        where t.member_id = v_teacher and t.role = 2 and t.branch_id = v_branch) then
+    return jsonb_build_object('status', 'invalid', 'field', 'teacher');
+  end if;
+  if exists (select 1 from public.classes k where k.branch_id = v_branch and k.name = v_name) then
+    return jsonb_build_object('status', 'duplicate', 'field', 'name');
+  end if;
+  insert into public.classes (branch_id, name, teacher_id)
+  values (v_branch, v_name, v_teacher)
+  returning id into v_id;
+  return jsonb_build_object('status', 'ok', 'class_id', v_id);
+end;
+$$;
+
+-- Rename / (de)activate a class the caller manages. Changing the teacher
+-- (p_set_teacher; p_teacher_id NULL = none) is for the admin and the branch
+-- account only — a teacher's classes stay its own.
+create or replace function public.lms_class_update(
+  p_class_id uuid, p_name text default null, p_active boolean default null,
+  p_set_teacher boolean default false, p_teacher_id uuid default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  c      record;
+  k      record;
+  v_name text;
+  v_set  boolean := coalesce(p_set_teacher, false);
+begin
+  if not public.lms_can_manage_class(p_class_id) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  select * into c from public.lms_caller();
+  if v_set and not (c.is_admin or c.role = 1) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  select * into k from public.classes x where x.id = p_class_id;
+  if p_name is not null then
+    v_name := nullif(btrim(p_name), '');
+    if v_name is null or length(v_name) > 40 then
+      return jsonb_build_object('status', 'invalid', 'field', 'name');
+    end if;
+    if exists (select 1 from public.classes x
+                where x.branch_id = k.branch_id and x.name = v_name and x.id <> p_class_id) then
+      return jsonb_build_object('status', 'duplicate', 'field', 'name');
+    end if;
+  end if;
+  if v_set and p_teacher_id is not null and not exists (
+       select 1 from public.members t
+        where t.member_id = p_teacher_id and t.role = 2 and t.branch_id = k.branch_id) then
+    return jsonb_build_object('status', 'invalid', 'field', 'teacher');
+  end if;
+  update public.classes x
+     set name       = coalesce(v_name, x.name),
+         active     = coalesce(p_active, x.active),
+         teacher_id = case when v_set then p_teacher_id else x.teacher_id end
+   where x.id = p_class_id;
+  return jsonb_build_object('status', 'ok');
+end;
+$$;
+
+-- D47: only the top admin deletes a class (its member rows go with it).
+create or replace function public.lms_class_delete(p_class_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not exists (select 1 from public.lms_caller() c where c.is_admin) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  delete from public.classes k where k.id = p_class_id;
+  if not found then
+    return jsonb_build_object('status', 'not_found');
+  end if;
+  return jsonb_build_object('status', 'ok');
+end;
+$$;
+
+-- Put a student into a class the caller manages. A member the caller cannot
+-- see (another branch, or none) → 42501; a teacher, or a student of another
+-- branch than the class → invalid. Already in = ok, added false.
+create or replace function public.lms_class_add_member(p_class_id uuid, p_member_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  c record;
+  k record;
+  t record;
+  n int;
+begin
+  if not public.lms_can_manage_class(p_class_id) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  select * into c from public.lms_caller();
+  select * into k from public.classes x where x.id = p_class_id;
+  select m.member_id, m.role, m.branch_id into t
+    from public.members m where m.member_id = p_member_id;
+  if t.member_id is null or (not c.is_admin and t.branch_id <> c.branch_id) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if t.role <> 3 or t.branch_id <> k.branch_id then
+    return jsonb_build_object('status', 'invalid', 'field', 'member');
+  end if;
+  insert into public.class_members (class_id, member_id)
+  values (p_class_id, p_member_id)
+  on conflict do nothing;
+  get diagnostics n = row_count;
+  return jsonb_build_object('status', 'ok', 'added', n > 0);
+end;
+$$;
+
+create or replace function public.lms_class_remove_member(p_class_id uuid, p_member_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  n int;
+begin
+  if not public.lms_can_manage_class(p_class_id) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  delete from public.class_members cm
+   where cm.class_id = p_class_id and cm.member_id = p_member_id;
+  get diagnostics n = row_count;
+  return jsonb_build_object('status', 'ok', 'removed', n > 0);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Unlock (D46). Clears the member's own key 'm:<member_id>' and the ID key
+-- 'id:<normalized ID>'. The ID key is shared by every branch, so the same ID
+-- elsewhere is unlocked too (accepted) — but each account's own key is not:
+-- clearing the ID key no longer helps anyone guess at another branch's
+-- account (security review H2), its failures sit on its own key.
+-- ---------------------------------------------------------------------------
+create or replace function public.lms_unlock_member(p_member_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  n int;
+begin
+  if not public.lms_can_manage_member(p_member_id, 'unlock') then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  delete from public.login_attempts a
+   using public.members m
+   where m.member_id = p_member_id
+     and a.key in ('id:' || left(public.lms_norm_id(m.id), 64), 'm:' || m.member_id);
+  get diagnostics n = row_count;
+  return jsonb_build_object('status', 'ok', 'cleared', n > 0);
+end;
+$$;
+
+-- Top admin only: any key — 'id:…', 'm:…' or 'ip:…' (IP locks are the
+-- admin's alone).
+create or replace function public.lms_unlock_key(p_key text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  n int;
+begin
+  if not exists (select 1 from public.lms_caller() c where c.is_admin) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if p_key is null or p_key !~ '^(id|ip|m):.' then
+    return jsonb_build_object('status', 'invalid', 'field', 'key');
+  end if;
+  delete from public.login_attempts a where a.key = p_key;
+  get diagnostics n = row_count;
+  return jsonb_build_object('status', 'ok', 'cleared', n > 0);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Bulk (3.4, §4.5): one call = one transaction, at most 500 rows. Any bad row
+-- → nothing is kept, and every row says why. Never returns a password.
+-- ---------------------------------------------------------------------------
+
+-- p_rows: [{login_id, password, role (2|3), display_name?, class?, branch_id
+-- (top admin only)}]. class = a class name of the row's branch the caller
+-- manages. With p_auto_suffix a taken ID takes the suggested one.
+create or replace function public.lms_bulk_create_members(
+  p_rows jsonb, p_auto_suffix boolean default false
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  c        record;
+  n_rows   int;
+  i        int;
+  r        jsonb;
+  v_role   int;
+  v_branch uuid;
+  v_class  uuid;
+  v_cname  text;
+  v_reason text;
+  res      jsonb;
+  v_out    jsonb := '[]'::jsonb;
+  n_ok     int := 0;
+  n_bad    int := 0;
+begin
+  select * into c from public.lms_caller();
+  if not found or not (c.is_admin or c.role in (1, 2)) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if jsonb_typeof(p_rows) is distinct from 'array' then
+    return jsonb_build_object('status', 'invalid', 'field', 'rows');
+  end if;
+  n_rows := jsonb_array_length(p_rows);
+  if n_rows = 0 then
+    return jsonb_build_object('status', 'invalid', 'field', 'rows');
+  end if;
+  if n_rows > 500 then
+    return jsonb_build_object('status', 'too_many', 'limit', 500);
+  end if;
+
+  begin
+    for i in 0 .. n_rows - 1 loop
+      r := p_rows -> i;
+      v_reason := null;
+      res := null;
+      v_class := null;
+      v_branch := null;
+      v_cname := nullif(btrim(r ->> 'class'), '');
+      v_role := case when (r ->> 'role') ~ '^[23]$' then (r ->> 'role')::int end;
+      if v_role is null or not public.lms_can_create_role(v_role) then
+        v_reason := 'role';
+      elsif c.is_admin then
+        select b.id into v_branch from public.branches b where b.id::text = (r ->> 'branch_id');
+        if v_branch is null then
+          v_reason := 'branch';
+        end if;
+      else
+        v_branch := c.branch_id;
+      end if;
+      if v_reason is null and v_cname is not null then
+        select k.id into v_class from public.classes k
+         where k.branch_id = v_branch and k.name = v_cname;
+        if v_role <> 3 then
+          v_reason := 'not_student';  -- class members are students (teachers: classes.teacher_id)
+        elsif v_class is null then
+          v_reason := 'class';
+        elsif not public.lms_can_manage_class(v_class) then
+          v_reason := 'class_not_allowed';
+        end if;
+      end if;
+      if v_reason is null then
+        res := public.lms_member_insert(r ->> 'login_id', r ->> 'password', v_role,
+                                        r ->> 'display_name', v_branch, p_auto_suffix);
+        if res ->> 'status' <> 'ok' then
+          v_reason := coalesce(res ->> 'field', res ->> 'status');
+        elsif v_class is not null then
+          insert into public.class_members (class_id, member_id)
+          values (v_class, (res ->> 'member_id')::uuid)
+          on conflict do nothing;
+        end if;
+      end if;
+      if v_reason is null then
+        n_ok := n_ok + 1;
+      else
+        n_bad := n_bad + 1;
+      end if;
+      v_out := v_out || jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(
+        'row', i + 1,
+        'login_id', coalesce(res ->> 'login_id', public.lms_norm_id(r ->> 'login_id')),
+        'role', v_role,
+        'class', v_cname,
+        'result', case when v_reason is null then 'ok' else 'error' end,
+        'reason', v_reason,
+        'suggestion', res ->> 'suggestion')));
+    end loop;
+    if n_bad > 0 then
+      raise exception 'LMS_BULK_ROLLBACK';  -- undo every row made above
+    end if;
+  exception when others then
+    if sqlerrm <> 'LMS_BULK_ROLLBACK' then
+      raise;
+    end if;
+  end;
+
+  if n_bad > 0 then
+    return jsonb_build_object('status', 'error', 'created', 0, 'errors', n_bad, 'rows', v_out);
+  end if;
+  return jsonb_build_object('status', 'ok', 'created', n_ok, 'rows', v_out);
+end;
+$$;
+
+-- p_rows: [{class, login_id}] — students into classes of one branch (the
+-- caller's; the top admin names it in p_branch_id). Same all-or-nothing rule.
+create or replace function public.lms_bulk_assign(p_rows jsonb, p_branch_id uuid default null)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  c        record;
+  t        record;
+  v_branch uuid;
+  n_rows   int;
+  i        int;
+  r        jsonb;
+  v_cname  text;
+  v_lid    text;
+  v_class  uuid;
+  v_reason text;
+  v_out    jsonb := '[]'::jsonb;
+  n_ok     int := 0;
+  n_bad    int := 0;
+begin
+  select * into c from public.lms_caller();
+  if not found or not (c.is_admin or c.role in (1, 2)) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  if c.is_admin then
+    select b.id into v_branch from public.branches b where b.id = p_branch_id;
+    if v_branch is null then
+      return jsonb_build_object('status', 'invalid', 'field', 'branch');
+    end if;
+  else
+    v_branch := c.branch_id;
+  end if;
+  if jsonb_typeof(p_rows) is distinct from 'array' then
+    return jsonb_build_object('status', 'invalid', 'field', 'rows');
+  end if;
+  n_rows := jsonb_array_length(p_rows);
+  if n_rows = 0 then
+    return jsonb_build_object('status', 'invalid', 'field', 'rows');
+  end if;
+  if n_rows > 500 then
+    return jsonb_build_object('status', 'too_many', 'limit', 500);
+  end if;
+
+  begin
+    for i in 0 .. n_rows - 1 loop
+      r := p_rows -> i;
+      v_reason := null;
+      v_class := null;
+      v_cname := nullif(btrim(r ->> 'class'), '');
+      v_lid := public.lms_norm_id(r ->> 'login_id');
+      select k.id into v_class from public.classes k
+       where k.branch_id = v_branch and k.name = v_cname;
+      if v_class is null then
+        v_reason := 'class';
+      elsif not public.lms_can_manage_class(v_class) then
+        v_reason := 'class_not_allowed';
+      else
+        select m.member_id, m.role into t
+          from public.members m
+         where m.branch_id = v_branch and public.lms_norm_id(m.id) = v_lid;
+        if t.member_id is null then
+          v_reason := 'member';
+        elsif t.role <> 3 then
+          v_reason := 'not_student';
+        else
+          insert into public.class_members (class_id, member_id)
+          values (v_class, t.member_id)
+          on conflict do nothing;
+        end if;
+      end if;
+      if v_reason is null then
+        n_ok := n_ok + 1;
+      else
+        n_bad := n_bad + 1;
+      end if;
+      v_out := v_out || jsonb_build_array(jsonb_strip_nulls(jsonb_build_object(
+        'row', i + 1, 'class', v_cname, 'login_id', v_lid,
+        'result', case when v_reason is null then 'ok' else 'error' end,
+        'reason', v_reason)));
+    end loop;
+    if n_bad > 0 then
+      raise exception 'LMS_BULK_ROLLBACK';
+    end if;
+  exception when others then
+    if sqlerrm <> 'LMS_BULK_ROLLBACK' then
+      raise;
+    end if;
+  end;
+
+  if n_bad > 0 then
+    return jsonb_build_object('status', 'error', 'assigned', 0, 'errors', n_bad, 'rows', v_out);
+  end if;
+  return jsonb_build_object('status', 'ok', 'assigned', n_ok, 'rows', v_out);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 3B grants — explicit (Supabase also grants new functions to anon /
+-- authenticated by default; PUBLIC gets EXECUTE on every new function).
+-- ---------------------------------------------------------------------------
+revoke execute on function public.lms_caller() from public, anon, authenticated;
+revoke execute on function public.lms_id_rule_ok(text) from public, anon, authenticated;
+revoke execute on function public.lms_pw_rule_ok(text) from public, anon, authenticated;
+revoke execute on function public.lms_id_taken(text, int, uuid, uuid) from public, anon, authenticated;
+revoke execute on function public.lms_id_suggest(text, int, uuid, uuid) from public, anon, authenticated;
+revoke execute on function public.lms_can_manage_member(uuid, text) from public, anon, authenticated;
+revoke execute on function public.lms_can_manage_class(uuid) from public, anon, authenticated;
+revoke execute on function public.lms_can_create_role(int) from public, anon, authenticated;
+revoke execute on function public.lms_member_insert(text, text, int, text, uuid, boolean)
+  from public, anon, authenticated;
+revoke execute on function public.lms_members_end_sessions() from public, anon, authenticated;
+
+-- The RPCs: the browser calls them as anon (LMS token) or authenticated
+-- (admin JWT); each checks its caller itself.
+revoke execute on function public.lms_branch_create(text) from public;
+revoke execute on function public.lms_branch_update(uuid, text, boolean) from public;
+revoke execute on function public.lms_member_list(uuid) from public;
+revoke execute on function public.lms_check_login_ids(text[], int, uuid) from public;
+revoke execute on function public.lms_member_create(text, text, int, text, uuid) from public;
+revoke execute on function public.lms_member_update(uuid, text, text, text, boolean) from public;
+revoke execute on function public.lms_member_delete(uuid) from public;
+revoke execute on function public.lms_class_create(text, uuid, uuid) from public;
+revoke execute on function public.lms_class_update(uuid, text, boolean, boolean, uuid) from public;
+revoke execute on function public.lms_class_delete(uuid) from public;
+revoke execute on function public.lms_class_add_member(uuid, uuid) from public;
+revoke execute on function public.lms_class_remove_member(uuid, uuid) from public;
+revoke execute on function public.lms_unlock_member(uuid) from public;
+revoke execute on function public.lms_unlock_key(text) from public;
+revoke execute on function public.lms_bulk_create_members(jsonb, boolean) from public;
+revoke execute on function public.lms_bulk_assign(jsonb, uuid) from public;
+grant execute on function public.lms_branch_create(text) to anon, authenticated;
+grant execute on function public.lms_branch_update(uuid, text, boolean) to anon, authenticated;
+grant execute on function public.lms_member_list(uuid) to anon, authenticated;
+grant execute on function public.lms_check_login_ids(text[], int, uuid) to anon, authenticated;
+grant execute on function public.lms_member_create(text, text, int, text, uuid) to anon, authenticated;
+grant execute on function public.lms_member_update(uuid, text, text, text, boolean) to anon, authenticated;
+grant execute on function public.lms_member_delete(uuid) to anon, authenticated;
+grant execute on function public.lms_class_create(text, uuid, uuid) to anon, authenticated;
+grant execute on function public.lms_class_update(uuid, text, boolean, boolean, uuid) to anon, authenticated;
+grant execute on function public.lms_class_delete(uuid) to anon, authenticated;
+grant execute on function public.lms_class_add_member(uuid, uuid) to anon, authenticated;
+grant execute on function public.lms_class_remove_member(uuid, uuid) to anon, authenticated;
+grant execute on function public.lms_unlock_member(uuid) to anon, authenticated;
+grant execute on function public.lms_unlock_key(text) to anon, authenticated;
+grant execute on function public.lms_bulk_create_members(jsonb, boolean) to anon, authenticated;
+grant execute on function public.lms_bulk_assign(jsonb, uuid) to anon, authenticated;
+
+-- Make PostgREST (the REST API) see the new RPCs right away.
+notify pgrst, 'reload schema';
+-- ==== end LMS (Phase 3B) ====
 
 -- ============================================================================
 -- Teacher resources (교사 자료실, 2026-10-29) — 1 private bucket + 1 table

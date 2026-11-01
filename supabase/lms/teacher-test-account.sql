@@ -1,4 +1,7 @@
 -- ============================================================================
+-- ⚠ 3A 시점 전용 — 3B 운영 반영 뒤 실행 금지 (대신 supabase/lms/verify-3b.sql).
+--   3A-era only: after the Phase 3B SQL is live, do NOT run this file
+--   (its `on conflict (id)` needs the old primary key that 3B moves).
 -- Live teacher test account (role 2, branch hq) — teacher-resources check
 -- ----------------------------------------------------------------------------
 -- For the download check: a teacher logs in and downloads one file.

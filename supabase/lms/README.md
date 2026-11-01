@@ -4,6 +4,10 @@
 열기: Supabase 대시보드 → 프로젝트 → **SQL Editor** → **New query** → 파일 내용 전체 붙여넣기 → **Run**.
 SQL Editor는 마지막 결과 표만 보여 준다. 여기 SQL 파일은 모두 결과가 표 한 개로 나오게 만들어 두었다.
 
+> ⚠ **3A 시점 전용 — 3B 운영 반영 뒤 실행 금지:** `verify-3a.sql`·`teacher-test-account.sql`·`fix-create-member-overload.sql`
+> (대신 `verify-3b.sql`). 3B가 옛 회원 RPC를 지우고 기본 키를 `member_id`로 옮겨서, 이 셋은 3A 상태에서만 맞는다. 3B 운영 순서(D49)는
+> 멈춤 3에서 이 문서에 적는다.
+
 실제로 한 순서(2026-10-29~30, 운영 결과 = 마지막 열). 다른 프로젝트·재구축 때도 이 순서를 따른다.
 
 | 순서 | 누가   | 무엇                                                                                                                                               | 기대 결과                                                                                                                                                                                         | 운영 결과                                                                                                                                         |
@@ -39,8 +43,13 @@ SQL Editor는 마지막 결과 표만 보여 준다. 여기 SQL 파일은 모두
 - `verify-teacher-resources.sql` — 읽기 전용(카탈로그 select 하나). 교사 자료실 버킷·테이블·RPC 실행 권한·Storage 정책.
 - `fix-create-member-overload.sql` — 운영에만 있던 `create_member` 5인자 오버로드(`p_profile jsonb` 기본값) 삭제.
   기본값 있는 인자가 붙은 오버로드는 기존 4인자 호출을 모호하게 만든다(SQL `42725`, 관리자 '회원 저장' REST `PGRST203`).
+- `00-precheck-3b.sql` — (3B) 읽기 전용 한 문장. 역할·지사별 회원 수, 테스트 계정 존재, 기본 키, members에 기대는 외래 키·뷰·
+  트리거·정책·함수, 옛 RPC, `members.profile`(개수만). 값이 "멈춤"으로 시작하면 migration.sql을 실행하지 않는다.
+- `verify-3b.sql` — (3B) 지사 2개·역할별 계정(같은 아이디 포함)으로 D45 권한 표의 허용·거부, 아이디 충돌·접미사, 잠금 해제, 삭제·세션
+  삭제, 대량 생성·배정(전부 롤백), 기본 키·옛 RPC 삭제를 확인하고 전부 되돌린다(마지막 `trace` 행).
 - 로컬 검증: `npm.cmd run test:sql` (PGlite 임베디드 Postgres, 운영 접속 없음) — `tests/lms-sql.spec.js`(운영의 오버로드
-  재현 → 42725 → 7단계 → 통과 포함), `tests/teacher-resources-sql.spec.js`.
+  재현 → 42725 → 7단계 → 통과 포함, 3B 이후 3A 사본 `tests/fixtures/migration-3a.sql`로 실행), `tests/lms-3b-sql.spec.js`(3A 사본 →
+  새 migration ×2 업그레이드 경로 + 빈 DB 새 설치 경로 → verify-3b), `tests/teacher-resources-sql.spec.js`.
 
 ## 교사 자료실 확인용 선생님 테스트 계정 (2026-10-29)
 

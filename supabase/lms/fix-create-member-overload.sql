@@ -1,4 +1,7 @@
 -- ============================================================================
+-- ⚠ 3A 시점 전용 — 3B 운영 반영 뒤 실행 금지 (대신 supabase/lms/verify-3b.sql).
+--   3A-era only: after the Phase 3B SQL is live, do NOT run this file
+--   (3B drops every create_member; this one-off fix is already done, D27).
 -- LMS Phase 3A — fix-create-member-overload.sql  (drops ONE live-only function)
 -- ----------------------------------------------------------------------------
 -- The live project has a second public.create_member that is in no file or

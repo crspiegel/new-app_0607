@@ -311,7 +311,52 @@ REST 1, 다른 교재·월·레벨로 가는 UI 없음, 페이지2·홈·월그�
 - [ ] **Step 4:** Vite 종료 → `npm.cmd run qa` 전체 PASS → 스크린샷 8장 → 로컬 커밋.
 - [ ] **Step 5 (멈춤 2):** 보고 — 운영 SQL(Task 3.1 Step 5) 실행 확인 전에는 푸시하지 않는다.
 
-Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼), 3.3 착수 전 pk 교체 시점(스펙 §4.9 위험 1).
+Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼) → fetch 래퍼, 3.3 착수 전 pk 교체 시점(스펙 §4.9 위험 1) → **D41: 3B에
+포함**.
+
+### Task 3.3·3.4 SQL — 3B-1 (지시서 `2026-10-31` D41~D47·D49, 멈춤 1까지)
+
+화면·엑셀 클라이언트는 이 Task가 아니다(멈춤 1 검토 뒤 다음 지시서). 3.5는 하지 않는다. 운영 실행 안내문은 멈춤 3에서.
+
+**Files:**
+
+- Modify: `supabase/migration.sql` — 위쪽 옛 RPC 3개(`create_member`·`update_member`·`set_member_active`) 정의와 revoke 삭제(D42),
+  3A 블록 바로 뒤 "LMS (Phase 3B)" 블록(재실행 안전).
+- Create: `supabase/lms/00-precheck-3b.sql`(한 문장, 읽기 전용), `supabase/lms/verify-3b.sql`(`begin … rollback`, 표 1개),
+  `tests/lms-3b-sql.spec.js`, `tests/fixtures/migration-3a.sql`(커밋 `8176966`의 migration.sql = 운영 상태, **수정 금지**).
+- Modify: `tests/lms-sql.spec.js`·`tests/teacher-resources-sql.spec.js`(테스트 계정 테스트만)의 입력을 3A 사본으로(기대값 그대로,
+  빅웨이브 승인 `2026-11-01`), `package.json` `test:sql`, 옛 운영 스크립트 3개 머리 주석, `supabase/lms/README.md` 한 줄.
+
+**Interfaces (Produces — 3B-2 화면이 쓰는 것).** 모두 `security definer`, anon(LMS 토큰)·authenticated(관리자 JWT) 둘 다 호출.
+호출자 없음·권한 밖·대상이 안 보임 = **예외 `42501`**. 그 밖의 결과는 jsonb `status`:
+
+| RPC                                                                                        | 누가             | 결과                                                                                      |
+| ------------------------------------------------------------------------------------------ | ---------------- | ----------------------------------------------------------------------------------------- |
+| `lms_branch_create(p_name)` · `lms_branch_update(p_branch_id, p_name?, p_active?)`         | 최고관리자       | `ok`(branch_id) · `invalid`(field) · `duplicate` · `not_found`                            |
+| `lms_member_list(p_branch_id?)` → 표(해시 없음, `class_ids`, `locked`, `lock_retry_sec`)   | 관리자·지사·선생 | 행 목록(D45 범위)                                                                         |
+| `lms_member_create(p_login_id, p_password, p_role, p_display_name?, p_branch_id?)`         | 관리자·지사·선생 | `ok`(member_id, login_id) · `invalid`(field) · `duplicate`(suggestion)                    |
+| `lms_member_update(p_member_id, p_login_id?, p_display_name?, p_password?, p_active?)`     | 관리자·지사·선생 | `ok` · `invalid` · `duplicate`(suggestion)                                                |
+| `lms_member_delete(p_member_id)` · `lms_class_delete(p_class_id)`                          | 최고관리자       | `ok` · `not_found`                                                                        |
+| `lms_check_login_ids(p_ids[], p_role?, p_branch_id?)` → 표(input, login_id, status, sug.)  | 관리자·지사·선생 | 행마다 `ok`·`duplicate`·`invalid`(호출자 지사 기준)                                       |
+| `lms_class_create(p_name, p_teacher_id?, p_branch_id?)` · `lms_class_update(…)`            | 관리자·지사·선생 | `ok` · `invalid` · `duplicate`                                                            |
+| `lms_class_add_member` · `lms_class_remove_member(p_class_id, p_member_id)`                | 관리자·지사·선생 | `ok`(added / removed) · `invalid`(field member)                                           |
+| `lms_unlock_member(p_member_id)` · `lms_unlock_key(p_key)`(관리자만)                       | D46              | `ok`(cleared) · `invalid`                                                                 |
+| `lms_bulk_create_members(p_rows, p_auto_suffix)` · `lms_bulk_assign(p_rows, p_branch_id?)` | 관리자·지사·선생 | `ok`·`error`(전체 롤백, 행별 reason)·`too_many`(500 초과)·`invalid`. 비밀번호는 안 돌려줌 |
+
+- [x] **Step 1:** 3A 사본 고정 — 옛 테스트 3개 입력만 사본으로, 옛 스크립트 3개에 "3A 시점 전용" 주석 → `test:sql` 그대로 통과.
+- [x] **Step 2 (테스트 먼저):** `tests/lms-3b-sql.spec.js` — ① precheck-3b(운영 3A 상태, 테스트 계정·`members(id)` FK가 있으면
+      "멈춤") ② 업그레이드 경로(3A 사본 → migration ×2, 카탈로그 무변화, member_id 불변, verify-3b 전부 pass, trace 0)
+      ③ 새 설치 경로(빈 DB → migration ×2 → verify-3b). `verify-3b.sql` = D45 표 칸마다 허용·거부(42501 또는 정의한 상태 값만),
+      D44 충돌·접미사, D46 잠금 해제, D47 삭제·세션 삭제, 대량 전체 롤백, pk·옛 RPC, 내부 함수 권한. → RED 확인(두 경로 모두
+      "기본 키가 아직 id", verify-3b = 같은 아이디 두 지사 `23505`).
+- [x] **Step 3:** "LMS (Phase 3B)" 블록 → GREEN(verify-3b 248/248, `test:sql` 12개). 일부러 망가뜨린 변형 5종으로 검증 행이 회귀를
+      잡는지 확인 — 처음 1종(중복 확인이 넘겨받은 지사를 믿음)을 못 잡아 확인 행 추가 → 5종 모두 실패 행.
+- [x] **Step 4:** rls-security-reviewer 검토 → 1차 **높음 2**(H1 같은 아이디 계정으로 남의 지사 계정 비밀번호 무제한 추측, H2 공통
+      잠금 키 해제로 반복) → 공격 재현 행 먼저(RED) → 계정별 실패 키 `m:<member_id>`·잠긴 계정 건너뛰기·`p_branch_id` 지사만 비교 →
+      재검토 **높음 0**. 새 중간 R1(지사 없는 정상 로그인이 다른 지사 동명 계정 키에 +1)은 PM 결정(추천: 3B-2 클라이언트가 지사 기억).
+      낮음 L1·L3·L6·L7·L9·L11·L12·R4 반영. verify-3b 274/274, `test:sql` 12개, `check` 통과. 스펙 §4.9 표.
+- [ ] **Step 5:** 스펙 §4.9 정오 메모(D41~D47·D49), NOTES, PROJECT_MEMORY → 로컬 커밋 1개 → **멈춤 1** 보고(푸시 금지).
+- [ ] **멈춤 3(나중):** 운영 순서(D49) = 테스트 계정 삭제 확인 → precheck-3b → migration.sql 전체 → verify-3b → 곧바로 푸시.
 
 ---
 

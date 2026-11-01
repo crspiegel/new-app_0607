@@ -438,6 +438,13 @@ const TEST_ACCOUNT_SCRIPT = readFileSync(
   path.resolve("supabase/lms/teacher-test-account.sql"),
   "utf8",
 );
+// The script relies on the 3A-era primary key (`on conflict (id)`), which
+// Phase 3B moves to member_id — so its test runs on the frozen 3A-era copy
+// (commit 8176966 = the live state). 3A 시점 전용 스크립트.
+const MIGRATION_3A = readFileSync(
+  path.resolve("tests/fixtures/migration-3a.sql"),
+  "utf8",
+);
 const TEST_ACCOUNT_SESSIONS =
   "select count(*)::int as n from public.lms_sessions s join public.members m on m.member_id = s.member_id where m.id = 'tps-teacher-test'";
 
@@ -464,7 +471,7 @@ test("teacher resources sql: teacher test account script", async ({}, testInfo) 
   const db = new PGlite({ extensions: { pgcrypto } });
   try {
     await db.exec(SUPABASE_SHIM);
-    await db.exec(MIGRATION);
+    await db.exec(MIGRATION_3A);
 
     // no branch hq → 0 rows and nothing written
     const noHq = await db.exec(`begin;

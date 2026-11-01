@@ -17,13 +17,14 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`8176966`** (pushed `2026-10-31`, master = origin). Older detail → archive, `2026-10-31` block.
+Live = **`8176966`** (`2026-10-31`); local master ahead (`dbfb08a` + 3B-1), unpushed. Older → archive.
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A **live**.
-  **Next = Phase 3B** (3.3 role-based admin menus + unlock → 3.5) — **no code before the PM brief.**
-  3.5 adds: levels CHECKs into `migration.sql` (D37), live-only `members.profile`, old admin RPCs'
-  PUBLIC execute, sequence default grants. Phase 4 (R4) **cancelled** → B.
+  **Phase 3B-1 = SQL only, local commit (`2026-11-01`):** "LMS (Phase 3B)" block — pk `member_id` (D41), old admin
+  RPCs dropped (D42), role-scoped management + bulk RPCs (D44–D47), `00-precheck-3b.sql`, `verify-3b.sql`. **Stop 1
+  = PM review.** Screens/Excel = next brief. Not run live (order D49). 3.5 adds: levels CHECKs into `migration.sql`
+  (D37), live-only `members.profile`, sequence default grants. Phase 4 (R4) **cancelled** → B.
 - **A levels + B teacher resources** — design `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`.
   - A **done**: levels rename live `2026-10-31` (55 rows, all new keys); CHECKs `content_pages_level_key`,
     `page_backgrounds_level_key`; admin saves allowed again.

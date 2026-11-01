@@ -11,9 +11,15 @@ import { SUPABASE_SHIM, lastRows } from "./sql-shim.mjs";
 // default grants), then: old schema + old members → 00-precheck.sql →
 // migration.sql twice (idempotent) → verify-3a.sql (every row must pass)
 // → nothing left behind. Pure Node — one project only.
+//
+// Since Phase 3B (2026-11-01) these tests run on the FROZEN 3A-era copy
+// tests/fixtures/migration-3a.sql (commit 8176966 = the live state): 3B drops
+// the old member RPCs and moves the primary key, so the 3A-era scripts only
+// make sense on the schema they were written for. The current migration.sql
+// is checked by tests/lms-3b-sql.spec.js.
 
 const read = (file) => readFileSync(path.resolve(file), "utf8");
-const MIGRATION = read("supabase/migration.sql");
+const MIGRATION = read("tests/fixtures/migration-3a.sql");
 const PRECHECK = read("supabase/lms/00-precheck.sql");
 const VERIFY = read("supabase/lms/verify-3a.sql");
 const LMS_START = MIGRATION.indexOf(

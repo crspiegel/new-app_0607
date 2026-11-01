@@ -1,4 +1,7 @@
 -- ============================================================================
+-- ⚠ 3A 시점 전용 — 3B 운영 반영 뒤 실행 금지 (대신 supabase/lms/verify-3b.sql).
+--   3A-era only: after the Phase 3B SQL is live, do NOT run this file
+--   (it calls the old create_member / update_member that 3B removes).
 -- LMS Phase 3A — verify-3a.sql  (leaves NO trace: everything is rolled back)
 -- ----------------------------------------------------------------------------
 -- Run AFTER the "LMS (Phase 3A)" block of supabase/migration.sql.

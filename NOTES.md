@@ -247,13 +247,45 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 - `classes` ↔ `class_members` 정책이 서로를 조회하면 재귀 오류 → SECURITY DEFINER 도우미 함수로 끊는다.
 - 로그인 실패를 예외로 돌려주지 않는다(`lms_login`은 항상 jsonb) — 예외는 실패 카운터 증가까지 롤백한다.
 - ⚠ **`members.id`가 아직 pk(전역 유일)라 3.5 전에는 같은 아이디를 두 지사에 만들 수 없다** — 동명이인 테스트는
-  대소문자 변형(`zz-v-twin`/`ZZ-V-TWIN`)으로 한다. 3.3 전에 pk 교체 여부 결정(스펙 §4.9 위험 1).
+  대소문자 변형(`zz-v-twin`/`ZZ-V-TWIN`)으로 한다. 3.3 전에 pk 교체 여부 결정(스펙 §4.9 위험 1). → **3B(D41)에서 교체됨**
+  (아래 "LMS SQL 3B"). 3B 이후에는 완전히 같은 아이디도 두 지사에 있을 수 있다(verify-3b `zz-v3-kim`).
 - ⚠ **구 `verify_member_login`은 anon이 무제한 호출할 수 있는 비밀번호 확인 창구였다** — 새 잠금을 만들어도 이 길로
   우회된다. 3A에서 본사 회원만 + 같은 잠금으로 재정의했다. 새 로그인 경로를 만들 때는 **같은 테이블을 읽는 옛 경로도**
   잠금에 묶을 것.
 - ⚠ pgcrypto `crypt(pw, hash)`는 깨진 bcrypt(`$2a$06$short`)·빈 값·1글자 값이면 `invalid salt` 예외, 아무 2글자 이상
   문자열은 옛 DES 솔트로 받아들여 예외가 없다 → "평문 해시" 테스트 픽스처는 `$2a$06$short`처럼 써야 예외 경로를 탄다.
 - PGlite: `db.query()`는 한 문장만 → 여러 문장은 `db.exec()`(결과 배열, 마지막 행 있는 결과 = SQL Editor 표).
+
+### LMS SQL 3B (Phase 3B-1, 2026-11-01)
+
+- **기본 키 교체(D41)는 `add constraint members_member_id_key primary key using index members_member_id_key`.** 외래 키들이
+  이미 기대는 고유 인덱스를 그대로 키로 바꿔서 외래 키를 안 건드린다. 제약 이름을 인덱스와 **같게** 해야 인덱스 이름이 안
+  바뀐다 — 다르게 주면 인덱스가 새 이름으로 바뀌고, 3A의 `create unique index if not exists members_member_id_key`가 재실행 때
+  같은 인덱스를 하나 더 만든다. 옛 키를 지운 뒤 `id`의 NOT NULL은 명시로 다시 건다(버전마다 동작이 다를 수 있음).
+- ⚠ **3A 시점 스크립트는 3B 이후 실행 금지**(`verify-3a`·`teacher-test-account`·`fix-create-member-overload`). 그 테스트는
+  `tests/fixtures/migration-3a.sql`(커밋 `8176966` 사본, **수정 금지**)로 돈다. 새 migration 검사는 두 경로(3A 사본 → 새 파일 /
+  빈 DB → 새 파일) × 2회 + 카탈로그(함수 본문·권한·제약·인덱스·정책·열) 무변화.
+- **LMS 쓰기는 전부 RPC**(`lms_caller()` = 관리자 JWT 또는 LMS 토큰). 범위 밖·안 보이는 대상 = `42501`(없는 대상과 같은 답 → 다른
+  지사 id 탐색 불가), 그 밖은 jsonb `status`. 검증 SQL은 거부를 `42501` 또는 정의한 상태 값으로만 인정한다.
+- ⚠ **같은 아이디가 여러 지사에 있고 직원이 비밀번호를 정할 수 있으면, 아이디 단위 실패 카운터만으로는 뚫린다**(보안 검토 H1·H2):
+  내 지사에 상대와 같은 아이디의 학생을 만들어 비밀번호를 추측값으로 바꿔 로그인하면 `ok`(내 학생만 맞음) / `choose`(추측이 상대
+  비밀번호와 같음)로 실패 기록 없이 무제한 추측. → `lms_login`은 **계정별 키 `m:<member_id>`**에 "비교했는데 안 맞은 계정"마다 실패를
+  센다(다른 계정이 맞아도). 잠긴 계정은 비교하지 않는다(더미 bcrypt). `p_branch_id`가 있으면 그 지사만 비교. 옛 경로
+  `verify_member_login`도 같은 키. **새 로그인 경로를 만들 때도 계정별 키를 지킬 것.**
+- 잠금 해제(D46) `lms_unlock_member` = 그 회원의 `m:` 키 + 지사 공통 `id:` 키. 공통 키라 다른 지사의 같은 아이디도 풀리지만(수용),
+  각 계정의 `m:` 키는 범위 안 사람(그 지사·담당 선생님·관리자)만 지운다 → 공통 키를 지워도 남의 계정 추측은 계속 막힌다.
+- 같은 아이디 학생이 매번 지사 없이 로그인하면 다른 지사 계정 키에 1회씩 쌓인다 → 클라이언트는 첫 로그인 뒤 기기에 지사를 기억해
+  다음부터 `p_branch_id`로 보내는 게 좋다(3B-2 화면 지시서 때).
+- ⚠ 대량 생성은 행마다 bcrypt → Supabase `statement_timeout`(anon 3초, authenticated 8초)에 걸릴 수 있다. 운영에서 시간 확인 전.
+- SQL 함정: 집계 안 `order by 1`은 열 번호가 아니라 **상수**(`string_agg(x, ',' order by 1 collate "C")` → "collations are not
+  supported by type integer") → 식을 그대로 쓴다. `if a or jsonb_array_length(x) = 0`처럼 **SQL `or`는 단락 평가를 보장하지 않는다**
+  → 배열이 아닐 수 있으면 `if`를 나눈다. plpgsql `returns table (member_id, role, …)`는 같은 이름의 열과 충돌 → `#variable_conflict
+use_column` + 별칭으로 전부 한정.
+- 검증 SQL에서 호출자를 바꾸는 도우미(`pg_temp.v3_as`)는 `reset role` 뒤 `set local role anon|authenticated` — invoker 함수 안의
+  `set local role`은 함수가 끝나도 유지된다. 토큰은 임시 표(`v3_who`)에만 두고 출력하지 않는다.
+- 검증 행이 실제로 회귀를 잡는지 **일부러 망가뜨린 변형**으로 확인했다(교사 범위·지사 목록·대량 롤백·중복 확인 지사·담당 교체 +
+  보안 수정 4종(계정별 실패·잠긴 계정 건너뛰기·잠금 해제 범위·반 지정 학생만) = 9종 → 모두 실패 행 발생). 처음엔 "중복 확인이 넘겨받은
+  지사를 믿음" 변형을 못 잡아 확인 행을 추가했다.
 
 ### LMS 로그인 클라이언트 (Phase 3A / 3.2, 2026-10-24)
 
