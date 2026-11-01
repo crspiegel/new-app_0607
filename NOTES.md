@@ -277,6 +277,11 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 - 같은 아이디 학생이 매번 지사 없이 로그인하면 다른 지사 계정 키에 1회씩 쌓인다 → 클라이언트는 첫 로그인 뒤 기기에 지사를 기억해
   다음부터 `p_branch_id`로 보내는 게 좋다(3B-2 화면 지시서 때).
 - ⚠ 대량 생성은 행마다 bcrypt → Supabase `statement_timeout`(anon 3초, authenticated 8초)에 걸릴 수 있다. 운영에서 시간 확인 전.
+- advisory lock 번호(겹치면 서로 기다린다): 7301 로그인 아이디 키 · 7302 교사 자료실 다운로드 한도 · 7303 계정 아이디 쓰기(생성·변경) ·
+  7304 학생별 반 넣기(D51 검사 경쟁 방지). 새 잠금은 새 번호로.
+- 함수의 인자·결과 열이 바뀌면 `create or replace`가 실패하거나(결과 열) **겹치는 함수가 하나 더 생긴다**(인자) → 옛 모양만
+  골라 drop한다(`lms_branch_create(text)`, `lms_member_list` 가드). `'…'::regprocedure` 문자열 변환은 **계획 단계에서** 풀려서 함수가
+  없으면 `if … and` 앞부분과 상관없이 오류 → `to_regprocedure(…)`(없으면 NULL)를 쓴다.
 - SQL 함정: 집계 안 `order by 1`은 열 번호가 아니라 **상수**(`string_agg(x, ',' order by 1 collate "C")` → "collations are not
   supported by type integer") → 식을 그대로 쓴다. `if a or jsonb_array_length(x) = 0`처럼 **SQL `or`는 단락 평가를 보장하지 않는다**
   → 배열이 아닐 수 있으면 `if`를 나눈다. plpgsql `returns table (member_id, role, …)`는 같은 이름의 열과 충돌 → `#variable_conflict

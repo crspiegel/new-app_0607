@@ -1209,7 +1209,12 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Branches (D45: top admin only — create, rename, deactivate; no delete)
 -- ---------------------------------------------------------------------------
-create or replace function public.lms_branch_create(p_name text)
+-- p_code: the branch's short internal handle (members never type it),
+-- ^[a-z0-9-]{2,20}$ after lower-casing; none given → 'b-' + 12 hex digits.
+-- (The first draft took p_name only; that signature is dropped so PostgREST
+-- never sees two lms_branch_create — the 42725 trap, NOTES.)
+drop function if exists public.lms_branch_create(text);
+create or replace function public.lms_branch_create(p_name text, p_code text default null)
 returns jsonb
 language plpgsql
 volatile
@@ -1218,6 +1223,7 @@ set search_path = public, extensions
 as $$
 declare
   v_name text := nullif(btrim(p_name), '');
+  v_code text := nullif(lower(btrim(p_code)), '');
   v_id   uuid;
 begin
   if not exists (select 1 from public.lms_caller() c where c.is_admin) then
@@ -1226,11 +1232,17 @@ begin
   if v_name is null or length(v_name) > 40 then
     return jsonb_build_object('status', 'invalid', 'field', 'name');
   end if;
+  if v_code is not null and v_code !~ '^[a-z0-9-]{2,20}$' then
+    return jsonb_build_object('status', 'invalid', 'field', 'code');
+  end if;
   if exists (select 1 from public.branches b where lower(b.name) = lower(v_name)) then
     return jsonb_build_object('status', 'duplicate', 'field', 'name');
   end if;
+  if exists (select 1 from public.branches b where b.code = v_code) then
+    return jsonb_build_object('status', 'duplicate', 'field', 'code');
+  end if;
   insert into public.branches (code, name)
-  values ('b-' || encode(extensions.gen_random_bytes(6), 'hex'), v_name)
+  values (coalesce(v_code, 'b-' || encode(extensions.gen_random_bytes(6), 'hex')), v_name)
   returning id into v_id;
   return jsonb_build_object('status', 'ok', 'branch_id', v_id);
 end;
@@ -1287,12 +1299,25 @@ $$;
 -- The members the caller may see, without password_hash (D14 — still no
 -- direct select on members for LMS roles): admin → everyone (or one branch);
 -- branch account → teachers and students of its branch; teacher → students of
--- its branch (class_ids: only the classes it teaches). locked /
+-- its branch (class_ids: only the classes it teaches; in_class: in any class
+-- at all — a teacher may add only students with none, D51). locked /
 -- lock_retry_sec = the login lock on the ID or on the account itself (D46).
+-- (An earlier draft had no in_class column; a changed column list needs a
+-- drop first — only when the old shape is there, so re-runs change nothing.)
+do $$
+begin
+  -- to_regprocedure (NULL when missing): a '…'::regprocedure literal would be
+  -- resolved at plan time and fail on a database without the function.
+  if pg_get_function_result(to_regprocedure('public.lms_member_list(uuid)')) !~ 'in_class' then
+    drop function public.lms_member_list(uuid);
+  end if;
+end;
+$$;
+
 create or replace function public.lms_member_list(p_branch_id uuid default null)
 returns table (
   member_id uuid, login_id text, display_name text, role smallint, branch_id uuid,
-  branch_name text, active boolean, class_ids uuid[], locked boolean,
+  branch_name text, active boolean, class_ids uuid[], in_class boolean, locked boolean,
   lock_retry_sec int, last_login_at timestamptz, created_at timestamptz
 )
 language plpgsql
@@ -1315,6 +1340,7 @@ begin
                   where cm.member_id = m.member_id
                     and (c.role is distinct from 2 or k.teacher_id = c.member_id)
                   order by cm.class_id),
+           exists (select 1 from public.class_members cm where cm.member_id = m.member_id),
            coalesce(l.until > now(), false),
            case when l.until > now()
                 then greatest(ceil(extract(epoch from l.until - now()))::int, 1) end,
@@ -1433,6 +1459,12 @@ declare
   v_name text;
 begin
   if not public.lms_can_manage_member(p_member_id, 'edit') then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  -- D52: only the top admin and the branch account change login IDs; a
+  -- teacher changes a student's name, password and active only.
+  if p_login_id is not null
+     and not exists (select 1 from public.lms_caller() c where c.is_admin or c.role = 1) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
   select * into t from public.members m where m.member_id = p_member_id;
@@ -1642,6 +1674,15 @@ begin
   select m.member_id, m.role, m.branch_id into t
     from public.members m where m.member_id = p_member_id;
   if t.member_id is null or (not c.is_admin and t.branch_id <> c.branch_id) then
+    raise exception 'not allowed' using errcode = '42501';
+  end if;
+  -- One class change per student at a time (security review N1): else two
+  -- adds at the same instant could both pass the D51 check below.
+  perform pg_advisory_xact_lock(7304, hashtext(p_member_id::text));
+  -- D51: a teacher adds only students that have no class yet; moving a
+  -- student out of another class is for the branch account and the admin.
+  if c.role = 2 and exists (select 1 from public.class_members cm
+                             where cm.member_id = p_member_id and cm.class_id <> p_class_id) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
   if t.role <> 3 or t.branch_id <> k.branch_id then
@@ -1910,10 +1951,16 @@ begin
         select m.member_id, m.role into t
           from public.members m
          where m.branch_id = v_branch and public.lms_norm_id(m.id) = v_lid;
+        if t.member_id is not null then
+          perform pg_advisory_xact_lock(7304, hashtext(t.member_id::text));  -- as add_member (N1)
+        end if;
         if t.member_id is null then
           v_reason := 'member';
         elsif t.role <> 3 then
           v_reason := 'not_student';
+        elsif c.role = 2 and exists (select 1 from public.class_members cm
+                                      where cm.member_id = t.member_id and cm.class_id <> v_class) then
+          v_reason := 'in_other_class';  -- D51
         else
           insert into public.class_members (class_id, member_id)
           values (v_class, t.member_id)
@@ -1964,7 +2011,7 @@ revoke execute on function public.lms_members_end_sessions() from public, anon, 
 
 -- The RPCs: the browser calls them as anon (LMS token) or authenticated
 -- (admin JWT); each checks its caller itself.
-revoke execute on function public.lms_branch_create(text) from public;
+revoke execute on function public.lms_branch_create(text, text) from public;
 revoke execute on function public.lms_branch_update(uuid, text, boolean) from public;
 revoke execute on function public.lms_member_list(uuid) from public;
 revoke execute on function public.lms_check_login_ids(text[], int, uuid) from public;
@@ -1980,7 +2027,7 @@ revoke execute on function public.lms_unlock_member(uuid) from public;
 revoke execute on function public.lms_unlock_key(text) from public;
 revoke execute on function public.lms_bulk_create_members(jsonb, boolean) from public;
 revoke execute on function public.lms_bulk_assign(jsonb, uuid) from public;
-grant execute on function public.lms_branch_create(text) to anon, authenticated;
+grant execute on function public.lms_branch_create(text, text) to anon, authenticated;
 grant execute on function public.lms_branch_update(uuid, text, boolean) to anon, authenticated;
 grant execute on function public.lms_member_list(uuid) to anon, authenticated;
 grant execute on function public.lms_check_login_ids(text[], int, uuid) to anon, authenticated;

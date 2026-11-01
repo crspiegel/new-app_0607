@@ -229,9 +229,22 @@ test("lms 3b sql: upgrade — live 3A state → migration ×2 → verify-3b, no 
   const db = new PGlite({ extensions: { pgcrypto } });
   try {
     await liveState(db);
+    // a database that ran the first 3B draft (ccb7dce) has lms_member_list
+    // without in_class — the migration must replace it, not fail
+    await db.exec(`create function public.lms_member_list(p_branch_id uuid default null)
+      returns table (member_id uuid, login_id text) language sql
+      as 'select null::uuid, null::text';`);
     const ids = `select id, member_id from public.members order by id`;
     const before = await rows(db, ids);
     await migrateTwice(db);
+    expect(
+      (
+        await rows(
+          db,
+          `select pg_get_function_result('public.lms_member_list(uuid)'::regprocedure) ~ 'in_class' as ok`,
+        )
+      )[0].ok,
+    ).toBe(true);
     expect(await rows(db, ids)).toEqual(before); // member_id never churns
 
     // precheck after: the new key, the old RPCs gone, profile left alone

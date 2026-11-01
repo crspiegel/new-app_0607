@@ -355,8 +355,16 @@ Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼) → fetch �
       잠금 키 해제로 반복) → 공격 재현 행 먼저(RED) → 계정별 실패 키 `m:<member_id>`·잠긴 계정 건너뛰기·`p_branch_id` 지사만 비교 →
       재검토 **높음 0**. 새 중간 R1(지사 없는 정상 로그인이 다른 지사 동명 계정 키에 +1)은 PM 결정(추천: 3B-2 클라이언트가 지사 기억).
       낮음 L1·L3·L6·L7·L9·L11·L12·R4 반영. verify-3b 274/274, `test:sql` 12개, `check` 통과. 스펙 §4.9 표.
-- [ ] **Step 5:** 스펙 §4.9 정오 메모(D41~D47·D49), NOTES, PROJECT_MEMORY → 로컬 커밋 1개 → **멈춤 1** 보고(푸시 금지).
+- [x] **Step 5:** 스펙 §4.9 정오 메모(D41~D47·D49), NOTES, PROJECT_MEMORY → 로컬 커밋 `ccb7dce` → **멈춤 1** 통과(PM `2026-11-01`).
 - [ ] **멈춤 3(나중):** 운영 순서(D49) = 테스트 계정 삭제 확인 → precheck-3b → migration.sql 전체 → verify-3b → 곧바로 푸시.
+
+### Task 3.3 — 3B-2 (지시서 `2026-11-01` D50~D52, 멈춤 2까지)
+
+- [x] **1단계 SQL 보정(D51·D52):** verify-3b에 행 먼저(RED: 선생님 아이디 변경 통과·다른 반 학생 넣기 통과·`in_class` 없음) →
+      `lms_class_add_member`·`lms_bulk_assign`(D51), `lms_member_update`(D52), `lms_member_list.in_class`(열 바뀜 → 옛 모양일 때만
+      drop하는 가드) + 지사 생성 코드 입력(`lms_branch_create(p_name, p_code)`, 옛 1인자 drop) + 재검토 N1(학생별 잠금 7304) →
+      verify-3b 290/290, 변형 12종 모두 실패 행, `test:sql` 12개. 보안 재검토 높음 0 → 로컬 커밋.
+- [ ] **2단계 화면(3.3):** 아래 세부는 1단계 커밋 뒤 이 자리에 적는다.
 
 ---
 
