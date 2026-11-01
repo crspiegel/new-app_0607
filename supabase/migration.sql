@@ -1653,6 +1653,9 @@ $$;
 -- Put a student into a class the caller manages. A member the caller cannot
 -- see (another branch, or none) → 42501; a teacher, or a student of another
 -- branch than the class → invalid. Already in = ok, added false.
+-- For a teacher this is a move (D53): a student in other classes that are all
+-- the teacher's own leaves them in the same call; one in anyone else's class
+-- → 42501 (D51). The branch account and the admin only add (a second class).
 create or replace function public.lms_class_add_member(p_class_id uuid, p_member_id uuid)
 returns jsonb
 language plpgsql
@@ -1666,10 +1669,13 @@ declare
   t record;
   n int;
 begin
-  if not public.lms_can_manage_class(p_class_id) then
+  -- The caller first, and no caller = no entry (security review of D53): a
+  -- session ended between two statements would leave c empty and skip the
+  -- D51 check below.
+  select * into c from public.lms_caller();
+  if not found or not public.lms_can_manage_class(p_class_id) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
-  select * into c from public.lms_caller();
   select * into k from public.classes x where x.id = p_class_id;
   select m.member_id, m.role, m.branch_id into t
     from public.members m where m.member_id = p_member_id;
@@ -1679,10 +1685,14 @@ begin
   -- One class change per student at a time (security review N1): else two
   -- adds at the same instant could both pass the D51 check below.
   perform pg_advisory_xact_lock(7304, hashtext(p_member_id::text));
-  -- D51: a teacher adds only students that have no class yet; moving a
-  -- student out of another class is for the branch account and the admin.
+  -- D51: a teacher adds only students that have no class yet, or (D53) whose
+  -- other classes are all its own; moving a student out of anyone else's
+  -- class is for the branch account and the admin.
   if c.role = 2 and exists (select 1 from public.class_members cm
-                             where cm.member_id = p_member_id and cm.class_id <> p_class_id) then
+                              join public.classes x on x.id = cm.class_id
+                             where cm.member_id = p_member_id and cm.class_id <> p_class_id
+                               and (x.teacher_id is distinct from c.member_id
+                                    or x.branch_id <> c.branch_id)) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
   if t.role <> 3 or t.branch_id <> k.branch_id then
@@ -1692,6 +1702,15 @@ begin
   values (p_class_id, p_member_id)
   on conflict do nothing;
   get diagnostics n = row_count;
+  if c.role = 2 then
+    -- D53: out of its other classes — again only the teacher's own, so a
+    -- class handed to another teacher meanwhile keeps the student.
+    delete from public.class_members cm
+     using public.classes x
+     where x.id = cm.class_id
+       and cm.member_id = p_member_id and cm.class_id <> p_class_id
+       and x.teacher_id = c.member_id and x.branch_id = c.branch_id;
+  end if;
   return jsonb_build_object('status', 'ok', 'added', n > 0);
 end;
 $$;

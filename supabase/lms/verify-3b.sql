@@ -267,6 +267,13 @@ declare
   k_b       uuid;
   k_a5      uuid;
   k_a6      uuid;
+  k_a7      uuid;
+  k_a8      uuid;
+  k_bx      uuid;
+  -- the classes a member is in, as the owner sees them (D53 rows)
+  q_classes text := $q$select coalesce(string_agg(k.name, ',' order by k.name), '-')
+                        from public.class_members cm join public.classes k on k.id = cm.class_id
+                       where cm.member_id = %L$q$;
   a         text;
   e         text;
   rpcs      text[] := array[
@@ -801,6 +808,76 @@ begin
     ['assign', 'tb', 'its own (inactive) class', 'j',
      format('public.lms_class_add_member(%L, %L)', k_b, m_sb), 'ok added=false']
   ]);
+
+  -- --------------------------------------------- D53: a teacher moves a student
+  -- between two of its own classes in one call (add = move). Any other class
+  -- (another teacher's) still blocks it (D51); the branch account is unchanged.
+  insert into public.classes (branch_id, name, teacher_id) values (br_a, 'V3반A7', m_ta1) returning id into k_a7;
+  res := pg_temp.v3_run(res, array[
+    ['assign', 'ta1', 'D53: its student of A1 into its class A7 = a move in one call', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a7, m_sa1), 'ok added=true'],
+    ['assign', 'owner', '… out of A1, only in A7', 'q', format(q_classes, m_sa1), 'V3반A7'],
+    ['assign', 'ta1', 'D53: and back to A1', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a1, m_sa1), 'ok added=true'],
+    ['assign', 'owner', '… only in A1', 'q', format(q_classes, m_sa1), 'V3반A1'],
+    ['assign', 'ta2', 'D53: a student of another teacher''s class into its class (D51 stays)', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a2, m_sa1), 'denied 42501'],
+    ['assign', 'owner', '… not moved', 'q', format(q_classes, m_sa1), 'V3반A1'],
+    ['assign', 'ba', 'D53 leaves the branch account alone: a second class, not a move', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a2, m_kima), 'ok added=true'],
+    ['assign', 'owner', '… in A1 and A2', 'q', format(q_classes, m_kima), 'V3반A1,V3반A2'],
+    ['assign', 'ta1', 'D53: that student into A7 — it is also in another teacher''s class', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a7, m_kima), 'denied 42501'],
+    ['assign', 'owner', '… nothing moved', 'q', format(q_classes, m_kima), 'V3반A1,V3반A2'],
+    ['assign', 'ba', '… out of A2 again', 'j',
+     format('public.lms_class_remove_member(%L, %L)', k_a2, m_kima), 'ok removed=true'],
+    ['assign', 'ba', 'a student of A1 also put in A7 (both are teacher A1''s)', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a7, m_lk), 'ok added=true'],
+    ['assign', 'ta1', 'D53: that student into A7 again — already there, out of A1', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a7, m_lk), 'ok added=false'],
+    ['assign', 'owner', '… only in A7', 'q', format(q_classes, m_lk), 'V3반A7'],
+    ['assign', 'ta1', 'D53: back to A1', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a1, m_lk), 'ok added=true'],
+    ['assign', 'owner', '… only in A1', 'q', format(q_classes, m_lk), 'V3반A1'],
+    ['assign', 'ta1', 'D53: bulk assign is unchanged (3.4) — a student of A1 into A7', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)', '[{"class":"V3반A7","login_id":"zz-v3-sa1"}]'),
+     'error assigned=0 errors=1 rows=1:error:in_other_class']
+  ]);
+  -- D53 edges (security review of D53): a class with no teacher is not the
+  -- teacher's own; the admin only adds; three own classes; an "own" class in
+  -- another branch (bad data) still blocks; the caller is read first.
+  insert into public.classes (branch_id, name, teacher_id) values (br_a, 'V3반A8', m_ta1) returning id into k_a8;
+  res := pg_temp.v3_run(res, array[
+    ['assign', 'ba', 'a student of A1 also put in A5 (no teacher)', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a5, m_sa1), 'ok added=true'],
+    ['assign', 'ta1', 'D53: that student into A7 — A5 is nobody''s, not its own', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a7, m_sa1), 'denied 42501'],
+    ['assign', 'owner', '… still in A1 and A5', 'q', format(q_classes, m_sa1), 'V3반A1,V3반A5'],
+    ['assign', 'ba', '… out of A5 again', 'j',
+     format('public.lms_class_remove_member(%L, %L)', k_a5, m_sa1), 'ok removed=true'],
+    ['assign', 'admin', 'D53 leaves the admin alone too: A7 as a second class', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a7, m_sa1), 'ok added=true'],
+    ['assign', 'owner', '… in A1 and A7', 'q', format(q_classes, m_sa1), 'V3반A1,V3반A7'],
+    ['assign', 'ta1', 'D53: from two of its classes (A1, A7) into a third (A8)', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a8, m_sa1), 'ok added=true'],
+    ['assign', 'owner', '… only in A8', 'q', format(q_classes, m_sa1), 'V3반A8'],
+    ['assign', 'ta1', 'D53: back to A1', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a1, m_sa1), 'ok added=true'],
+    ['assign', 'owner', '… only in A1', 'q', format(q_classes, m_sa1), 'V3반A1'],
+    ['assign', 'owner', 'D53: the caller is read (and checked) before anything else', 'q',
+     $q$select (pg_get_functiondef('public.lms_class_add_member(uuid,uuid)'::regprocedure)
+                ~ 'from public\.lms_caller\(\);\s+if not found or not public\.lms_can_manage_class')::text$q$,
+     'true']
+  ]);
+  -- bad data on purpose: a class of branch B whose teacher is A1's ta1, with sa1 in it
+  insert into public.classes (branch_id, name, teacher_id) values (br_b, 'V3반BX', m_ta1) returning id into k_bx;
+  insert into public.class_members (class_id, member_id) values (k_bx, m_sa1);
+  res := pg_temp.v3_run(res, array[
+    ['assign', 'ta1', 'D53: a class of another branch never counts as its own', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a7, m_sa1), 'denied 42501'],
+    ['assign', 'owner', '… nothing moved', 'q', format(q_classes, m_sa1), 'V3반A1,V3반BX']
+  ]);
+  delete from public.classes k where k.id in (k_a7, k_a8, k_bx);  -- later cases see the classes as before
 
   -- --------------------------------------------- unlock (D46)
   insert into public.login_attempts (key, fails, window_start, locked_until, updated_at) values

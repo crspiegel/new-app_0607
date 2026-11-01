@@ -211,6 +211,10 @@ async function verify3b(db) {
   expect(result.length).toBeGreaterThan(150);
   const areas = new Set(result.map((r) => r.area));
   for (const area of AREAS) expect(areas.has(area), area).toBe(true);
+  // D53 (a teacher moves a student between its own classes) stays covered
+  expect(
+    result.filter((r) => String(r.check_case).includes("D53")).length,
+  ).toBeGreaterThanOrEqual(8);
   expect(result[result.length - 1]).toMatchObject({
     area: "trace",
     actual: "branches=0 members=0 classes=0 attempts=0",
