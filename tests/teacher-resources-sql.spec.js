@@ -196,7 +196,10 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
     expect(await list({}, "beginner")).toEqual([]);
     expect(await list({ token: student }, "beginner")).toEqual([]);
     expect(await list(other, "beginner")).toEqual([]);
+    // D63: monthly (월간교육안) first, then plan (연간교육안 — the old
+    // 월간.연간교육안 slot key), award, test (level-2/3)
     const beginner = [
+      { slot: "monthly", file_name: null, size: null },
       { slot: "plan", file_name: "연간교육안.pdf", size: 1234 },
       { slot: "award", file_name: null, size: null },
     ];
@@ -204,13 +207,14 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
     expect(await list({ token: branch }, "beginner")).toEqual(beginner);
     expect(await list(admin, "beginner")).toEqual(beginner);
     expect(await list({ token: teacher }, "level-2")).toEqual([
+      { slot: "monthly", file_name: null, size: null },
       { slot: "plan", file_name: null, size: null },
       { slot: "award", file_name: null, size: null },
       { slot: "test", file_name: "테스트 문제.xlsx", size: 2048 },
     ]);
     expect(
       (await list({ token: teacher }, "level-1")).map((r) => r.slot),
-    ).toEqual(["plan", "award"]);
+    ).toEqual(["monthly", "plan", "award"]);
     expect(await list({ token: teacher }, "Level 1")).toEqual([]);
 
     // --- (나): no browser-side path to a file any more — the old
@@ -414,6 +418,7 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
       ),
     ).toEqual([{ old: "beginner/plan/1730000000001.pdf" }]);
     expect(await list(admin, "beginner")).toEqual([
+      { slot: "monthly", file_name: null, size: null },
       { slot: "plan", file_name: null, size: null },
       { slot: "award", file_name: null, size: null },
     ]);
@@ -426,6 +431,233 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
     ).toEqual([{ old: null }]);
   } finally {
     await db.close();
+  }
+});
+
+// D63 (2026-11-02): the old '월간.연간교육안' slot became two — monthly
+// (월간교육안, new) and plan (연간교육안: the same key, so the live rows and
+// Storage paths <level>/plan/… stay where they are). 14 slots in all.
+const LEVEL_KEYS = ["beginner", "level-1", "level-2", "level-3"];
+const SLOTS_D63 = {
+  beginner: ["monthly", "plan", "award"],
+  "level-1": ["monthly", "plan", "award"],
+  "level-2": ["monthly", "plan", "award", "test"],
+  "level-3": ["monthly", "plan", "award", "test"],
+};
+
+async function people(db) {
+  await db.exec(`
+    insert into auth.users (id, email) values ('${ADMIN_UID}', 'admin@example.test');
+    insert into public.admins (user_id) values ('${ADMIN_UID}');
+    insert into public.members (id, password_hash, grade, role) values
+      ('t-teacher', extensions.crypt('pw-2', extensions.gen_salt('bf')), 2, 2);`);
+  const teacher = (
+    await as(
+      db,
+      {},
+      `select public.lms_login('t-teacher', 'pw-2') ->> 'token' as token`,
+    )
+  )[0].token;
+  return { admin: { role: "authenticated", uid: ADMIN_UID }, teacher };
+}
+
+test("teacher resources sql: D63 — monthly (월간교육안) beside plan (연간교육안) on every level", async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  test.setTimeout(120000);
+  const db = new PGlite({ extensions: { pgcrypto } });
+  try {
+    await db.exec(SUPABASE_SHIM);
+    await db.exec(MIGRATION);
+    const { admin, teacher } = await people(db);
+    const upload = (name) =>
+      as(
+        db,
+        admin,
+        `insert into storage.objects (bucket_id, name) values ('${BUCKET}', '${name}')`,
+      );
+    const set = (level, slot, p, name) =>
+      as(
+        db,
+        admin,
+        `select public.teacher_resource_set('${level}', '${slot}', '${p}', '${name}', 4321) as old`,
+      );
+
+    // Storage: the admin may upload a monthly file on all four levels; still
+    // no test file below level-2 and no slot outside the four
+    for (const [i, level] of LEVEL_KEYS.entries()) {
+      const p = `${level}/monthly/173000000001${i}.pdf`;
+      await upload(p);
+      expect(await set(level, "monthly", p, `${level} 월간교육안.pdf`)).toEqual(
+        [{ old: null }],
+      );
+    }
+    await upload("beginner/plan/1730000000020.pdf");
+    expect(
+      await set(
+        "beginner",
+        "plan",
+        "beginner/plan/1730000000020.pdf",
+        "연간교육안.pdf",
+      ),
+    ).toEqual([{ old: null }]);
+    for (const bad of [
+      "beginner/annual/1730000000021.pdf",
+      "beginner/Monthly/1730000000022.pdf",
+      "level-1/test/1730000000023.pdf",
+    ]) {
+      await expect(upload(bad)).rejects.toThrow(/row-level security/);
+    }
+    // the table refuses any other slot name even for an object that exists
+    await db.exec(
+      `insert into storage.objects (bucket_id, name) values ('${BUCKET}', 'beginner/annual/1730000000024.pdf')`,
+    );
+    await expect(
+      set("beginner", "annual", "beginner/annual/1730000000024.pdf", "x.pdf"),
+    ).rejects.toThrow(/teacher_resources_slot_ok/);
+
+    // list: fixed order, 3 / 3 / 4 / 4 = 14 slots
+    let total = 0;
+    for (const level of LEVEL_KEYS) {
+      const rows = await as(
+        db,
+        { token: teacher },
+        `select slot, file_name from public.teacher_resources_list('${level}')`,
+      );
+      expect(
+        rows.map((r) => r.slot),
+        level,
+      ).toEqual(SLOTS_D63[level]);
+      expect(rows[0].file_name).toBe(`${level} 월간교육안.pdf`);
+      total += rows.length;
+    }
+    expect(total).toBe(14);
+
+    // download: monthly and plan are separate files
+    const issue = async (slot) =>
+      (
+        await as(
+          db,
+          { role: "service_role", token: teacher },
+          `select public.teacher_resource_issue('beginner', '${slot}', null) as r`,
+        )
+      )[0].r;
+    expect(await issue("monthly")).toEqual({
+      status: "ok",
+      path: "beginner/monthly/1730000000010.pdf",
+      name: "beginner 월간교육안.pdf",
+    });
+    expect(await issue("plan")).toEqual({
+      status: "ok",
+      path: "beginner/plan/1730000000020.pdf",
+      name: "연간교육안.pdf",
+    });
+
+    // clearing one leaves the other
+    expect(
+      await as(
+        db,
+        admin,
+        "select public.teacher_resource_clear('beginner', 'monthly') as old",
+      ),
+    ).toEqual([{ old: "beginner/monthly/1730000000010.pdf" }]);
+    expect((await issue("monthly")).status).toBe("empty");
+    expect((await issue("plan")).status).toBe("ok");
+  } finally {
+    await db.close();
+  }
+});
+
+// The live database today (commit 4a9b23d = tests/fixtures/migration-3b.sql,
+// 수정 금지) with a file in the old 월간.연간교육안 slot → migration.sql again:
+// the file is the 연간교육안 (plan) file, monthly is empty, and every teacher-
+// resources definition equals a fresh install of the new migration.sql.
+const MIGRATION_3B = readFileSync(
+  path.resolve("tests/fixtures/migration-3b.sql"),
+  "utf8",
+);
+const TR_DEFINITIONS = `
+  select 'con ' || conname || ' ' || pg_get_constraintdef(oid) as x
+    from pg_constraint where conrelid = 'public.teacher_resources'::regclass
+  union all
+  select 'fn ' || p.oid::regprocedure::text || ' ' || md5(p.prosrc) || ' '
+         || coalesce(array_to_string(p.proacl, ','), '-') || ' '
+         || coalesce(array_to_string(p.proconfig, ','), '-') || ' ' || p.prosecdef
+    from pg_proc p
+   where p.pronamespace = 'public'::regnamespace and p.proname like 'teacher_resource%'
+  union all
+  select 'pol ' || policyname || ' ' || cmd || ' ' || roles::text || ' '
+         || coalesce(qual, '') || ' ' || coalesce(with_check, '')
+    from pg_policies where schemaname = 'storage' and policyname like 'teacher_resources%'
+  union all
+  select 'bucket ' || id || ' ' || public || ' ' || file_size_limit || ' '
+         || array_to_string(allowed_mime_types, ',')
+    from storage.buckets where id = 'teacher-resources'
+  order by 1`;
+
+test("teacher resources sql: D63 upgrade — live (4a9b23d) + migration.sql = fresh install", async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  test.setTimeout(180000);
+  const live = new PGlite({ extensions: { pgcrypto } });
+  const fresh = new PGlite({ extensions: { pgcrypto } });
+  try {
+    await live.exec(SUPABASE_SHIM);
+    await live.exec(MIGRATION_3B);
+    const { admin, teacher } = await people(live);
+    // a file TPS put in the old 월간.연간교육안 slot
+    await as(
+      live,
+      admin,
+      `insert into storage.objects (bucket_id, name) values ('${BUCKET}', 'level-2/plan/1730000000030.pdf')`,
+    );
+    await as(
+      live,
+      admin,
+      `select public.teacher_resource_set('level-2', 'plan', 'level-2/plan/1730000000030.pdf', '2026 월간.연간교육안.pdf', 5000)`,
+    );
+    const before = await live.query(
+      "select level, slot, storage_path, file_name from public.teacher_resources",
+    );
+    // the live state still has the old three slots
+    expect(
+      (
+        await as(
+          live,
+          { token: teacher },
+          "select slot from public.teacher_resources_list('level-2')",
+        )
+      ).map((r) => r.slot),
+    ).toEqual(["plan", "award", "test"]);
+
+    await live.exec(MIGRATION);
+    await live.exec(MIGRATION); // re-run safe
+    expect(
+      (
+        await live.query(
+          "select level, slot, storage_path, file_name from public.teacher_resources",
+        )
+      ).rows,
+    ).toEqual(before.rows); // nothing moved
+    expect(
+      await as(
+        live,
+        { token: teacher },
+        "select slot, file_name from public.teacher_resources_list('level-2')",
+      ),
+    ).toEqual([
+      { slot: "monthly", file_name: null },
+      { slot: "plan", file_name: "2026 월간.연간교육안.pdf" }, // now the 연간교육안 card
+      { slot: "award", file_name: null },
+      { slot: "test", file_name: null },
+    ]);
+
+    await fresh.exec(SUPABASE_SHIM);
+    await fresh.exec(MIGRATION);
+    expect((await live.query(TR_DEFINITIONS)).rows).toEqual(
+      (await fresh.query(TR_DEFINITIONS)).rows,
+    );
+  } finally {
+    await live.close();
+    await fresh.close();
   }
 });
 

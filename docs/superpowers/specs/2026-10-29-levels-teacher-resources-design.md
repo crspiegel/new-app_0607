@@ -20,6 +20,15 @@
 | d   | 운영 선생님 테스트 계정(role 2, 지사 hq) 생성 SQL을 `supabase/lms/` 아래에(사용자 실행, 3A 운영 반영 뒤)                                                                                                                                                                                                                             |
 | e   | "넘으면 바로 402" 판단의 출처를 보고에 적는다                                                                                                                                                                                                                                                                                        |
 
+## D63 — 칸 나누기 (2026-11-02, 아래 본문의 칸 설명보다 우선)
+
+'월간.연간교육안' 칸 1개 → **'월간교육안'(새 키 `monthly`) · '연간교육안'(옛 키 `plan` 그대로)** 2개. 순서 월간 → 연간 →
+상장 → 테스트, 칸 수 Beginner·Level 1 = 3, Level 2·3 = 4(합 14). 옛 키를 연간교육안으로 쓰므로 이미 올린 행·Storage
+경로(`<level>/plan/…`)는 옮기지 않는다. 바뀐 곳: 칸 규칙 CHECK(`teacher_resources_slot_ok`, 기존 표는 drop 후 add) ·
+`teacher_resources_list` 칸 순서 · Storage 업로드 정책 경로 · Edge Function `SLOT_RE` · 화면 `RES_SLOTS`. `issue`·`set`·`clear`는
+칸 이름을 하드코딩하지 않아 그대로. 운영 순서: Edge Function 재배포 → 운영 SQL → 푸시(각 단계 뒤 옛 화면이 깨지지 않음 — 옛
+화면은 모르는 `monthly` 행을 무시, 테스트로 확인).
+
 ## 멈춤 4 — PM 결정 (2026-10-29): (나) Edge Function + 하루 30회 (아래 "멈춤 3"보다 우선)
 
 | 결정 | 내용                                                                                                                                                                                     |

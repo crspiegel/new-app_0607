@@ -429,6 +429,11 @@ Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼) → fetch �
       돌려준다 → SQL 변경 없음.
 - [x] **화면(teacher-resources.js · styles.css):** 자료실 = 카드 한 줄에 하나(아이콘 · 제목 + 형식·크기·날짜 · 내려받기 / 준비 중 안내),
       휴대폰은 버튼이 카드 아래 전체 폭. 월 페이지 버튼 = 레벨 색 채움. 다운로드 흐름 무변경. 테스트 RED 7 → 통과(선택자 갱신 4 + 새 3).
+- [x] **D63 칸 나누기(지시서 `2026-11-02`, 멈춤 R까지):** '월간.연간교육안' → `monthly` 월간교육안(새) + `plan` 연간교육안(옛 키 그대로 —
+      행·Storage 경로 이동 없음), 14칸. SQL(칸 규칙 drop+add · 목록 순서 · Storage 경로) + Edge `SLOT_RE` — 테스트 먼저(RED 4 → GREEN),
+      운영(4a9b23d) 사본 `tests/fixtures/migration-3b.sql` → migration.sql = 새 설치 정의. 운영용 DO 블록 3개는 로컬 전용(반영본 = migration.sql
+      에서 잘라 만들고 전체 카탈로그 비교). 순서 안전성: 옛 화면 사본 `tests/fixtures/teacher-resources-4a9b23d.js`로 새 목록 무시 확인.
+      화면(`RES_SLOTS`) = 멈춤 R, 디자인 승인 뒤 커밋.
 - [x] **멈춤 TR → 빅웨이브 디자인 승인(`2026-11-02`):** Beginner 흰 글자·"엑셀"/"XLS"·RES_SLOTS 제목 그대로, 자료실 새 기준 이미지
       추가 안 함(구조 테스트로 확인). 화면 로컬 커밋 → 3B 운영 반영 푸시에 함께(D60).
 

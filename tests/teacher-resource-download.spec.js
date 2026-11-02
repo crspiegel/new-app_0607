@@ -153,6 +153,36 @@ test("download fn: bad method / body / nobody signed in → refused, no DB call"
   expect(calls).toEqual([]);
 });
 
+// D63 (2026-11-02): '월간.연간교육안' became two slots — monthly (월간교육안,
+// new) and plan (연간교육안, the old slot key, so live files stay put).
+test("download fn: D63 — monthly is a slot; plan / award / test still are; nothing else", async () => {
+  const { handler, calls } = fakeSupabase();
+  for (const slot of ["monthly", "plan", "award", "test"]) {
+    const res = await handler(
+      post({ level: "level-2", slot }, { "x-lms-token": TOKEN }),
+    );
+    expect(res.status, slot).toBe(200);
+  }
+  const asked = calls
+    .filter((c) => c.url.endsWith("/rest/v1/rpc/teacher_resource_issue"))
+    .map((c) => c.body.p_slot);
+  expect(asked).toEqual(["monthly", "plan", "award", "test"]);
+  const before = calls.length;
+  for (const slot of [
+    "annual",
+    "Monthly",
+    "monthly2",
+    "월간",
+    "plan|monthly",
+  ]) {
+    const res = await handler(
+      post({ level: "level-2", slot }, { "x-lms-token": TOKEN }),
+    );
+    expect(res.status, slot).toBe(400);
+  }
+  expect(calls.length).toBe(before); // refused before any Supabase call
+});
+
 test("download fn: an LMS teacher gets a 15-second URL named once-encoded", async () => {
   const { handler, calls } = fakeSupabase();
   const res = await handler(

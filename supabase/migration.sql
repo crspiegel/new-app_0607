@@ -2126,7 +2126,10 @@ notify pgrst, 'reload schema';
 -- ----------------------------------------------------------------------------
 -- ADD-ONLY and safe to re-run. Needs the "LMS (Phase 3A)" block above
 -- (lms_member). Level keys are the NEW keys: beginner · level-1..3.
--- Slots: plan (월간.연간교육안) · award (상장) · test (테스트, level-2/3 only).
+-- Slots, in card order (D63, 2026-11-02): monthly (월간교육안) · plan
+-- (연간교육안 — the old '월간.연간교육안' slot key, kept so live files and
+-- Storage paths <level>/plan/… stay where they are) · award (상장) · test
+-- (테스트, level-2/3 only). 3 + 3 + 4 + 4 = 14 slots.
 -- Admins upload / replace / delete. Admins and LMS role 1 (branch) / 2
 -- (teacher) list the slots and download through the Edge Function
 -- supabase/functions/teacher-resource-download (PM decision 2026-10-29, (나)):
@@ -2162,11 +2165,21 @@ create table if not exists public.teacher_resources (
   updated_at   timestamptz not null default now(),
   primary key (level, slot),
   constraint teacher_resources_slot_ok check (
-    (level in ('beginner', 'level-1') and slot in ('plan', 'award'))
-    or (level in ('level-2', 'level-3') and slot in ('plan', 'award', 'test'))),
+    (level in ('beginner', 'level-1') and slot in ('monthly', 'plan', 'award'))
+    or (level in ('level-2', 'level-3') and slot in ('monthly', 'plan', 'award', 'test'))),
   constraint teacher_resources_path_ok check (
     storage_path ~ ('^' || level || '/' || slot || '/[0-9]{13}\.(pdf|xlsx|xls)$'))
 );
+
+-- D63: the same slot rule on a table made before monthly existed (`create
+-- table if not exists` leaves an existing table as it is). Drop + add in ONE
+-- statement (atomic with any tool — security review L1) = the same definition
+-- on every run; existing rows (plan / award / test) pass.
+alter table public.teacher_resources
+  drop constraint if exists teacher_resources_slot_ok,
+  add constraint teacher_resources_slot_ok check (
+    (level in ('beginner', 'level-1') and slot in ('monthly', 'plan', 'award'))
+    or (level in ('level-2', 'level-3') and slot in ('monthly', 'plan', 'award', 'test')));
 
 -- RLS on with NO policies: anon / authenticated get nothing directly.
 alter table public.teacher_resources enable row level security;
@@ -2184,8 +2197,10 @@ as $$
       or exists (select 1 from public.lms_member() m where m.role in (1, 2));
 $$;
 
--- The level's slots in button order with the current file (NULL file = an
+-- The level's slots in card order with the current file (NULL file = an
 -- empty slot, shown as "준비 중"). No rows for anyone else or a bad level.
+-- monthly = 월간교육안 (D63), plan = 연간교육안 (the old 월간.연간교육안 key).
+-- A page that does not know monthly (deployed before D63) ignores that row.
 create or replace function public.teacher_resources_list(p_level text)
 returns table (slot text, file_name text, file_size bigint, updated_at timestamptz)
 language sql
@@ -2194,7 +2209,7 @@ security definer
 set search_path = public, extensions
 as $$
   select s.slot, r.file_name, r.file_size, r.updated_at
-    from (values ('plan', 1), ('award', 2), ('test', 3)) as s (slot, ord)
+    from (values ('monthly', 1), ('plan', 2), ('award', 3), ('test', 4)) as s (slot, ord)
     left join public.teacher_resources r
       on r.level = p_level and r.slot = s.slot
    where public.teacher_resources_allowed()
@@ -2342,7 +2357,8 @@ begin
 end;
 $$;
 
--- Storage: admins write (only well-formed ASCII paths) and read.
+-- Storage: admins write (only well-formed ASCII paths) and read. Slots as
+-- above (monthly added by D63).
 drop policy if exists teacher_resources_admin_all on storage.objects;
 create policy teacher_resources_admin_all on storage.objects
   for all to authenticated
@@ -2350,7 +2366,7 @@ create policy teacher_resources_admin_all on storage.objects
   with check (
     bucket_id = 'teacher-resources'
     and public.is_admin()
-    and name ~ '^(beginner|level-1|level-2|level-3)/(plan|award|test)/[0-9]{13}\.(pdf|xlsx|xls)$'
+    and name ~ '^(beginner|level-1|level-2|level-3)/(monthly|plan|award|test)/[0-9]{13}\.(pdf|xlsx|xls)$'
     and (name !~ '/test/' or name ~ '^level-[23]/'));
 
 -- No Storage read policy for LMS sessions (anon): the Edge Function signs

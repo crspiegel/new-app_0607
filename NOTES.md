@@ -1157,6 +1157,13 @@ level, book, slot)`)에서만.
   없으면 그 부분만 뺀다. 날짜 = 보는 사람 시간(한국)의 MM/DD.
 - ⚠ "월간.연간교육안"이 "월간. / 연간교육안"으로 끊기던 원인: `keep-all`이어도 **마침표 뒤는 줄바꿈 자리**다(한글 앞) → 제목을
   띄어쓰기로 나눠 단어마다 `white-space: nowrap`(`.res-word`). 띄어쓰기에서만 줄이 바뀐다.
+- (D63, `2026-11-02`) 칸 = `monthly` 월간교육안(새) · `plan` **연간교육안(옛 월간.연간교육안 키 그대로 — 행·Storage 경로를
+  옮기지 않으려고)** · `award` · `test`. 칸 목록이 있는 곳은 다섯 군데: CHECK `teacher_resources_slot_ok`, `teacher_resources_list`의
+  values, Storage 업로드 정책 경로 정규식, Edge Function `SLOT_RE`, 화면 `RES_SLOTS` — 칸을 바꿀 때 모두 함께. ⚠ `create table if
+not exists` 안의 CHECK는 이미 있는 표를 안 바꾼다 → 그 아래 `drop constraint if exists` + `add constraint`.
+- 옛 화면은 목록에 모르는 칸이 와도 **무시**한다(`resourceSlots`를 돌며 `rows.find`) → 칸 추가는 "SQL 먼저, 화면 나중"이 안전.
+  `tests/fixtures/teacher-resources-4a9b23d.js`(D63 전 운영 화면, 수정 금지)로 확인. 운영 SQL Editor용 반영본은 DO 블록 하나로
+  migration.sql에서 잘라 만든다(로컬 `docs/worker-briefs/2026-11-02-d63-sql-check.mjs` — 전체 카탈로그 비교).
 - 월 페이지 '교사 자료실' 버튼은 레벨 색 채움(`#teacherResBtn`), 자료실 페이지 '월 선택'은 테두리 그대로(같은 `.teacher-res-button`).
   카드 회색 글자는 `#666`(사이트 `--muted-ink` #777은 흰 바탕 14px에서 4.5:1 미달).
 

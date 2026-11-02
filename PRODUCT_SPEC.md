@@ -250,8 +250,11 @@ Menu button requirements:
 - Each level's month page has a '교사 자료실' button at the right end of the title row (under the
   title on phones). It opens that level's resource page `#resources/<key>`: the same page with the
   March-December buttons replaced by download buttons, same level colors.
-- Buttons (fixed names): Beginner, Level 1 → 월간.연간교육안 · 상장; Level 2, Level 3 → 월간.연간교육안 ·
-  상장 · 테스트 (10 slots). A slot without a file is a grey, disabled "준비 중" button.
+- Cards (fixed names, D63 2026-11-02): Beginner, Level 1 → 월간교육안 · 연간교육안 · 상장; Level 2, Level 3
+  → 월간교육안 · 연간교육안 · 상장 · 테스트 (14 slots). Slot keys: `monthly` (월간교육안, new) · `plan`
+  (연간교육안 — the old 월간.연간교육안 key, so earlier files are the 연간교육안 files) · `award` · `test`.
+  One card per row (D58): file icon · title + "PDF · 1.2MB · 11/02 업데이트" · [내려받기]; a slot without
+  a file says "아직 올라온 자료가 없어요" (not a button).
 - One file per slot (PDF / xlsx / xls, 10 MB max) in the private Storage bucket `teacher-resources`.
   A download is a 15-second signed URL (expiry fixed on the server) issued by the Edge Function
   `teacher-resource-download` and opened in the same tab (the file is saved, the page stays).

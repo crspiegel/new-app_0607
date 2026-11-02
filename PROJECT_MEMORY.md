@@ -17,23 +17,20 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`8176966`** (`2026-10-31`); local master ahead, unpushed. Older: archive.
+Live = **`4a9b23d`** (`2026-11-02`, 3B SQL run first, then pushed — D49/D62). Older: archive.
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
-  plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A **live**.
-  **Phase 3B SQL = 5 local commits (`ccb7dce` … `bd75abc`):** "LMS (Phase 3B)"
-  block — pk `member_id`, old admin RPCs dropped, scoped RPCs (D41–D56); `00-precheck-3b.sql`, `verify-3b.sql` (347).
-  **3.3 screens** (3B-2b admin frame; `lms-admin.js`) and **3.4 Excel** (`lms-bulk.js`, SheetJS in `vendor/`) = design
-  approved, **local commits**. Not live — next = D49 (live SQL → push at once). 3.5: levels
-  CHECKs into `migration.sql` (D37), `members.profile`, sequence grants. Phase 4 (R4) **cancelled** → B.
+  plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"
+  block — pk `member_id`, old admin RPCs dropped, scoped RPCs (D41–D56); `00-precheck-3b.sql`, `verify-3b.sql` (347);
+  3.3 admin screens (`lms-admin.js`), 3.4 Excel (`lms-bulk.js`, SheetJS in `vendor/`). Live account check done.
+  3.5 next: levels CHECKs into `migration.sql` (D37), `members.profile`, sequence grants. Phase 4 (R4) **cancelled** → B.
 - **A levels + B teacher resources** — design `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`.
   - A **done**: levels rename live `2026-10-31` (55 rows, all new keys); CHECKs `content_pages_level_key`,
     `page_backgrounds_level_key`; admin saves allowed again.
   - B live: '교사 자료실' (admin + LMS role 1/2) → private bucket; download via Edge Function
-    `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). **0 files live now.**
-    Test account `tps-teacher-test` **exists live**. Redesign D58 = approved, local commit; goes in the 3B push (D60).
-  - **Next (user, design doc "최종 운영 순서" 8):** upload the real 10 files → iPhone Safari download →
-    delete the test account **right away** → monthly Usage (egress) check.
+    `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). Card design D58 live; test account
+    deleted. **D63 in progress:** 14 slots — `monthly` 월간교육안 (new) + `plan` = 연간교육안 (old 월간.연간교육안 key);
+    live order = Edge Function redeploy → SQL (DO block) → push. TPS uploads real files after that; monthly Usage check.
 - **Student page header fix** live (`8176966`), PC check done 10/31.
 - **User:** iPhone real-device check (2B); Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own
   Vimeo (`vimeo.com/<id>` in admin).
