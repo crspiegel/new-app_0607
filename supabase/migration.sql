@@ -1225,6 +1225,7 @@ declare
   v_name text := nullif(btrim(p_name), '');
   v_code text := nullif(lower(btrim(p_code)), '');
   v_id   uuid;
+  v_con  text;
 begin
   if not exists (select 1 from public.lms_caller() c where c.is_admin) then
     raise exception 'not allowed' using errcode = '42501';
@@ -1241,9 +1242,18 @@ begin
   if exists (select 1 from public.branches b where b.code = v_code) then
     return jsonb_build_object('status', 'duplicate', 'field', 'code');
   end if;
-  insert into public.branches (code, name)
-  values (coalesce(v_code, 'b-' || encode(extensions.gen_random_bytes(6), 'hex')), v_name)
-  returning id into v_id;
+  -- N5: two calls at the same moment can both pass the checks above (neither
+  -- sees the other's row yet); the unique index then stops the second one —
+  -- answer as the checks do, not with error 23505.
+  begin
+    insert into public.branches (code, name)
+    values (coalesce(v_code, 'b-' || encode(extensions.gen_random_bytes(6), 'hex')), v_name)
+    returning id into v_id;
+  exception when unique_violation then
+    get stacked diagnostics v_con = constraint_name;
+    return jsonb_build_object('status', 'duplicate', 'field',
+                              case when v_con = 'branches_name_key' then 'name' else 'code' end);
+  end;
   return jsonb_build_object('status', 'ok', 'branch_id', v_id);
 end;
 $$;
@@ -1911,6 +1921,11 @@ $$;
 
 -- p_rows: [{class, login_id}] — students into classes of one branch (the
 -- caller's; the top admin names it in p_branch_id). Same all-or-nothing rule.
+-- A teacher's row is a move, as lms_class_add_member (D53 → D56): fine when
+-- the student's other classes are all its own (it leaves them), in_other_class
+-- when any is someone else's; the same student again for another class is
+-- duplicate_row. The branch account and the admin only add.
+-- Every student of the file is locked first, in one fixed order (N4).
 create or replace function public.lms_bulk_assign(p_rows jsonb, p_branch_id uuid default null)
 returns jsonb
 language plpgsql
@@ -1929,6 +1944,8 @@ declare
   v_lid    text;
   v_class  uuid;
   v_reason text;
+  v_key    int;
+  v_placed jsonb := '{}'::jsonb;  -- teacher: student → the class this call put it in
   v_out    jsonb := '[]'::jsonb;
   n_ok     int := 0;
   n_bad    int := 0;
@@ -1956,6 +1973,20 @@ begin
     return jsonb_build_object('status', 'too_many', 'limit', 500);
   end if;
 
+  -- N4: lock every student this file names before any write, in one fixed
+  -- order (the lock number) — two bulk calls naming the same students in
+  -- opposite orders then queue instead of each holding what the other waits for.
+  for v_key in
+    select distinct hashtext(m.member_id::text)
+      from public.members m
+     where m.branch_id = v_branch
+       and public.lms_norm_id(m.id) in (
+             select public.lms_norm_id(e ->> 'login_id') from jsonb_array_elements(p_rows) e)
+     order by 1
+  loop
+    perform pg_advisory_xact_lock(7304, v_key);
+  end loop;
+
   begin
     for i in 0 .. n_rows - 1 loop
       r := p_rows -> i;
@@ -1974,19 +2005,39 @@ begin
           from public.members m
          where m.branch_id = v_branch and public.lms_norm_id(m.id) = v_lid;
         if t.member_id is not null then
-          perform pg_advisory_xact_lock(7304, hashtext(t.member_id::text));  -- as add_member (N1)
+          -- as add_member (N1); already held from the N4 loop unless the ID
+          -- changed in between
+          perform pg_advisory_xact_lock(7304, hashtext(t.member_id::text));
         end if;
         if t.member_id is null then
           v_reason := 'member';
         elsif t.role <> 3 then
           v_reason := 'not_student';
+        elsif c.role = 2 and v_placed ? t.member_id::text
+              and v_placed ->> t.member_id::text <> v_class::text then
+          -- the same student again, for another class: that move would
+          -- silently undo the earlier row (security review of D56, L1)
+          v_reason := 'duplicate_row';
         elsif c.role = 2 and exists (select 1 from public.class_members cm
-                                      where cm.member_id = t.member_id and cm.class_id <> v_class) then
-          v_reason := 'in_other_class';  -- D51
+                                       join public.classes x on x.id = cm.class_id
+                                      where cm.member_id = t.member_id and cm.class_id <> v_class
+                                        and (x.teacher_id is distinct from c.member_id
+                                             or x.branch_id <> c.branch_id)) then
+          v_reason := 'in_other_class';  -- D51 / D56: in someone else's class
         else
           insert into public.class_members (class_id, member_id)
           values (v_class, t.member_id)
           on conflict do nothing;
+          if c.role = 2 then
+            -- D56 (as D53): out of the teacher's other classes — again only
+            -- its own, so a class handed to another teacher keeps the student
+            delete from public.class_members cm
+             using public.classes x
+             where x.id = cm.class_id
+               and cm.member_id = t.member_id and cm.class_id <> v_class
+               and x.teacher_id = c.member_id and x.branch_id = c.branch_id;
+            v_placed := v_placed || jsonb_build_object(t.member_id::text, v_class);
+          end if;
         end if;
       end if;
       if v_reason is null then

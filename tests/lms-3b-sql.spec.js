@@ -215,6 +215,15 @@ async function verify3b(db) {
   expect(
     result.filter((r) => String(r.check_case).includes("D53")).length,
   ).toBeGreaterThanOrEqual(8);
+  // D56 (the teacher's bulk assign = a move, like D53) and N4 (one lock order)
+  expect(
+    result.filter((r) => String(r.check_case).includes("D56")).length,
+  ).toBeGreaterThanOrEqual(19);
+  expect(
+    result.filter((r) =>
+      String(r.check_case).includes("N4: bulk assign locks"),
+    ),
+  ).toHaveLength(1);
   // lms_class_update reads the caller first (security review of D53, M1)
   expect(
     result.filter((r) =>

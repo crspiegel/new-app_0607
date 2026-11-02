@@ -276,9 +276,15 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   각 계정의 `m:` 키는 범위 안 사람(그 지사·담당 선생님·관리자)만 지운다 → 공통 키를 지워도 남의 계정 추측은 계속 막힌다.
 - 같은 아이디 학생이 매번 지사 없이 로그인하면 다른 지사 계정 키에 1회씩 쌓인다 → 클라이언트는 첫 로그인 뒤 기기에 지사를 기억해
   다음부터 `p_branch_id`로 보내는 게 좋다(3B-2 화면 지시서 때).
-- ⚠ 대량 생성은 행마다 bcrypt → Supabase `statement_timeout`(anon 3초, authenticated 8초)에 걸릴 수 있다. 운영에서 시간 확인 전.
+- ⚠ 대량 생성은 행마다 bcrypt → Supabase `statement_timeout`(anon 3초, authenticated 8초)에 걸릴 수 있다. 로컬 실측(3B-3, PostgreSQL 18.6
+  이 PC) 약 3.5ms/행(PGlite WASM 약 5ms/행) → 클라이언트 한도 `BULK_MAX_ROWS` = 100. 운영 실측 전(멈춤 3 뒤 실계정 확인 때).
 - advisory lock 번호(겹치면 서로 기다린다): 7301 로그인 아이디 키 · 7302 교사 자료실 다운로드 한도 · 7303 계정 아이디 쓰기(생성·변경) ·
-  7304 학생별 반 넣기(D51 검사 경쟁 방지). 새 잠금은 새 번호로.
+  7304 학생별 반 넣기(D51 검사 경쟁 방지). 새 잠금은 새 번호로. **한 호출이 잠금을 여러 개 잡으면 쓰기 전에 잠금 번호 순으로 한꺼번에**
+  (3B-3 N4: `lms_bulk_assign`) — 행마다 잡으면 반대 순서의 두 호출이 서로 기다리다 한쪽이 40P01로 끝난다.
+- PGlite는 연결이 하나라 **동시 실행(교착·고유 제약 경쟁)은 재현 불가** → `tests/lms-3b-concurrency.spec.js`가 devDependency
+  `embedded-postgres`(실제 PostgreSQL 18.6, 임시 폴더·빈 포트, 처음 기동 약 15~20초)로 두 연결을 동시에 돌린다. 겹치게 하려면 테스트 전용
+  트리거로 `pg_sleep`(대량 배정 행마다 0.3초). PostgreSQL의 교착 감지는 `deadlock_timeout` 1초 뒤 한쪽을 40P01로 끝낸다(영원히 멈추진 않음).
+  설치 때 npm이 `allow-scripts` 경고(postinstall 미실행)를 내도 Windows에서는 그대로 동작한다.
 - 함수의 인자·결과 열이 바뀌면 `create or replace`가 실패하거나(결과 열) **겹치는 함수가 하나 더 생긴다**(인자) → 옛 모양만
   골라 drop한다(`lms_branch_create(text)`, `lms_member_list` 가드). `'…'::regprocedure` 문자열 변환은 **계획 단계에서** 풀려서 함수가
   없으면 `if … and` 앞부분과 상관없이 오류 → `to_regprocedure(…)`(없으면 NULL)를 쓴다.

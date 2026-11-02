@@ -849,9 +849,50 @@ begin
     ['assign', 'ta1', 'D53: back to A1', 'j',
      format('public.lms_class_add_member(%L, %L)', k_a1, m_lk), 'ok added=true'],
     ['assign', 'owner', '… only in A1', 'q', format(q_classes, m_lk), 'V3반A1'],
-    ['assign', 'ta1', 'D53: bulk assign is unchanged (3.4) — a student of A1 into A7', 'j',
+    -- D56 (3.4): the teacher's bulk assign follows the same rule — a move when
+    -- the student's other classes are all its own; a row naming a student in
+    -- anyone else's class is in_other_class and the whole file is undone.
+    ['assign', 'ta1', 'D56: bulk assign is a move too — its student of A1 into A7', 'j',
      format('public.lms_bulk_assign(%L::jsonb)', '[{"class":"V3반A7","login_id":"zz-v3-sa1"}]'),
-     'error assigned=0 errors=1 rows=1:error:in_other_class']
+     'ok assigned=1 rows=1:ok:zz-v3-sa1'],
+    ['assign', 'owner', '… D56: out of A1, only in A7', 'q', format(q_classes, m_sa1), 'V3반A7'],
+    ['assign', 'ta1', 'D56: and back to A1 in bulk', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)', '[{"class":"V3반A1","login_id":"zz-v3-sa1"}]'),
+     'ok assigned=1 rows=1:ok:zz-v3-sa1'],
+    ['assign', 'owner', '… D56: only in A1', 'q', format(q_classes, m_sa1), 'V3반A1'],
+    -- security review of D56 (L1): one student named twice for two classes —
+    -- the second move would silently undo the first, so that row fails
+    ['assign', 'ta1', 'D56: the same student twice, two of its classes → row 2 fails, nothing kept', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)',
+       '[{"class":"V3반A7","login_id":"zz-v3-sa1"},{"class":"V3반A1","login_id":"zz-v3-sa1"}]'),
+     'error assigned=0 errors=1 rows=1:ok:zz-v3-sa1,2:error:duplicate_row'],
+    ['assign', 'owner', '… D56: still only in A1', 'q', format(q_classes, m_sa1), 'V3반A1'],
+    ['assign', 'ta1', 'D56: the same student twice for the same class is harmless', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)',
+       '[{"class":"V3반A1","login_id":"zz-v3-sa1"},{"class":"V3반A1","login_id":"zz-v3-sa1"}]'),
+     'ok assigned=2 rows=1:ok:zz-v3-sa1,2:ok:zz-v3-sa1'],
+    ['assign', 'ba', 'zz-v3-kim also into A2 (teacher A2''s class)', 'j',
+     format('public.lms_class_add_member(%L, %L)', k_a2, m_kima), 'ok added=true'],
+    ['assign', 'ta1', 'D56: a good row + a student also in another teacher''s class → nothing kept', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)',
+       '[{"class":"V3반A7","login_id":"zz-v3-sa1"},{"class":"V3반A7","login_id":"zz-v3-kim"}]'),
+     'error assigned=0 errors=1 rows=1:ok:zz-v3-sa1,2:error:in_other_class'],
+    ['assign', 'owner', '… D56: row 1 was undone — still only in A1', 'q', format(q_classes, m_sa1), 'V3반A1'],
+    ['assign', 'owner', '… D56: zz-v3-kim not moved', 'q', format(q_classes, m_kima), 'V3반A1,V3반A2'],
+    ['assign', 'ba', '… zz-v3-kim out of A2 again', 'j',
+     format('public.lms_class_remove_member(%L, %L)', k_a2, m_kima), 'ok removed=true'],
+    ['assign', 'ba', 'D56 leaves the branch account alone: its bulk assign adds a second class', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)', '[{"class":"V3반A7","login_id":"zz-v3-lk"}]'),
+     'ok assigned=1 rows=1:ok:zz-v3-lk'],
+    ['assign', 'owner', '… D56: in A1 and A7', 'q', format(q_classes, m_lk), 'V3반A1,V3반A7'],
+    ['assign', 'ta1', 'D56: into A7 where it already is — out of A1', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)', '[{"class":"V3반A7","login_id":"zz-v3-lk"}]'),
+     'ok assigned=1 rows=1:ok:zz-v3-lk'],
+    ['assign', 'owner', '… D56: only in A7', 'q', format(q_classes, m_lk), 'V3반A7'],
+    ['assign', 'ta1', 'D56: back to A1', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)', '[{"class":"V3반A1","login_id":"zz-v3-lk"}]'),
+     'ok assigned=1 rows=1:ok:zz-v3-lk'],
+    ['assign', 'owner', '… D56: only in A1', 'q', format(q_classes, m_lk), 'V3반A1']
   ]);
   -- D53 edges (security review of D53): a class with no teacher is not the
   -- teacher's own; the admin only adds; three own classes; an "own" class in
@@ -862,6 +903,9 @@ begin
      format('public.lms_class_add_member(%L, %L)', k_a5, m_sa1), 'ok added=true'],
     ['assign', 'ta1', 'D53: that student into A7 — A5 is nobody''s, not its own', 'j',
      format('public.lms_class_add_member(%L, %L)', k_a7, m_sa1), 'denied 42501'],
+    ['assign', 'ta1', 'D56: the same in bulk', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)', '[{"class":"V3반A7","login_id":"zz-v3-sa1"}]'),
+     'error assigned=0 errors=1 rows=1:error:in_other_class'],
     ['assign', 'owner', '… still in A1 and A5', 'q', format(q_classes, m_sa1), 'V3반A1,V3반A5'],
     ['assign', 'ba', '… out of A5 again', 'j',
      format('public.lms_class_remove_member(%L, %L)', k_a5, m_sa1), 'ok removed=true'],
@@ -874,6 +918,26 @@ begin
     ['assign', 'ta1', 'D53: back to A1', 'j',
      format('public.lms_class_add_member(%L, %L)', k_a1, m_sa1), 'ok added=true'],
     ['assign', 'owner', '… only in A1', 'q', format(q_classes, m_sa1), 'V3반A1'],
+    ['assign', 'admin', 'D56 leaves the admin alone: its bulk assign adds a second class', 'j',
+     format('public.lms_bulk_assign(%L::jsonb, %L)', '[{"class":"V3반A8","login_id":"zz-v3-sa1"}]', br_a),
+     'ok assigned=1 rows=1:ok:zz-v3-sa1'],
+    ['assign', 'owner', '… D56: in A1 and A8', 'q', format(q_classes, m_sa1), 'V3반A1,V3반A8'],
+    ['assign', 'ta1', 'D56: bulk into A1 where it already is — out of A8', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)', '[{"class":"V3반A1","login_id":"zz-v3-sa1"}]'),
+     'ok assigned=1 rows=1:ok:zz-v3-sa1'],
+    ['assign', 'owner', '… D56: only in A1 again', 'q', format(q_classes, m_sa1), 'V3반A1'],
+    -- N4: every student of the file is locked first, in one fixed order (the
+    -- lock number), so two bulk calls never hold what the other one waits for.
+    -- (The real two-connection race: tests/lms-3b-concurrency.spec.js.)
+    -- N5: lms_branch_create tells a name clash from a code clash by this name
+    ['assign', 'owner', 'N5: the branch name constraint the duplicate answer reads', 'q',
+     $q$select count(*)::text from pg_constraint
+         where conrelid = 'public.branches'::regclass and conname = 'branches_name_key' and contype = 'u'$q$,
+     '1'],
+    ['assign', 'owner', 'N4: bulk assign locks its students in one fixed order before any write', 'q',
+     $q$select (pg_get_functiondef('public.lms_bulk_assign(jsonb,uuid)'::regprocedure)
+                ~ 'for v_key in\s+select distinct hashtext\(m\.member_id::text\).*order by 1\s+loop\s+perform pg_advisory_xact_lock\(7304, v_key\);\s+end loop;\s+begin\s+for i in')::text$q$,
+     'true'],
     ['assign', 'owner', 'D53: the caller is read (and checked) before anything else', 'q',
      $q$select (pg_get_functiondef('public.lms_class_add_member(uuid,uuid)'::regprocedure)
                 ~ 'from public\.lms_caller\(\);\s+if not found or not public\.lms_can_manage_class')::text$q$,
@@ -885,6 +949,9 @@ begin
   res := pg_temp.v3_run(res, array[
     ['assign', 'ta1', 'D53: a class of another branch never counts as its own', 'j',
      format('public.lms_class_add_member(%L, %L)', k_a7, m_sa1), 'denied 42501'],
+    ['assign', 'ta1', 'D56: the same in bulk', 'j',
+     format('public.lms_bulk_assign(%L::jsonb)', '[{"class":"V3반A7","login_id":"zz-v3-sa1"}]'),
+     'error assigned=0 errors=1 rows=1:error:in_other_class'],
     ['assign', 'owner', '… nothing moved', 'q', format(q_classes, m_sa1), 'V3반A1,V3반BX']
   ]);
   delete from public.classes k where k.id in (k_a7, k_a8, k_bx);  -- later cases see the classes as before
