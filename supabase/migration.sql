@@ -2130,10 +2130,13 @@ notify pgrst, 'reload schema';
 -- ("anyone with the link"; only its ID is stored). Teachers download a Drive
 -- file from Google directly — no Storage egress, no Edge Function, no daily
 -- limit; files keep every rule below (30/day, 15 s URL, 10 MB, PDF/xlsx/xls).
--- Slots, in card order (D63, 2026-11-02): monthly (월간교육안) · plan
--- (연간교육안 — the old '월간.연간교육안' slot key, kept so live files and
--- Storage paths <level>/plan/… stay where they are) · award (상장) · test
--- (테스트, level-2/3 only). 3 + 3 + 4 + 4 = 14 slots.
+-- Slots, in card order (D65, 2026-11-02): monthly-03 … monthly-12 (월간교육안
+-- 3월~12월, one per month) · plan (연간교육안 — the old '월간.연간교육안'
+-- slot key, kept so live files and Storage paths <level>/plan/… stay where
+-- they are) · award (상장) · test (테스트, level-2/3 only) · script (핵심문장
+-- 스크립트) · pictures (그림 자료실) · flashcards (플래쉬카드). 15 + 15 + 16
+-- + 16 = 62 slots. D63's single 'monthly' slot is gone: its rows must be
+-- deleted in the admin screen first (the file stops below while one is left).
 -- Admins upload / replace / delete. Admins and LMS role 1 (branch) / 2
 -- (teacher) list the slots and download through the Edge Function
 -- supabase/functions/teacher-resource-download (PM decision 2026-10-29, (나)):
@@ -2171,8 +2174,11 @@ create table if not exists public.teacher_resources (
   drive_id     text,
   primary key (level, slot),
   constraint teacher_resources_slot_ok check (
-    (level in ('beginner', 'level-1') and slot in ('monthly', 'plan', 'award'))
-    or (level in ('level-2', 'level-3') and slot in ('monthly', 'plan', 'award', 'test'))),
+    level in ('beginner', 'level-1', 'level-2', 'level-3')
+    and (slot in ('monthly-03', 'monthly-04', 'monthly-05', 'monthly-06', 'monthly-07',
+                  'monthly-08', 'monthly-09', 'monthly-10', 'monthly-11', 'monthly-12',
+                  'plan', 'award', 'script', 'pictures', 'flashcards')
+         or (slot = 'test' and level in ('level-2', 'level-3')))),
   constraint teacher_resources_path_ok check (
     storage_path ~ ('^' || level || '/' || slot || '/[0-9]{13}\.(pdf|xlsx|xls)$')),
   constraint teacher_resources_source_ok check (
@@ -2198,15 +2204,35 @@ alter table public.teacher_resources
   drop constraint if exists teacher_resources_drive_ok,
   add constraint teacher_resources_drive_ok check (drive_id ~ '^[A-Za-z0-9_-]{25,64}$');
 
--- D63: the same slot rule on a table made before monthly existed (`create
--- table if not exists` leaves an existing table as it is). Drop + add in ONE
--- statement (atomic with any tool — security review L1) = the same definition
--- on every run; existing rows (plan / award / test) pass.
+-- D65: a row still in D63's single 'monthly' slot stops this file here, before
+-- the slot rule below would refuse it — with a message instead of a bare
+-- check violation. Delete those in the admin screen first (its Storage object
+-- goes with the delete). A stopped run changes nothing when the file runs as
+-- ONE transaction (the SQL Editor, or psql -1 -v ON_ERROR_STOP=1); live, the
+-- one-DO-block apply puts this check first.
+do $$
+declare
+  v_left int;
+begin
+  select count(*) into v_left from public.teacher_resources where slot = 'monthly';
+  if v_left > 0 then
+    raise exception '교사 자료실: 월간교육안(monthly) %개가 남아 있어요 — 관리자 화면(배너 → 교사 자료실)에서 먼저 지우세요 (D65).', v_left;
+  end if;
+end;
+$$;
+
+-- D63/D65: the same slot rule on a table made before (`create table if not
+-- exists` leaves an existing table as it is). Drop + add in ONE statement
+-- (atomic with any tool — security review L1) = the same definition on every
+-- run; existing rows (plan / award / test) pass.
 alter table public.teacher_resources
   drop constraint if exists teacher_resources_slot_ok,
   add constraint teacher_resources_slot_ok check (
-    (level in ('beginner', 'level-1') and slot in ('monthly', 'plan', 'award'))
-    or (level in ('level-2', 'level-3') and slot in ('monthly', 'plan', 'award', 'test')));
+    level in ('beginner', 'level-1', 'level-2', 'level-3')
+    and (slot in ('monthly-03', 'monthly-04', 'monthly-05', 'monthly-06', 'monthly-07',
+                  'monthly-08', 'monthly-09', 'monthly-10', 'monthly-11', 'monthly-12',
+                  'plan', 'award', 'script', 'pictures', 'flashcards')
+         or (slot = 'test' and level in ('level-2', 'level-3'))));
 
 -- RLS on with NO policies: anon / authenticated get nothing directly.
 alter table public.teacher_resources enable row level security;
@@ -2226,11 +2252,13 @@ $$;
 
 -- The level's slots in card order with the current file or Drive file ID
 -- (both NULL = an empty slot, shown as "준비 중"). No rows for anyone else or
--- a bad level. monthly = 월간교육안 (D63), plan = 연간교육안 (the old
--- 월간.연간교육안 key). A page that does not know monthly (deployed before
--- D63) ignores that row; a page from before D64 shows a Drive slot as empty
--- (its file_name is NULL). D64 added drive_id to the result — a changed
--- result needs a drop first, done only while the old shape is there.
+-- a bad level. monthly-03 … monthly-12 = 월간교육안 3~12월 (D65), plan =
+-- 연간교육안 (the old 월간.연간교육안 key), then award, test (level-2/3),
+-- script, pictures, flashcards. A page that does not know a slot ignores
+-- that row (pages before D65 look up their own slots: their 'monthly' card
+-- is "준비 중"); a page from before D64 shows a Drive slot as empty (its
+-- file_name is NULL). D64 added drive_id to the result — a changed result
+-- needs a drop first, done only while the old shape is there.
 do $$
 begin
   if pg_get_function_result(to_regprocedure('public.teacher_resources_list(text)')) !~ 'drive_id' then
@@ -2247,7 +2275,11 @@ security definer
 set search_path = public, extensions
 as $$
   select s.slot, r.file_name, r.file_size, r.updated_at, r.drive_id
-    from (values ('monthly', 1), ('plan', 2), ('award', 3), ('test', 4)) as s (slot, ord)
+    from (values ('monthly-03', 1), ('monthly-04', 2), ('monthly-05', 3), ('monthly-06', 4),
+                 ('monthly-07', 5), ('monthly-08', 6), ('monthly-09', 7), ('monthly-10', 8),
+                 ('monthly-11', 9), ('monthly-12', 10), ('plan', 11), ('award', 12),
+                 ('test', 13), ('script', 14), ('pictures', 15), ('flashcards', 16))
+         as s (slot, ord)
     left join public.teacher_resources r
       on r.level = p_level and r.slot = s.slot
    where public.teacher_resources_allowed()
@@ -2436,7 +2468,8 @@ end;
 $$;
 
 -- Storage: admins write (only well-formed ASCII paths) and read. Slots as
--- above (monthly added by D63).
+-- above (D65: monthly-03 … monthly-12, script, pictures, flashcards; the
+-- single monthly is gone).
 drop policy if exists teacher_resources_admin_all on storage.objects;
 create policy teacher_resources_admin_all on storage.objects
   for all to authenticated
@@ -2444,7 +2477,7 @@ create policy teacher_resources_admin_all on storage.objects
   with check (
     bucket_id = 'teacher-resources'
     and public.is_admin()
-    and name ~ '^(beginner|level-1|level-2|level-3)/(monthly|plan|award|test)/[0-9]{13}\.(pdf|xlsx|xls)$'
+    and name ~ '^(beginner|level-1|level-2|level-3)/(monthly-(0[3-9]|1[0-2])|plan|award|test|script|pictures|flashcards)/[0-9]{13}\.(pdf|xlsx|xls)$'
     and (name !~ '/test/' or name ~ '^level-[23]/'));
 
 -- No Storage read policy for LMS sessions (anon): the Edge Function signs

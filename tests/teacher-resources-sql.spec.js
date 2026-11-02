@@ -21,6 +21,44 @@ const XLSX =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const XLS = "application/vnd.ms-excel";
 
+// D65 (2026-11-02): the slots of each level in card order — 월간교육안 3~12월
+// (monthly-03 … monthly-12), plan (연간교육안), award (상장), test (테스트,
+// level-2/3 only), script (핵심문장 스크립트), pictures (그림 자료실),
+// flashcards (플래쉬카드). D63's single 'monthly' is gone. 15 / 15 / 16 / 16.
+const MONTHLY = Array.from(
+  { length: 10 },
+  (_, i) => `monthly-${String(i + 3).padStart(2, "0")}`,
+);
+const SLOTS_D65 = {
+  beginner: [...MONTHLY, "plan", "award", "script", "pictures", "flashcards"],
+  "level-1": [...MONTHLY, "plan", "award", "script", "pictures", "flashcards"],
+  "level-2": [
+    ...MONTHLY,
+    "plan",
+    "award",
+    "test",
+    "script",
+    "pictures",
+    "flashcards",
+  ],
+  "level-3": [
+    ...MONTHLY,
+    "plan",
+    "award",
+    "test",
+    "script",
+    "pictures",
+    "flashcards",
+  ],
+};
+// A level's list as { slot, file_name, size }, `filled` = { slot: [name, size] }.
+const rowsOf = (level, filled = {}) =>
+  SLOTS_D65[level].map((slot) => ({
+    slot,
+    file_name: filled[slot]?.[0] ?? null,
+    size: filled[slot]?.[1] ?? null,
+  }));
+
 // One caller, one transaction: rows of the last statement in `sql`.
 async function as(db, { role = "anon", token = null, uid = null }, sql) {
   const headers = JSON.stringify(token ? { "x-lms-token": token } : {});
@@ -196,25 +234,19 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
     expect(await list({}, "beginner")).toEqual([]);
     expect(await list({ token: student }, "beginner")).toEqual([]);
     expect(await list(other, "beginner")).toEqual([]);
-    // D63: monthly (월간교육안) first, then plan (연간교육안 — the old
-    // 월간.연간교육안 slot key), award, test (level-2/3)
-    const beginner = [
-      { slot: "monthly", file_name: null, size: null },
-      { slot: "plan", file_name: "연간교육안.pdf", size: 1234 },
-      { slot: "award", file_name: null, size: null },
-    ];
+    // D65: 월간교육안 3~12월 first, then plan (연간교육안 — the old
+    // 월간.연간교육안 slot key), award, test (level-2/3), script, pictures,
+    // flashcards
+    const beginner = rowsOf("beginner", { plan: ["연간교육안.pdf", 1234] });
     expect(await list({ token: teacher }, "beginner")).toEqual(beginner);
     expect(await list({ token: branch }, "beginner")).toEqual(beginner);
     expect(await list(admin, "beginner")).toEqual(beginner);
-    expect(await list({ token: teacher }, "level-2")).toEqual([
-      { slot: "monthly", file_name: null, size: null },
-      { slot: "plan", file_name: null, size: null },
-      { slot: "award", file_name: null, size: null },
-      { slot: "test", file_name: "테스트 문제.xlsx", size: 2048 },
-    ]);
+    expect(await list({ token: teacher }, "level-2")).toEqual(
+      rowsOf("level-2", { test: ["테스트 문제.xlsx", 2048] }),
+    );
     expect(
       (await list({ token: teacher }, "level-1")).map((r) => r.slot),
-    ).toEqual(["monthly", "plan", "award"]);
+    ).toEqual(SLOTS_D65["level-1"]);
     expect(await list({ token: teacher }, "Level 1")).toEqual([]);
 
     // --- (나): no browser-side path to a file any more — the old
@@ -417,11 +449,7 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
         "select public.teacher_resource_clear('beginner', 'plan') as old",
       ),
     ).toEqual([{ old: "beginner/plan/1730000000001.pdf" }]);
-    expect(await list(admin, "beginner")).toEqual([
-      { slot: "monthly", file_name: null, size: null },
-      { slot: "plan", file_name: null, size: null },
-      { slot: "award", file_name: null, size: null },
-    ]);
+    expect(await list(admin, "beginner")).toEqual(rowsOf("beginner"));
     expect(
       await as(
         db,
@@ -434,16 +462,11 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
   }
 });
 
-// D63 (2026-11-02): the old '월간.연간교육안' slot became two — monthly
-// (월간교육안, new) and plan (연간교육안: the same key, so the live rows and
-// Storage paths <level>/plan/… stay where they are). 14 slots in all.
+// D65 (2026-11-02): 월간교육안 = 3월~12월, one slot per month (monthly-03 …
+// monthly-12), and three new kinds on every level — script (핵심문장
+// 스크립트), pictures (그림 자료실), flashcards (플래쉬카드). plan (연간교육안)
+// · award · test (level-2/3) as before; D63's single 'monthly' is gone.
 const LEVEL_KEYS = ["beginner", "level-1", "level-2", "level-3"];
-const SLOTS_D63 = {
-  beginner: ["monthly", "plan", "award"],
-  "level-1": ["monthly", "plan", "award"],
-  "level-2": ["monthly", "plan", "award", "test"],
-  "level-3": ["monthly", "plan", "award", "test"],
-};
 
 async function people(db) {
   await db.exec(`
@@ -461,7 +484,7 @@ async function people(db) {
   return { admin: { role: "authenticated", uid: ADMIN_UID }, teacher };
 }
 
-test("teacher resources sql: D63 — monthly (월간교육안) beside plan (연간교육안) on every level", async ({}, testInfo) => {
+test("teacher resources sql: D65 — 월간교육안 3~12월 and the three new kinds on every level", async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
   test.setTimeout(120000);
   const db = new PGlite({ extensions: { pgcrypto } });
@@ -481,87 +504,135 @@ test("teacher resources sql: D63 — monthly (월간교육안) beside plan (연�
         admin,
         `select public.teacher_resource_set('${level}', '${slot}', '${p}', '${name}', 4321) as old`,
       );
-
-    // Storage: the admin may upload a monthly file on all four levels; still
-    // no test file below level-2 and no slot outside the four
-    for (const [i, level] of LEVEL_KEYS.entries()) {
-      const p = `${level}/monthly/173000000001${i}.pdf`;
-      await upload(p);
-      expect(await set(level, "monthly", p, `${level} 월간교육안.pdf`)).toEqual(
-        [{ old: null }],
+    const setDrive = (level, slot, id) =>
+      as(
+        db,
+        admin,
+        `select public.teacher_resource_set_drive('${level}', '${slot}', '${id}') as old`,
       );
+
+    // Storage + table: every month 3~12 and the three new kinds on all four
+    // levels, as a file …
+    let n = 100;
+    for (const level of LEVEL_KEYS) {
+      for (const slot of ["monthly-03", "monthly-12", "script", "pictures"]) {
+        const p = `${level}/${slot}/1730000000${(n += 1)}.pdf`;
+        await upload(p);
+        expect(await set(level, slot, p, `${level} ${slot}.pdf`)).toEqual([
+          { old: null },
+        ]);
+      }
+      // … or as a Google Drive file (D64 rule, unchanged)
+      expect(await setDrive(level, "flashcards", DRIVE_A)).toEqual([
+        { old: null },
+      ]);
+      expect(await setDrive(level, "monthly-07", DRIVE_B)).toEqual([
+        { old: null },
+      ]);
     }
-    await upload("beginner/plan/1730000000020.pdf");
-    expect(
-      await set(
-        "beginner",
-        "plan",
-        "beginner/plan/1730000000020.pdf",
-        "연간교육안.pdf",
-      ),
-    ).toEqual([{ old: null }]);
+    // Storage refuses the old single 'monthly', months outside 3~12, other
+    // spellings, test below level-2 and unknown kinds
     for (const bad of [
-      "beginner/annual/1730000000021.pdf",
-      "beginner/Monthly/1730000000022.pdf",
-      "level-1/test/1730000000023.pdf",
+      "beginner/monthly/1730000000201.pdf",
+      "beginner/monthly-02/1730000000202.pdf",
+      "beginner/monthly-13/1730000000203.pdf",
+      "beginner/monthly-3/1730000000204.pdf",
+      "beginner/Monthly-03/1730000000205.pdf",
+      "beginner/script-1/1730000000206.pdf",
+      "beginner/annual/1730000000207.pdf",
+      "level-1/test/1730000000208.pdf",
     ]) {
-      await expect(upload(bad)).rejects.toThrow(/row-level security/);
+      await expect(upload(bad), bad).rejects.toThrow(/row-level security/);
     }
-    // the table refuses any other slot name even for an object that exists
+    // … and so does the table, even for an object that exists or a link
     await db.exec(
-      `insert into storage.objects (bucket_id, name) values ('${BUCKET}', 'beginner/annual/1730000000024.pdf')`,
+      `insert into storage.objects (bucket_id, name) values ('${BUCKET}', 'beginner/monthly/1730000000209.pdf')`,
     );
     await expect(
-      set("beginner", "annual", "beginner/annual/1730000000024.pdf", "x.pdf"),
+      set("beginner", "monthly", "beginner/monthly/1730000000209.pdf", "x.pdf"),
     ).rejects.toThrow(/teacher_resources_slot_ok/);
+    for (const [level, slot] of [
+      ["beginner", "monthly"],
+      ["beginner", "monthly-02"],
+      ["level-2", "monthly-1"],
+      ["level-1", "test"],
+      ["level-3", "scripts"],
+    ]) {
+      await expect(
+        setDrive(level, slot, DRIVE_A),
+        `${level}/${slot}`,
+      ).rejects.toThrow(/teacher_resources_slot_ok/);
+    }
 
-    // list: fixed order, 3 / 3 / 4 / 4 = 14 slots
+    // list: fixed order, 15 / 15 / 16 / 16 = 62 slots; each filled slot in
+    // its place, files and links alike
     let total = 0;
     for (const level of LEVEL_KEYS) {
       const rows = await as(
         db,
         { token: teacher },
-        `select slot, file_name from public.teacher_resources_list('${level}')`,
+        `select slot, file_name, drive_id from public.teacher_resources_list('${level}')`,
       );
       expect(
         rows.map((r) => r.slot),
         level,
-      ).toEqual(SLOTS_D63[level]);
-      expect(rows[0].file_name).toBe(`${level} 월간교육안.pdf`);
+      ).toEqual(SLOTS_D65[level]);
+      const by = Object.fromEntries(rows.map((r) => [r.slot, r]));
+      expect(by["monthly-03"].file_name).toBe(`${level} monthly-03.pdf`);
+      expect(by["monthly-07"]).toEqual({
+        slot: "monthly-07",
+        file_name: null,
+        drive_id: DRIVE_B,
+      });
+      expect(by["monthly-12"].file_name).toBe(`${level} monthly-12.pdf`);
+      expect(by.script.file_name).toBe(`${level} script.pdf`);
+      expect(by.pictures.file_name).toBe(`${level} pictures.pdf`);
+      expect(by.flashcards.drive_id).toBe(DRIVE_A);
+      expect(by.plan.file_name).toBeNull();
       total += rows.length;
     }
-    expect(total).toBe(14);
+    expect(total).toBe(62);
 
-    // download: monthly and plan are separate files
+    // download: each month is its own file; a link month is "empty" to the
+    // function (no error, nothing counted)
     const issue = async (slot) =>
       (
         await as(
           db,
           { role: "service_role", token: teacher },
-          `select public.teacher_resource_issue('beginner', '${slot}', null) as r`,
+          `select public.teacher_resource_issue('level-1', '${slot}', null) as r`,
         )
       )[0].r;
-    expect(await issue("monthly")).toEqual({
+    expect(await issue("monthly-03")).toEqual({
       status: "ok",
-      path: "beginner/monthly/1730000000010.pdf",
-      name: "beginner 월간교육안.pdf",
+      path: "level-1/monthly-03/1730000000105.pdf",
+      name: "level-1 monthly-03.pdf",
     });
-    expect(await issue("plan")).toEqual({
-      status: "ok",
-      path: "beginner/plan/1730000000020.pdf",
-      name: "연간교육안.pdf",
-    });
+    expect((await issue("monthly-12")).path).toBe(
+      "level-1/monthly-12/1730000000106.pdf",
+    );
+    expect((await issue("script")).status).toBe("ok");
+    expect(await issue("monthly-07")).toEqual({ status: "empty" });
+    expect(await issue("monthly-04")).toEqual({ status: "empty" });
+    expect(await issue("monthly")).toEqual({ status: "empty" });
+    expect(
+      (
+        await db.query(
+          "select count(*)::int as n from public.teacher_resource_downloads",
+        )
+      ).rows[0].n,
+    ).toBe(3);
 
-    // clearing one leaves the other
+    // clearing one month leaves the others
     expect(
       await as(
         db,
         admin,
-        "select public.teacher_resource_clear('beginner', 'monthly') as old",
+        "select public.teacher_resource_clear('level-1', 'monthly-03') as old",
       ),
-    ).toEqual([{ old: "beginner/monthly/1730000000010.pdf" }]);
-    expect((await issue("monthly")).status).toBe("empty");
-    expect((await issue("plan")).status).toBe("ok");
+    ).toEqual([{ old: "level-1/monthly-03/1730000000105.pdf" }]);
+    expect((await issue("monthly-03")).status).toBe("empty");
+    expect((await issue("monthly-12")).status).toBe("ok");
   } finally {
     await db.close();
   }
@@ -612,11 +683,11 @@ test("teacher resources sql: D64 — a slot holds a file OR a Google Drive file"
       {},
     ]) {
       await expect(
-        setDrive(who, "beginner", "monthly", DRIVE_A),
+        setDrive(who, "beginner", "monthly-03", DRIVE_A),
       ).rejects.toThrow(/permission denied for function/); // anon: no EXECUTE
     }
     await expect(
-      setDrive(other, "beginner", "monthly", DRIVE_A),
+      setDrive(other, "beginner", "monthly-03", DRIVE_A),
     ).rejects.toThrow(/not authorized/);
     // only a Drive file ID (letters, digits, _ and -, 25-64 long)
     for (const bad of [
@@ -627,7 +698,7 @@ test("teacher resources sql: D64 — a slot holds a file OR a Google Drive file"
       "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view",
     ]) {
       await expect(
-        setDrive(admin, "beginner", "monthly", bad.replace(/'/g, "''")),
+        setDrive(admin, "beginner", "monthly-03", bad.replace(/'/g, "''")),
       ).rejects.toThrow(/not a Google Drive file id/);
     }
     // not a slot of that level (D63 rule unchanged)
@@ -636,7 +707,7 @@ test("teacher resources sql: D64 — a slot holds a file OR a Google Drive file"
     );
 
     // empty slot → link: nothing to delete
-    expect(await setDrive(admin, "beginner", "monthly", DRIVE_A)).toEqual([
+    expect(await setDrive(admin, "beginner", "monthly-03", DRIVE_A)).toEqual([
       { old: null },
     ]);
     // file slot → link: the file's Storage path comes back (the page deletes it)
@@ -665,11 +736,12 @@ test("teacher resources sql: D64 — a slot holds a file OR a Google Drive file"
         db,
         who,
         `select slot, file_name, file_size::int as size, drive_id, updated_at is not null as dated
-           from public.teacher_resources_list('beginner')`,
+           from public.teacher_resources_list('beginner')
+          where slot in ('monthly-03', 'plan', 'award')`,
       );
     const expected = [
       {
-        slot: "monthly",
+        slot: "monthly-03",
         file_name: null,
         size: null,
         drive_id: DRIVE_A,
@@ -703,7 +775,7 @@ test("teacher resources sql: D64 — a slot holds a file OR a Google Drive file"
         await as(
           db,
           { role: "service_role", token: teacher },
-          "select public.teacher_resource_issue('beginner', 'monthly', null) as r",
+          "select public.teacher_resource_issue('beginner', 'monthly-03', null) as r",
         )
       )[0].r;
     expect(await issued()).toEqual({ status: "empty" });
@@ -719,17 +791,17 @@ test("teacher resources sql: D64 — a slot holds a file OR a Google Drive file"
     await as(
       db,
       admin,
-      `insert into storage.objects (bucket_id, name) values ('${BUCKET}', 'beginner/monthly/1730000000041.pdf')`,
+      `insert into storage.objects (bucket_id, name) values ('${BUCKET}', 'beginner/monthly-03/1730000000041.pdf')`,
     );
     expect(
       await as(
         db,
         admin,
-        `select public.teacher_resource_set('beginner', 'monthly', 'beginner/monthly/1730000000041.pdf', '월간교육안.pdf', 3000) as old`,
+        `select public.teacher_resource_set('beginner', 'monthly-03', 'beginner/monthly-03/1730000000041.pdf', '월간교육안.pdf', 3000) as old`,
       ),
     ).toEqual([{ old: null }]);
     expect((await list(admin))[0]).toEqual({
-      slot: "monthly",
+      slot: "monthly-03",
       file_name: "월간교육안.pdf",
       size: 3000,
       drive_id: null,
@@ -771,15 +843,18 @@ test("teacher resources sql: D64 — a slot holds a file OR a Google Drive file"
   }
 });
 
-// D64 on the live database today (commit 6c32cd8 = tests/fixtures/
-// migration-4b.sql, 수정 금지): the file rows stay as they are and every
-// teacher-resources definition equals a fresh install of the new file.
+// D64 + D65 on the live database today (commit 6c32cd8 = tests/fixtures/
+// migration-4b.sql, 수정 금지). A file still in the D63 'monthly' slot stops
+// the new file before it changes anything (빅웨이브 deletes those first in
+// the admin screen — its Storage object goes with the old delete flow); once
+// gone, the other file rows stay as they are and every teacher-resources
+// definition equals a fresh install of the new file.
 const MIGRATION_4B = readFileSync(
   path.resolve("tests/fixtures/migration-4b.sql"),
   "utf8",
 );
 
-test("teacher resources sql: D64 upgrade — live (6c32cd8) + migration.sql = fresh install", async ({}, testInfo) => {
+test("teacher resources sql: D64 + D65 upgrade — live (6c32cd8) + migration.sql = fresh install", async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
   test.setTimeout(180000);
   const live = new PGlite({ extensions: { pgcrypto } });
@@ -791,6 +866,7 @@ test("teacher resources sql: D64 upgrade — live (6c32cd8) + migration.sql = fr
     for (const [level, slot, n] of [
       ["beginner", "monthly", 50],
       ["level-2", "plan", 51],
+      ["level-3", "award", 52],
     ]) {
       const p = `${level}/${slot}/17300000000${n}.pdf`;
       await as(
@@ -807,22 +883,41 @@ test("teacher resources sql: D64 upgrade — live (6c32cd8) + migration.sql = fr
     const rows =
       "select level, slot, storage_path, file_name, file_size from public.teacher_resources order by 1, 2";
     const before = (await live.query(rows)).rows;
+    const catalog = (await live.query(TR_DEFINITIONS)).rows;
 
-    await live.exec(MIGRATION);
-    await live.exec(MIGRATION); // re-run safe
+    // a 'monthly' row left: the whole file stops with a plain message and
+    // nothing changes (one transaction)
+    await expect(live.exec(MIGRATION)).rejects.toThrow(
+      /월간교육안\(monthly\) 1개.*먼저 지우세요/,
+    );
     expect((await live.query(rows)).rows).toEqual(before);
+    expect((await live.query(TR_DEFINITIONS)).rows).toEqual(catalog);
+
+    // 빅웨이브 deletes it in the (old) admin screen → the file runs, twice
     expect(
       await as(
         live,
-        { token: teacher },
-        "select slot, file_name, drive_id from public.teacher_resources_list('level-2')",
+        admin,
+        "select public.teacher_resource_clear('beginner', 'monthly') as old",
       ),
-    ).toEqual([
-      { slot: "monthly", file_name: null, drive_id: null },
-      { slot: "plan", file_name: "plan.pdf", drive_id: null },
-      { slot: "award", file_name: null, drive_id: null },
-      { slot: "test", file_name: null, drive_id: null },
-    ]);
+    ).toEqual([{ old: "beginner/monthly/1730000000050.pdf" }]);
+    await live.exec(MIGRATION);
+    await live.exec(MIGRATION); // re-run safe
+    expect((await live.query(rows)).rows).toEqual(
+      before.filter((r) => r.slot !== "monthly"),
+    );
+    const level2 = await as(
+      live,
+      { token: teacher },
+      "select slot, file_name, drive_id from public.teacher_resources_list('level-2')",
+    );
+    expect(level2).toEqual(
+      SLOTS_D65["level-2"].map((slot) => ({
+        slot,
+        file_name: slot === "plan" ? "plan.pdf" : null,
+        drive_id: null,
+      })),
+    );
 
     await fresh.exec(SUPABASE_SHIM);
     await fresh.exec(MIGRATION);
@@ -911,12 +1006,13 @@ test("teacher resources sql: D63 upgrade — live (4a9b23d) + migration.sql = fr
         { token: teacher },
         "select slot, file_name from public.teacher_resources_list('level-2')",
       ),
-    ).toEqual([
-      { slot: "monthly", file_name: null },
-      { slot: "plan", file_name: "2026 월간.연간교육안.pdf" }, // now the 연간교육안 card
-      { slot: "award", file_name: null },
-      { slot: "test", file_name: null },
-    ]);
+    ).toEqual(
+      // now the 연간교육안 (plan) card, among the D65 slots
+      SLOTS_D65["level-2"].map((slot) => ({
+        slot,
+        file_name: slot === "plan" ? "2026 월간.연간교육안.pdf" : null,
+      })),
+    );
 
     await fresh.exec(SUPABASE_SHIM);
     await fresh.exec(MIGRATION);

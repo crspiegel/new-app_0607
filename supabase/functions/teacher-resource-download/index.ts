@@ -32,10 +32,13 @@ const ALLOWED_ORIGINS = [
   "http://localhost:5173",
 ];
 const LEVEL_RE = /^(beginner|level-[123])$/;
-// monthly = 월간교육안 (D63, 2026-11-02) · plan = 연간교육안 (the old
-// 월간.연간교육안 slot key) · award = 상장 · test = 테스트 (level-2/3; the DB
-// answers "empty" for a slot a level does not have).
-const SLOT_RE = /^(monthly|plan|award|test)$/;
+// A slot key's SHAPE only (D65, 2026-11-02): lowercase letters, digits and
+// '-', a letter first, 24 at most. Which keys a level has is the database's
+// answer — teacher_resource_issue finds no row for anything else ("empty" →
+// 404) — so a new slot needs no redeploy. Today: monthly-03 … monthly-12
+// (월간교육안 3~12월) · plan (연간교육안) · award · test (level-2/3) · script ·
+// pictures · flashcards.
+const SLOT_RE = /^[a-z][a-z0-9-]{0,23}$/;
 const LMS_TOKEN_RE = /^[A-Za-z0-9_-]{8,256}$/;
 const ISSUE_STATUS = { denied: 401, empty: 404, limit: 429 };
 

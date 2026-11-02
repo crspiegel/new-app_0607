@@ -153,11 +153,25 @@ test("download fn: bad method / body / nobody signed in → refused, no DB call"
   expect(calls).toEqual([]);
 });
 
-// D63 (2026-11-02): '월간.연간교육안' became two slots — monthly (월간교육안,
-// new) and plan (연간교육안, the old slot key, so live files stay put).
-test("download fn: D63 — monthly is a slot; plan / award / test still are; nothing else", async () => {
+// D65 (2026-11-02): the function checks only the SHAPE of a slot key (lower-
+// case letters, digits and '-', 24 at most, a letter first); which keys a
+// level has is the database's answer (teacher_resource_issue: no row =
+// "empty" = 404) — so a new slot needs no redeploy. Today: monthly-03 …
+// monthly-12 (월간교육안 3~12월) · plan · award · test · script · pictures ·
+// flashcards.
+test("download fn: D65 — any well-formed slot key goes to the DB; anything else is refused first", async () => {
   const { handler, calls } = fakeSupabase();
-  for (const slot of ["monthly", "plan", "award", "test"]) {
+  const keys = [
+    "monthly-03",
+    "monthly-12",
+    "plan",
+    "award",
+    "test",
+    "script",
+    "pictures",
+    "flashcards",
+  ];
+  for (const slot of keys) {
     const res = await handler(
       post({ level: "level-2", slot }, { "x-lms-token": TOKEN }),
     );
@@ -166,14 +180,19 @@ test("download fn: D63 — monthly is a slot; plan / award / test still are; not
   const asked = calls
     .filter((c) => c.url.endsWith("/rest/v1/rpc/teacher_resource_issue"))
     .map((c) => c.body.p_slot);
-  expect(asked).toEqual(["monthly", "plan", "award", "test"]);
+  expect(asked).toEqual(keys);
   const before = calls.length;
   for (const slot of [
-    "annual",
-    "Monthly",
-    "monthly2",
+    "",
+    "Monthly-03",
+    "3-monthly",
+    "-plan",
+    "monthly_03",
+    "monthly 03",
     "월간",
-    "plan|monthly",
+    "plan|award",
+    "../plan",
+    "a".repeat(25),
   ]) {
     const res = await handler(
       post({ level: "level-2", slot }, { "x-lms-token": TOKEN }),

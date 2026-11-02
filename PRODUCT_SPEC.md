@@ -255,6 +255,18 @@ Menu button requirements:
   (연간교육안 — the old 월간.연간교육안 key, so earlier files are the 연간교육안 files) · `award` · `test`.
   One card per row (D58): file icon · title + "PDF · 1.2MB · 11/02 업데이트" · [내려받기]; a slot without
   a file says "아직 올라온 자료가 없어요" (not a button).
+- D65 (2026-11-02, replaces the D63 card list): 월간교육안 is one slot per month, March-December
+  (`monthly-03` … `monthly-12`); three new kinds on every level, registered per level: 핵심문장
+  스크립트 (`script`) · 그림 자료실 (`pictures`) · 플래쉬카드 (`flashcards`). Card order: 월간교육안 →
+  연간교육안 → 상장 → 테스트 (Level 2/3 only) → 핵심문장 스크립트 → 그림 자료실 → 플래쉬카드 (6 cards on
+  Beginner / Level 1, 7 on Level 2 / 3; 15 / 15 / 16 / 16 = 62 slots). Cards in a grid: 2 per row on a
+  PC, 1 on a phone. [월간교육안] ("3월~12월 · N개 등록", [월 선택 ▾]) opens a full-width panel under the
+  grid with the ten month buttons (5 × 2 on a PC): a month with a file or a link is a level-colored
+  button (file = our download, Drive = new tab), an empty month is a dim button that cannot be pressed;
+  pressing again closes it. D63's single `monthly` slot is gone — its files are deleted in the admin
+  screen before the change. Each slot keeps the D64 rule (a file OR a Drive link) and the file rules
+  (PDF / Excel, 10 MB, 30 a day, 15 s); big files or other formats go as Drive links. Admin: level
+  tabs, a foldable 월간교육안 group ("N/10 등록"), then the other slots.
 - D64 (2026-11-02): each slot holds EITHER an uploaded file OR a Google Drive file link (the admin's
   file shared "anyone with the link"; only its ID is stored). Registering one removes the other (a
   replaced file is deleted from Storage). A Drive card says "구글 드라이브 · 11/02 업데이트" and its

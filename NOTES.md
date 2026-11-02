@@ -1172,6 +1172,11 @@ not exists` 안의 CHECK는 이미 있는 표를 안 바꾼다 → 그 아래 `d
   `URL` 없음). 관리자 테스트: 저장·업로드마다 목록을 다시 그리므로 다음 클릭 전에 "옛 행 표시 → 사라질 때까지 대기"
   (`markRows`/`redrawn`) — 안 그러면 곧 바뀔 옛 행을 눌러 두 번 누르기 상태가 사라진다. 구글 요청은 `context.route`로 막는다
   (새 탭은 `page.route`에 안 걸림).
+- (D65, `2026-11-02`) 칸 = `monthly-03`…`monthly-12` · `plan` · `award` · `test` · `script` · `pictures` · `flashcards`
+  (62칸). 칸 목록이 있는 곳은 이제 네 군데(CHECK, 목록 values, Storage 정책 정규식, 화면 `RES_SLOTS`) — Edge Function
+  `SLOT_RE`는 형식만 본다(DB가 판단, 없는 칸 = "empty" = 404). 칸을 **없앨** 때는 그 칸의 행이 남아 있으면 CHECK를 다시 거는
+  ALTER가 실패한다 → `migration.sql`에 그 행이 있으면 문구로 멈추는 DO 블록(파일 전체가 한 트랜잭션이라 아무것도 안 바뀜),
+  운영 precheck가 미리 알려 줌. 행은 관리자 화면에서 지워야 Storage 파일도 같이 정리된다(SQL로 지우면 파일이 남음).
 - 옛 화면은 목록에 모르는 칸이 와도 **무시**한다(`resourceSlots`를 돌며 `rows.find`) → 칸 추가는 "SQL 먼저, 화면 나중"이 안전.
   `tests/fixtures/teacher-resources-4a9b23d.js`(D63 전 운영 화면, 수정 금지)로 확인. 운영 SQL Editor용 반영본은 DO 블록 하나로
   migration.sql에서 잘라 만든다(로컬 `docs/worker-briefs/2026-11-02-d63-sql-check.mjs` — 전체 카탈로그 비교).

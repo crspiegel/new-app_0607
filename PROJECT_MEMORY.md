@@ -28,10 +28,10 @@ Live = **`6c32cd8`** (`2026-11-02`: 3B `4a9b23d` + D63 — live SQL first, then 
   - A **done**: levels rename live `2026-10-31` (55 rows, all new keys); CHECKs `content_pages_level_key`,
     `page_backgrounds_level_key`; admin saves allowed again.
   - B live: '교사 자료실' (admin + LMS role 1/2) → private bucket; download via Edge Function
-    `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). Card design D58, **D63 live** (14 slots:
-    `monthly` 월간교육안 + `plan` = 연간교육안, the old key). **D64 in progress:** a slot = a file OR a Google Drive file
-    (ID only; teachers download from Google — no egress, no limit); live order = SQL (DO block) → push, no Edge redeploy.
-    SQL `4cbb87b` + screen committed (local, 11/02); live held — goes live together with D65.
+    `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). D58 cards, **D63 live** (14 slots).
+    Local, not live: **D64** (`4cbb87b` + `28b15cb`: a slot = a file OR a Google Drive file ID, downloaded from Google)
+    - **D65 in progress** (월간 3~12월 + script · pictures · flashcards = 62 slots; 2-column cards + month panel).
+      Live together: delete 'monthly' files → Edge redeploy → precheck → apply DO → verify → push.
 - **Student page header fix** live (`8176966`), PC check done 10/31.
 - **User:** iPhone real-device check (2B); Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own
   Vimeo (`vimeo.com/<id>` in admin).
