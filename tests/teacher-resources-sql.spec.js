@@ -567,6 +567,274 @@ test("teacher resources sql: D63 — monthly (월간교육안) beside plan (연�
   }
 });
 
+// D64 (2026-11-02): a slot holds an uploaded file OR a Google Drive file —
+// only its ID is stored; teachers download it from Google directly (no
+// Storage egress, no Edge Function, no daily limit). One kind per slot.
+const DRIVE_A = "1AbCdEfGhIjKlMnOpQrStUvWxYz012345"; // 33 chars, as Drive makes them
+const DRIVE_B = "0B7_legacy-Drive_Id_0123456789"; // 30, older style
+
+test("teacher resources sql: D64 — a slot holds a file OR a Google Drive file", async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  test.setTimeout(120000);
+  const db = new PGlite({ extensions: { pgcrypto } });
+  try {
+    await db.exec(SUPABASE_SHIM);
+    await db.exec(MIGRATION);
+    const { admin, teacher } = await people(db);
+    await db.exec(`
+      insert into auth.users (id, email) values ('${OTHER_UID}', 'other@example.test');
+      insert into public.members (id, password_hash, grade, role) values
+        ('t-branch', extensions.crypt('pw-1', extensions.gen_salt('bf')), 1, 1),
+        ('t-student', extensions.crypt('pw-3', extensions.gen_salt('bf')), 3, 3);`);
+    const tokenOf = async (id, pw) =>
+      (
+        await as(
+          db,
+          {},
+          `select public.lms_login('${id}', '${pw}') ->> 'token' as token`,
+        )
+      )[0].token;
+    const branch = await tokenOf("t-branch", "pw-1");
+    const student = await tokenOf("t-student", "pw-3");
+    const other = { role: "authenticated", uid: OTHER_UID };
+    const setDrive = (who, level, slot, id) =>
+      as(
+        db,
+        who,
+        `select public.teacher_resource_set_drive('${level}', '${slot}', '${id}') as old`,
+      );
+
+    // who may register a link: the top admin only
+    for (const who of [
+      { token: teacher },
+      { token: branch },
+      { token: student },
+      {},
+    ]) {
+      await expect(
+        setDrive(who, "beginner", "monthly", DRIVE_A),
+      ).rejects.toThrow(/permission denied for function/); // anon: no EXECUTE
+    }
+    await expect(
+      setDrive(other, "beginner", "monthly", DRIVE_A),
+    ).rejects.toThrow(/not authorized/);
+    // only a Drive file ID (letters, digits, _ and -, 25-64 long)
+    for (const bad of [
+      "short-id",
+      "has space 1234567890123456789012",
+      "../beginner/plan/1730000000000",
+      "a".repeat(65),
+      "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/view",
+    ]) {
+      await expect(
+        setDrive(admin, "beginner", "monthly", bad.replace(/'/g, "''")),
+      ).rejects.toThrow(/not a Google Drive file id/);
+    }
+    // not a slot of that level (D63 rule unchanged)
+    await expect(setDrive(admin, "beginner", "test", DRIVE_A)).rejects.toThrow(
+      /teacher_resources_slot_ok/,
+    );
+
+    // empty slot → link: nothing to delete
+    expect(await setDrive(admin, "beginner", "monthly", DRIVE_A)).toEqual([
+      { old: null },
+    ]);
+    // file slot → link: the file's Storage path comes back (the page deletes it)
+    await as(
+      db,
+      admin,
+      `insert into storage.objects (bucket_id, name) values ('${BUCKET}', 'beginner/plan/1730000000040.pdf')`,
+    );
+    await as(
+      db,
+      admin,
+      `select public.teacher_resource_set('beginner', 'plan', 'beginner/plan/1730000000040.pdf', '연간교육안.pdf', 2000)`,
+    );
+    expect(await setDrive(admin, "beginner", "plan", DRIVE_B)).toEqual([
+      { old: "beginner/plan/1730000000040.pdf" },
+    ]);
+    // link → link: nothing to delete
+    expect(await setDrive(admin, "beginner", "plan", DRIVE_A)).toEqual([
+      { old: null },
+    ]);
+
+    // the list: admin, branch account and teacher see the ID (and the date);
+    // students, visitors and other signed-in users see nothing
+    const list = (who) =>
+      as(
+        db,
+        who,
+        `select slot, file_name, file_size::int as size, drive_id, updated_at is not null as dated
+           from public.teacher_resources_list('beginner')`,
+      );
+    const expected = [
+      {
+        slot: "monthly",
+        file_name: null,
+        size: null,
+        drive_id: DRIVE_A,
+        dated: true,
+      },
+      {
+        slot: "plan",
+        file_name: null,
+        size: null,
+        drive_id: DRIVE_A,
+        dated: true,
+      },
+      {
+        slot: "award",
+        file_name: null,
+        size: null,
+        drive_id: null,
+        dated: false,
+      },
+    ];
+    for (const who of [admin, { token: branch }, { token: teacher }]) {
+      expect(await list(who)).toEqual(expected);
+    }
+    for (const who of [{ token: student }, {}, other])
+      expect(await list(who)).toEqual([]);
+
+    // the Edge Function path never signs a Drive slot: a plain "empty"
+    // (no error on the missing path) and no download counted
+    const issued = async () =>
+      (
+        await as(
+          db,
+          { role: "service_role", token: teacher },
+          "select public.teacher_resource_issue('beginner', 'monthly', null) as r",
+        )
+      )[0].r;
+    expect(await issued()).toEqual({ status: "empty" });
+    expect(
+      (
+        await db.query(
+          "select count(*)::int as n from public.teacher_resource_downloads",
+        )
+      ).rows[0].n,
+    ).toBe(0);
+
+    // link → file: the link goes, nothing to delete
+    await as(
+      db,
+      admin,
+      `insert into storage.objects (bucket_id, name) values ('${BUCKET}', 'beginner/monthly/1730000000041.pdf')`,
+    );
+    expect(
+      await as(
+        db,
+        admin,
+        `select public.teacher_resource_set('beginner', 'monthly', 'beginner/monthly/1730000000041.pdf', '월간교육안.pdf', 3000) as old`,
+      ),
+    ).toEqual([{ old: null }]);
+    expect((await list(admin))[0]).toEqual({
+      slot: "monthly",
+      file_name: "월간교육안.pdf",
+      size: 3000,
+      drive_id: null,
+      dated: true,
+    });
+    // clearing a link: the row goes, nothing to delete
+    expect(
+      await as(
+        db,
+        admin,
+        "select public.teacher_resource_clear('beginner', 'plan') as old",
+      ),
+    ).toEqual([{ old: null }]);
+    expect((await list(admin))[1]).toEqual({
+      slot: "plan",
+      file_name: null,
+      size: null,
+      drive_id: null,
+      dated: false,
+    });
+
+    // the table itself: exactly one kind per row, a well-formed ID
+    for (const values of [
+      `'level-1', 'award', 'level-1/award/1730000000042.pdf', 'x.pdf', 1, '${DRIVE_A}'`, // both
+      `'level-1', 'award', null, null, null, null`, // neither
+      `'level-1', 'award', null, 'x.pdf', null, '${DRIVE_A}'`, // a link with a name
+      `'level-1', 'award', null, null, null, 'bad id'`, // not an ID
+    ]) {
+      await expect(
+        db.exec(
+          `insert into public.teacher_resources (level, slot, storage_path, file_name, file_size, drive_id) values (${values})`,
+        ),
+      ).rejects.toThrow(
+        /teacher_resources_source_ok|teacher_resources_drive_ok/,
+      );
+    }
+  } finally {
+    await db.close();
+  }
+});
+
+// D64 on the live database today (commit 6c32cd8 = tests/fixtures/
+// migration-4b.sql, 수정 금지): the file rows stay as they are and every
+// teacher-resources definition equals a fresh install of the new file.
+const MIGRATION_4B = readFileSync(
+  path.resolve("tests/fixtures/migration-4b.sql"),
+  "utf8",
+);
+
+test("teacher resources sql: D64 upgrade — live (6c32cd8) + migration.sql = fresh install", async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  test.setTimeout(180000);
+  const live = new PGlite({ extensions: { pgcrypto } });
+  const fresh = new PGlite({ extensions: { pgcrypto } });
+  try {
+    await live.exec(SUPABASE_SHIM);
+    await live.exec(MIGRATION_4B);
+    const { admin, teacher } = await people(live);
+    for (const [level, slot, n] of [
+      ["beginner", "monthly", 50],
+      ["level-2", "plan", 51],
+    ]) {
+      const p = `${level}/${slot}/17300000000${n}.pdf`;
+      await as(
+        live,
+        admin,
+        `insert into storage.objects (bucket_id, name) values ('${BUCKET}', '${p}')`,
+      );
+      await as(
+        live,
+        admin,
+        `select public.teacher_resource_set('${level}', '${slot}', '${p}', '${slot}.pdf', 1000)`,
+      );
+    }
+    const rows =
+      "select level, slot, storage_path, file_name, file_size from public.teacher_resources order by 1, 2";
+    const before = (await live.query(rows)).rows;
+
+    await live.exec(MIGRATION);
+    await live.exec(MIGRATION); // re-run safe
+    expect((await live.query(rows)).rows).toEqual(before);
+    expect(
+      await as(
+        live,
+        { token: teacher },
+        "select slot, file_name, drive_id from public.teacher_resources_list('level-2')",
+      ),
+    ).toEqual([
+      { slot: "monthly", file_name: null, drive_id: null },
+      { slot: "plan", file_name: "plan.pdf", drive_id: null },
+      { slot: "award", file_name: null, drive_id: null },
+      { slot: "test", file_name: null, drive_id: null },
+    ]);
+
+    await fresh.exec(SUPABASE_SHIM);
+    await fresh.exec(MIGRATION);
+    expect((await live.query(TR_DEFINITIONS)).rows).toEqual(
+      (await fresh.query(TR_DEFINITIONS)).rows,
+    );
+  } finally {
+    await live.close();
+    await fresh.close();
+  }
+});
+
 // The live database today (commit 4a9b23d = tests/fixtures/migration-3b.sql,
 // 수정 금지) with a file in the old 월간.연간교육안 slot → migration.sql again:
 // the file is the 연간교육안 (plan) file, monthly is empty, and every teacher-
@@ -833,6 +1101,17 @@ test("teacher resources sql: read-only verify script", async ({}, testInfo) => {
       [
         "grant execute on function public.teacher_resource_issue(text, text, uuid) to anon",
         ["teacher_resource_issue: Edge Function (service role) only"],
+      ],
+      // D64: the Drive link RPC and the one-kind-per-row rule
+      [
+        "grant execute on function public.teacher_resource_set_drive(text, text, text) to anon",
+        ["teacher_resource_set_drive: signed-in only (checks is_admin inside)"],
+      ],
+      [
+        "alter table public.teacher_resources drop constraint teacher_resources_source_ok",
+        [
+          "teacher_resources checks: slot rule, path rule, size <= 10 MB, file or Drive, Drive ID",
+        ],
       ],
       [
         `alter policy teacher_resources_admin_all on storage.objects

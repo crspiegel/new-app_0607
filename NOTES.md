@@ -1161,6 +1161,12 @@ level, book, slot)`)에서만.
   옮기지 않으려고)** · `award` · `test`. 칸 목록이 있는 곳은 다섯 군데: CHECK `teacher_resources_slot_ok`, `teacher_resources_list`의
   values, Storage 업로드 정책 경로 정규식, Edge Function `SLOT_RE`, 화면 `RES_SLOTS` — 칸을 바꿀 때 모두 함께. ⚠ `create table if
 not exists` 안의 CHECK는 이미 있는 표를 안 바꾼다 → 그 아래 `drop constraint if exists` + `add constraint`.
+- (D64, `2026-11-02`) 칸 = 파일 **또는** 구글 드라이브 파일(ID만, `drive_id`). 드라이브 칸은 파일 열 3개가 NULL —
+  `storage_path`의 경로 CHECK·`file_size` CHECK는 NULL이면 통과하므로 "파일 행에만" 걸린다. 규칙 2개(`source_ok`: 정확히 하나,
+  `drive_ok`: ID 형식 25~64자). 해제는 기존 `teacher_resource_clear`(드라이브면 지울 경로 NULL). `teacher_resource_issue`는
+  경로가 NULL이면 원래 "empty" → **Edge Function 무변경**. 목록 함수 결과에 열을 더하면 `create or replace`가 실패 →
+  옛 모양일 때만 drop(`lms_member_list`와 같은 가드), drop하면 권한도 사라지므로 grant를 같은 파일·같은 DO 블록에.
+  옛 화면(D63)은 `file_name`이 NULL인 드라이브 칸을 "준비 중"으로 본다(안전) → "SQL 먼저, 화면 나중".
 - 옛 화면은 목록에 모르는 칸이 와도 **무시**한다(`resourceSlots`를 돌며 `rows.find`) → 칸 추가는 "SQL 먼저, 화면 나중"이 안전.
   `tests/fixtures/teacher-resources-4a9b23d.js`(D63 전 운영 화면, 수정 금지)로 확인. 운영 SQL Editor용 반영본은 DO 블록 하나로
   migration.sql에서 잘라 만든다(로컬 `docs/worker-briefs/2026-11-02-d63-sql-check.mjs` — 전체 카탈로그 비교).

@@ -255,6 +255,13 @@ Menu button requirements:
   (연간교육안 — the old 월간.연간교육안 key, so earlier files are the 연간교육안 files) · `award` · `test`.
   One card per row (D58): file icon · title + "PDF · 1.2MB · 11/02 업데이트" · [내려받기]; a slot without
   a file says "아직 올라온 자료가 없어요" (not a button).
+- D64 (2026-11-02): each slot holds EITHER an uploaded file OR a Google Drive file link (the admin's
+  file shared "anyone with the link"; only its ID is stored). Registering one removes the other (a
+  replaced file is deleted from Storage). A Drive card says "구글 드라이브 · 11/02 업데이트" and its
+  [내려받기] opens `https://drive.google.com/uc?export=download&id=<ID>` in a new tab — straight from
+  Google: no Storage traffic, no Edge Function, no daily limit. Links accepted: drive.google.com
+  `/file/d/<ID>/…`, `/open?id=<ID>`, `/uc?…id=<ID>`; Google Docs/Sheets/Slides links are refused
+  ("PDF나 엑셀 파일로 드라이브에 올린 뒤 그 파일 링크를 넣어 주세요").
 - One file per slot (PDF / xlsx / xls, 10 MB max) in the private Storage bucket `teacher-resources`.
   A download is a 15-second signed URL (expiry fixed on the server) issued by the Edge Function
   `teacher-resource-download` and opened in the same tab (the file is saved, the page stays).

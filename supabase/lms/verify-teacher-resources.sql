@@ -52,7 +52,8 @@ fn (no, sig, roles) as (
   (9,  'public.teacher_resources_allowed()',                         array['anon', 'authenticated']),
   (10, 'public.teacher_resource_issue(text, text, uuid)',            array['anon', 'authenticated', 'service_role']),
   (11, 'public.teacher_resource_set(text, text, text, text, bigint)', array['anon', 'authenticated']),
-  (12, 'public.teacher_resource_clear(text, text)',                  array['anon', 'authenticated'])
+  (12, 'public.teacher_resource_clear(text, text)',                  array['anon', 'authenticated']),
+  (23, 'public.teacher_resource_set_drive(text, text, text)',        array['anon', 'authenticated'])
 ),
 fn_state as (
   select f.no, f.sig,
@@ -103,7 +104,7 @@ rows_ (no, area, check_name, expected, actual) as (
        'anon=no authenticated=yes', (select exec from fn_state where no = 11)),
   (12, 'rpc', 'teacher_resource_clear: signed-in only (checks is_admin inside)',
        'anon=no authenticated=yes', (select exec from fn_state where no = 12)),
-  (13, 'rpc', 'all 5 SECURITY DEFINER with search_path = public, extensions', '5 / 5',
+  (13, 'rpc', 'all 6 SECURITY DEFINER with search_path = public, extensions', '6 / 6',
        (select count(*) filter (where definer_ok) || ' / ' || count(*) from fn_state)),
   (14, 'storage', 'teacher_resources_admin_all: for all, to authenticated, admins only',
        'cmd=ALL roles={authenticated} using=ok check=ok',
@@ -132,8 +133,8 @@ rows_ (no, area, check_name, expected, actual) as (
               then 'teacher_resource_is_current' end,
          case when exists (select 1 from pol where policyname = 'teacher_resources_lms_read')
               then 'teacher_resources_lms_read' end), ''), 'none')),
-  (18, 'table', 'teacher_resources checks: slot rule, path rule, size <= 10 MB',
-       'slot_ok path_ok size_10mb',
+  (18, 'table', 'teacher_resources checks: slot rule, path rule, size <= 10 MB, file or Drive, Drive ID',
+       'slot_ok path_ok size_10mb source_ok drive_ok',
        concat_ws(' ',
          case when exists (select 1 from pg_constraint
                             where conrelid = to_regclass('public.teacher_resources')
@@ -145,7 +146,13 @@ rows_ (no, area, check_name, expected, actual) as (
                             where conrelid = to_regclass('public.teacher_resources')
                               and contype = 'c'
                               and pg_get_constraintdef(oid) ~ 'file_size.*10485760')
-              then 'size_10mb' end)),
+              then 'size_10mb' end,
+         case when exists (select 1 from pg_constraint
+                            where conrelid = to_regclass('public.teacher_resources')
+                              and conname = 'teacher_resources_source_ok') then 'source_ok' end,
+         case when exists (select 1 from pg_constraint
+                            where conrelid = to_regclass('public.teacher_resources')
+                              and conname = 'teacher_resources_drive_ok') then 'drive_ok' end)),
   (19, 'storage', 'RLS is on for storage.objects and storage.buckets (tables with it off)',
        'none',
        coalesce((select string_agg(c.relname, ', ' order by c.relname) from pg_class c
@@ -171,7 +178,9 @@ rows_ (no, area, check_name, expected, actual) as (
                     and d.refobjid in (to_regclass('public.teacher_resources'),
                                        to_regclass('public.teacher_resource_downloads'))
                     and rw.ev_class <> d.refobjid), 'none')),
-  (23, 'info', 'all storage.objects policies (for the eye, no pass/fail)', null,
+  (23, 'rpc', 'teacher_resource_set_drive: signed-in only (checks is_admin inside)',
+       'anon=no authenticated=yes', (select exec from fn_state where no = 23)),
+  (24, 'info', 'all storage.objects policies (for the eye, no pass/fail)', null,
        coalesce((select string_agg(policyname, ', ' order by policyname) from pol), 'none'))
 ),
 checked as (

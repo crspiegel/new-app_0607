@@ -2126,6 +2126,10 @@ notify pgrst, 'reload schema';
 -- ----------------------------------------------------------------------------
 -- ADD-ONLY and safe to re-run. Needs the "LMS (Phase 3A)" block above
 -- (lms_member). Level keys are the NEW keys: beginner · level-1..3.
+-- D64 (2026-11-02): a slot holds an uploaded file OR a Google Drive file
+-- ("anyone with the link"; only its ID is stored). Teachers download a Drive
+-- file from Google directly — no Storage egress, no Edge Function, no daily
+-- limit; files keep every rule below (30/day, 15 s URL, 10 MB, PDF/xlsx/xls).
 -- Slots, in card order (D63, 2026-11-02): monthly (월간교육안) · plan
 -- (연간교육안 — the old '월간.연간교육안' slot key, kept so live files and
 -- Storage paths <level>/plan/… stay where they are) · award (상장) · test
@@ -2153,23 +2157,46 @@ on conflict (id) do update
       file_size_limit    = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
 
--- One row per filled slot. storage_path is ASCII only:
+-- One row per filled slot. A file row: storage_path is ASCII only,
 -- <level>/<slot>/<upload epoch ms>.<ext>; the original (Korean) name lives in
--- file_name and becomes the download name.
+-- file_name and becomes the download name. A Drive row (D64): drive_id only —
+-- the three file columns are NULL (the path / size checks pass on NULL).
 create table if not exists public.teacher_resources (
   level        text not null,
   slot         text not null,
-  storage_path text not null unique,
-  file_name    text not null check (length(file_name) between 1 and 200),
-  file_size    bigint not null check (file_size between 1 and 10485760),
+  storage_path text unique,
+  file_name    text check (length(file_name) between 1 and 200),
+  file_size    bigint check (file_size between 1 and 10485760),
   updated_at   timestamptz not null default now(),
+  drive_id     text,
   primary key (level, slot),
   constraint teacher_resources_slot_ok check (
     (level in ('beginner', 'level-1') and slot in ('monthly', 'plan', 'award'))
     or (level in ('level-2', 'level-3') and slot in ('monthly', 'plan', 'award', 'test'))),
   constraint teacher_resources_path_ok check (
-    storage_path ~ ('^' || level || '/' || slot || '/[0-9]{13}\.(pdf|xlsx|xls)$'))
+    storage_path ~ ('^' || level || '/' || slot || '/[0-9]{13}\.(pdf|xlsx|xls)$')),
+  constraint teacher_resources_source_ok check (
+    (drive_id is null and storage_path is not null and file_name is not null and file_size is not null)
+    or (drive_id is not null and storage_path is null and file_name is null and file_size is null)),
+  constraint teacher_resources_drive_ok check (drive_id ~ '^[A-Za-z0-9_-]{25,64}$')
 );
+
+-- D64 on a table made before Drive links (`create table if not exists`
+-- leaves it as it is): the column, the three file columns nullable, and the
+-- two rules — each ALTER is one statement, the same result on every run.
+-- Live rows are all file rows, so the rules pass.
+alter table public.teacher_resources add column if not exists drive_id text;
+alter table public.teacher_resources
+  alter column storage_path drop not null,
+  alter column file_name drop not null,
+  alter column file_size drop not null;
+alter table public.teacher_resources
+  drop constraint if exists teacher_resources_source_ok,
+  add constraint teacher_resources_source_ok check (
+    (drive_id is null and storage_path is not null and file_name is not null and file_size is not null)
+    or (drive_id is not null and storage_path is null and file_name is null and file_size is null)),
+  drop constraint if exists teacher_resources_drive_ok,
+  add constraint teacher_resources_drive_ok check (drive_id ~ '^[A-Za-z0-9_-]{25,64}$');
 
 -- D63: the same slot rule on a table made before monthly existed (`create
 -- table if not exists` leaves an existing table as it is). Drop + add in ONE
@@ -2197,18 +2224,29 @@ as $$
       or exists (select 1 from public.lms_member() m where m.role in (1, 2));
 $$;
 
--- The level's slots in card order with the current file (NULL file = an
--- empty slot, shown as "준비 중"). No rows for anyone else or a bad level.
--- monthly = 월간교육안 (D63), plan = 연간교육안 (the old 월간.연간교육안 key).
--- A page that does not know monthly (deployed before D63) ignores that row.
+-- The level's slots in card order with the current file or Drive file ID
+-- (both NULL = an empty slot, shown as "준비 중"). No rows for anyone else or
+-- a bad level. monthly = 월간교육안 (D63), plan = 연간교육안 (the old
+-- 월간.연간교육안 key). A page that does not know monthly (deployed before
+-- D63) ignores that row; a page from before D64 shows a Drive slot as empty
+-- (its file_name is NULL). D64 added drive_id to the result — a changed
+-- result needs a drop first, done only while the old shape is there.
+do $$
+begin
+  if pg_get_function_result(to_regprocedure('public.teacher_resources_list(text)')) !~ 'drive_id' then
+    drop function public.teacher_resources_list(text);
+  end if;
+end;
+$$;
+
 create or replace function public.teacher_resources_list(p_level text)
-returns table (slot text, file_name text, file_size bigint, updated_at timestamptz)
+returns table (slot text, file_name text, file_size bigint, updated_at timestamptz, drive_id text)
 language sql
 stable
 security definer
 set search_path = public, extensions
 as $$
-  select s.slot, r.file_name, r.file_size, r.updated_at
+  select s.slot, r.file_name, r.file_size, r.updated_at, r.drive_id
     from (values ('monthly', 1), ('plan', 2), ('award', 3), ('test', 4)) as s (slot, ord)
     left join public.teacher_resources r
       on r.level = p_level and r.slot = s.slot
@@ -2299,8 +2337,9 @@ $$;
 -- get a file path or read the bucket.
 drop function if exists public.teacher_resource_file(text, text);
 
--- Admin: point a slot at an object that was just uploaded. Returns the
--- REPLACED object's path (the client deletes it from Storage), or NULL.
+-- Admin: point a slot at an object that was just uploaded (a Drive link in
+-- that slot goes — D64). Returns the REPLACED object's path (the client
+-- deletes it from Storage), or NULL.
 create or replace function public.teacher_resource_set(
   p_level text, p_slot text, p_path text, p_name text, p_size bigint
 )
@@ -2331,8 +2370,47 @@ begin
     set storage_path = excluded.storage_path,
         file_name    = excluded.file_name,
         file_size    = excluded.file_size,
+        drive_id     = null,
         updated_at   = now();
   return nullif(v_old, p_path);
+end;
+$$;
+
+-- Admin (D64): point a slot at a Google Drive file — its ID only (the page
+-- takes it out of the link; checked here again). An uploaded file in that
+-- slot goes: returns its Storage path (the client deletes it), or NULL.
+-- Clearing a link = teacher_resource_clear (returns NULL for a link).
+create or replace function public.teacher_resource_set_drive(
+  p_level text, p_slot text, p_drive_id text
+)
+returns text
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_old text;
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  if p_drive_id is null or p_drive_id !~ '^[A-Za-z0-9_-]{25,64}$' then
+    raise exception 'teacher resource: not a Google Drive file id' using errcode = '22023';
+  end if;
+  select r.storage_path into v_old
+    from public.teacher_resources r
+   where r.level = p_level and r.slot = p_slot
+   for update;
+  insert into public.teacher_resources as r (level, slot, drive_id, updated_at)
+  values (p_level, p_slot, p_drive_id, now())
+  on conflict (level, slot) do update
+    set storage_path = null,
+        file_name    = null,
+        file_size    = null,
+        drive_id     = excluded.drive_id,
+        updated_at   = now();
+  return v_old;
 end;
 $$;
 
@@ -2384,8 +2462,10 @@ revoke execute on function public.teacher_resource_issue(text, text, uuid) from 
 grant execute on function public.teacher_resource_issue(text, text, uuid) to service_role;
 revoke execute on function public.teacher_resource_set(text, text, text, text, bigint) from public, anon;
 revoke execute on function public.teacher_resource_clear(text, text) from public, anon;
+revoke execute on function public.teacher_resource_set_drive(text, text, text) from public, anon;
 grant execute on function public.teacher_resource_set(text, text, text, text, bigint) to authenticated;
 grant execute on function public.teacher_resource_clear(text, text) to authenticated;
+grant execute on function public.teacher_resource_set_drive(text, text, text) to authenticated;
 
 notify pgrst, 'reload schema';
 -- ==== end Teacher resources ====

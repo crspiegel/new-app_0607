@@ -17,7 +17,7 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`4a9b23d`** (`2026-11-02`, 3B SQL run first, then pushed — D49/D62). Older: archive.
+Live = **`6c32cd8`** (`2026-11-02`: 3B `4a9b23d` + D63 — live SQL first, then the push). Older: archive.
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"
@@ -28,9 +28,9 @@ Live = **`4a9b23d`** (`2026-11-02`, 3B SQL run first, then pushed — D49/D62). 
   - A **done**: levels rename live `2026-10-31` (55 rows, all new keys); CHECKs `content_pages_level_key`,
     `page_backgrounds_level_key`; admin saves allowed again.
   - B live: '교사 자료실' (admin + LMS role 1/2) → private bucket; download via Edge Function
-    `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). Card design D58 live; test account
-    deleted. **D63 in progress:** 14 slots — `monthly` 월간교육안 (new) + `plan` = 연간교육안 (old 월간.연간교육안 key);
-    live order = Edge Function redeploy → SQL (DO block) → push. TPS uploads real files after that; monthly Usage check.
+    `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). Card design D58, **D63 live** (14 slots:
+    `monthly` 월간교육안 + `plan` = 연간교육안, the old key). **D64 in progress:** a slot = a file OR a Google Drive file
+    (ID only; teachers download from Google — no egress, no limit); live order = SQL (DO block) → push, no Edge redeploy.
 - **Student page header fix** live (`8176966`), PC check done 10/31.
 - **User:** iPhone real-device check (2B); Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own
   Vimeo (`vimeo.com/<id>` in admin).

@@ -20,6 +20,16 @@
 | d   | 운영 선생님 테스트 계정(role 2, 지사 hq) 생성 SQL을 `supabase/lms/` 아래에(사용자 실행, 3A 운영 반영 뒤)                                                                                                                                                                                                                             |
 | e   | "넘으면 바로 402" 판단의 출처를 보고에 적는다                                                                                                                                                                                                                                                                                        |
 
+## D64 — 구글 드라이브 링크 (2026-11-02, 이그레스 줄이기)
+
+칸마다 **파일 업로드 또는 구글 드라이브 파일 링크 중 하나**. 드라이브 칸은 파일 ID만 저장(`teacher_resources.drive_id`,
+`^[A-Za-z0-9_-]{25,64}$`), 파일 열 3개는 NULL — 규칙 `teacher_resources_source_ok`(파일 또는 드라이브 정확히 하나)·
+`teacher_resources_drive_ok`(ID 형식). 등록 `teacher_resource_set_drive`(최고관리자만, 바뀐 파일의 Storage 경로를 돌려줌),
+해제 = 기존 `teacher_resource_clear`, 파일 등록 `teacher_resource_set`은 링크를 지움. `teacher_resources_list`에 `drive_id` 열
+(결과 모양이 바뀌어 옛 모양일 때만 drop 후 create). 선생님은 `https://drive.google.com/uc?export=download&id=<ID>`를 새 탭으로 —
+우리 Storage·Edge Function을 거치지 않음(하루 30회 제한 없음). `teacher_resource_issue`는 드라이브 칸에서 경로가 NULL이라
+그대로 "empty"(Edge Function 변경·재배포 없음). 운영 순서: SQL(DO 블록) → 푸시. 옛 화면은 드라이브 칸을 "준비 중"으로 본다.
+
 ## D63 — 칸 나누기 (2026-11-02, 아래 본문의 칸 설명보다 우선)
 
 '월간.연간교육안' 칸 1개 → **'월간교육안'(새 키 `monthly`) · '연간교육안'(옛 키 `plan` 그대로)** 2개. 순서 월간 → 연간 →

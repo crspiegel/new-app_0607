@@ -429,6 +429,10 @@ Phase 3 남은 결정: 3.2 헤더 방식(재생성 vs fetch 래퍼) → fetch �
       돌려준다 → SQL 변경 없음.
 - [x] **화면(teacher-resources.js · styles.css):** 자료실 = 카드 한 줄에 하나(아이콘 · 제목 + 형식·크기·날짜 · 내려받기 / 준비 중 안내),
       휴대폰은 버튼이 카드 아래 전체 폭. 월 페이지 버튼 = 레벨 색 채움. 다운로드 흐름 무변경. 테스트 RED 7 → 통과(선택자 갱신 4 + 새 3).
+- [x] **D64 구글 드라이브 링크(지시서 `2026-11-02`, 멈춤 G까지):** SQL — `drive_id`·규칙 2개·파일 열 NULL 허용, `set_drive` 새 RPC,
+      `set`이 링크를 지움, 목록 `drive_id` 열(가드 drop). Edge Function 무변경(issue가 원래 empty). 테스트 먼저(RED 3 → GREEN), 운영(6c32cd8)
+      사본 `tests/fixtures/migration-4b.sql`. 읽기 전용 검증 `verify-teacher-resources.sql`에 새 함수·규칙. 운영 DO 블록 3개 로컬 전용.
+      화면 = 멈춤 G(관리자 링크 입력·전환 확인, 선생님 카드 새 탭) — 디자인 승인 뒤 커밋.
 - [x] **D63 칸 나누기(지시서 `2026-11-02`, 멈춤 R까지):** '월간.연간교육안' → `monthly` 월간교육안(새) + `plan` 연간교육안(옛 키 그대로 —
       행·Storage 경로 이동 없음), 14칸. SQL(칸 규칙 drop+add · 목록 순서 · Storage 경로) + Edge `SLOT_RE` — 테스트 먼저(RED 4 → GREEN),
       운영(4a9b23d) 사본 `tests/fixtures/migration-3b.sql` → migration.sql = 새 설치 정의. 운영용 DO 블록 3개는 로컬 전용(반영본 = migration.sql
