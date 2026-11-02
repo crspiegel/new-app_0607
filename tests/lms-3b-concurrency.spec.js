@@ -3,12 +3,15 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import EmbeddedPostgres from "embedded-postgres";
 import { SUPABASE_SHIM } from "./sql-shim.mjs";
 
 // Two connections at the same moment — what PGlite (one connection) cannot do.
-// A throwaway local PostgreSQL (devDependency embedded-postgres) in a temp
-// folder on a free 127.0.0.1 port; never the live project. Fresh install of
+// A throwaway local PostgreSQL (embedded-postgres) in a temp folder on a free
+// 127.0.0.1 port; never the live project. The package is NOT in package.json
+// (D61: Vercel installs that list on every deploy — a beta package with an
+// install script must not be able to break a deploy), so without it these
+// tests are skipped with the line below; install it for one run (NOTES).
+// Fresh install of
 // supabase/migration.sql, then:
 //   N4 — two bulk assigns naming the same students in opposite orders: both
 //        finish (no deadlock, error 40P01, for either of them);
@@ -32,6 +35,19 @@ function freePort() {
   });
 }
 
+const INSTALL_HINT =
+  "embedded-postgres 없음 — 한 번만 설치: npm i --no-save embedded-postgres@18.6.0-beta.19";
+
+// The package, when it is installed (D61: never a dependency of the site).
+async function loadEmbeddedPostgres() {
+  try {
+    return (await import("embedded-postgres")).default;
+  } catch {
+    return null;
+  }
+}
+
+let EmbeddedPostgres = null;
 let pg = null;
 let dir = null;
 const clients = [];
@@ -95,6 +111,8 @@ async function classesOf(owner, id) {
 test.describe("lms 3b sql: two connections at once (local PostgreSQL)", () => {
   test.beforeAll(async ({}, testInfo) => {
     if (testInfo.project.name !== "desktop") return;
+    EmbeddedPostgres = await loadEmbeddedPostgres();
+    if (!EmbeddedPostgres) return; // the tests skip themselves (INSTALL_HINT)
     test.setTimeout(180000);
     dir = mkdtempSync(path.join(os.tmpdir(), "lms-pg-"));
     pg = new EmbeddedPostgres({
@@ -103,6 +121,9 @@ test.describe("lms 3b sql: two connections at once (local PostgreSQL)", () => {
       password: "local-test-only",
       port: await freePort(),
       persistent: false,
+      // no separate I/O helper processes (PostgreSQL 18's io_method=worker):
+      // on Windows they outlived stop() and locked node_modules (npm ci EPERM)
+      postgresFlags: ["-c", "io_method=sync"],
       onLog: () => {},
     });
     await pg.initialise();
@@ -132,6 +153,7 @@ test.describe("lms 3b sql: two connections at once (local PostgreSQL)", () => {
 
   test("N4: two bulk assigns, same students in opposite orders → both finish", async ({}, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+    test.skip(!pg, INSTALL_HINT);
     test.setTimeout(120000);
     const owner = clients[0];
     // Test-only: every class_members insert takes 0.3 s, so the two calls
@@ -174,6 +196,7 @@ test.describe("lms 3b sql: two connections at once (local PostgreSQL)", () => {
 
   test("N5: two branches made at the same moment with the same code / name → duplicate", async ({}, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+    test.skip(!pg, INSTALL_HINT);
     test.setTimeout(60000);
     const admin = { jwt: ADMIN_UID };
     const one = await connect();

@@ -281,10 +281,15 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 - advisory lock 번호(겹치면 서로 기다린다): 7301 로그인 아이디 키 · 7302 교사 자료실 다운로드 한도 · 7303 계정 아이디 쓰기(생성·변경) ·
   7304 학생별 반 넣기(D51 검사 경쟁 방지). 새 잠금은 새 번호로. **한 호출이 잠금을 여러 개 잡으면 쓰기 전에 잠금 번호 순으로 한꺼번에**
   (3B-3 N4: `lms_bulk_assign`) — 행마다 잡으면 반대 순서의 두 호출이 서로 기다리다 한쪽이 40P01로 끝난다.
-- PGlite는 연결이 하나라 **동시 실행(교착·고유 제약 경쟁)은 재현 불가** → `tests/lms-3b-concurrency.spec.js`가 devDependency
-  `embedded-postgres`(실제 PostgreSQL 18.6, 임시 폴더·빈 포트, 처음 기동 약 15~20초)로 두 연결을 동시에 돌린다. 겹치게 하려면 테스트 전용
-  트리거로 `pg_sleep`(대량 배정 행마다 0.3초). PostgreSQL의 교착 감지는 `deadlock_timeout` 1초 뒤 한쪽을 40P01로 끝낸다(영원히 멈추진 않음).
-  설치 때 npm이 `allow-scripts` 경고(postinstall 미실행)를 내도 Windows에서는 그대로 동작한다.
+- PGlite는 연결이 하나라 **동시 실행(교착·고유 제약 경쟁)은 재현 불가** → `tests/lms-3b-concurrency.spec.js`가 `embedded-postgres`
+  (실제 PostgreSQL 18.6, 임시 폴더·빈 포트, 처음 기동 약 15~20초)로 두 연결을 동시에 돌린다. 겹치게 하려면 테스트 전용 트리거로
+  `pg_sleep`(대량 배정 행마다 0.3초). PostgreSQL의 교착 감지는 `deadlock_timeout` 1초 뒤 한쪽을 40P01로 끝낸다(영원히 멈추진 않음).
+- ⚠ **`embedded-postgres`는 `package.json`에 넣지 않는다(D61).** Vercel은 배포마다 `package.json`을 설치한다 — 베타 + 설치 스크립트가
+  있는 패키지가 배포 설치를 깨면, D49 순서(운영 SQL 직후 푸시)에서 옛 회원 탭이 멈춘 채로 남는다. 없으면 위 테스트는 실패가 아니라
+  건너뜀(이유에 설치 한 줄). 돌릴 때만: `npm i --no-save embedded-postgres@18.6.0-beta.19` → `npm run test:sql` → `npm ci`로 정리
+  (`--no-save`라 `package.json`·lock은 안 바뀜). npm이 `allow-scripts` 경고(postinstall 미실행)를 내도 Windows에서는 그대로 동작한다.
+  ⚠ PostgreSQL 18의 I/O 도우미 프로세스(`postgres.exe --forkchild="io_worker"`)가 Windows에서 `stop()` 뒤에도 남아 `node_modules`를
+  잠갔다 → `npm ci`가 EPERM(-4048). 테스트는 `io_method=sync`로 띄운다(도우미 없음). 남아 있으면 그 경로의 프로세스만 끈다.
 - 함수의 인자·결과 열이 바뀌면 `create or replace`가 실패하거나(결과 열) **겹치는 함수가 하나 더 생긴다**(인자) → 옛 모양만
   골라 drop한다(`lms_branch_create(text)`, `lms_member_list` 가드). `'…'::regprocedure` 문자열 변환은 **계획 단계에서** 풀려서 함수가
   없으면 `if … and` 앞부분과 상관없이 오류 → `to_regprocedure(…)`(없으면 NULL)를 쓴다.
