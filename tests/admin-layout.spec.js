@@ -556,7 +556,9 @@ test("admin editors: every user-visible content keeps its editor", async ({
   await page
     .locator('#adminSidebar .admin-menu-btn[data-admin-view="banner"]')
     .click();
-  await expect(page.locator("#teacherResAdmin .res-admin-row")).toHaveCount(10);
+  // 14 teacher-resource slots (D63: 월간교육안 + 연간교육안 instead of
+  // 월간.연간교육안) — one editor row per card the teachers see
+  await expect(page.locator("#teacherResAdmin .res-admin-row")).toHaveCount(14);
   await expect(page.locator("#heroBannerUpload")).toBeVisible();
   await expect(page.locator("#heroBannerSave")).toBeVisible();
   await expect(page.locator('input[name="heroBannerMode"]')).toHaveCount(2);

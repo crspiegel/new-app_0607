@@ -9,9 +9,9 @@
      updateAdminUI on every login / logout / restore);
    - the level's resource page (#resources/<level>): the month page itself in
      another mode — body[data-screen="resources"] swaps its 3~12월 buttons for
-     2-3 download buttons, so the header, title, colors and background are the
+     3-4 resource cards, so the header, title, colors and background are the
      month page's by construction;
-   - the admin section in the 배너 tab: 4 levels, 10 slots, upload / replace /
+   - the admin section in the 배너 tab: 4 levels, 14 slots, upload / replace /
      delete (the admin mirror of the resource pages).
 
    Files live in the PRIVATE Storage bucket "teacher-resources" (10 MB, PDF /
@@ -28,8 +28,13 @@
 
 const RES_BUCKET = "teacher-resources";
 const RES_MAX_BYTES = 10 * 1024 * 1024; // = the bucket's file_size_limit
+// The slots in card order (D63, 2026-11-02): 월간교육안 is new (monthly);
+// plan = 연간교육안 — the old '월간.연간교육안' slot key, kept so the files
+// already uploaded (rows and Storage paths <level>/plan/…) stay put.
+// Beginner / Level 1: 3 slots, Level 2 / 3: 4 (test) — 14 in all.
 const RES_SLOTS = [
-  { slot: "plan", label: "월간.연간교육안" },
+  { slot: "monthly", label: "월간교육안" },
+  { slot: "plan", label: "연간교육안" },
   { slot: "award", label: "상장" },
   { slot: "test", label: "테스트", levels: ["level-2", "level-3"] },
 ];

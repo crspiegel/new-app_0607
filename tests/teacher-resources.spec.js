@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 // Teacher resources (B, 2026-10-29): the '교사 자료실' button on each level's
 // month page, the per-level resource page and the admin upload section in
@@ -34,8 +36,8 @@ const TOKEN = "tok-test-00000000000000000000000000000000000";
 function listFor(level, files = {}) {
   const slots =
     level === "level-2" || level === "level-3"
-      ? ["plan", "award", "test"]
-      : ["plan", "award"];
+      ? ["monthly", "plan", "award", "test"]
+      : ["monthly", "plan", "award"];
   return slots.map((slot) => {
     const file = files[`${level}/${slot}`];
     return {
@@ -354,10 +356,11 @@ test("resources: each level's page has its fixed buttons; empty = 준비 중", a
     },
   });
   const expected = {
-    beginner: ["월간.연간교육안", "상장"],
-    "level-1": ["월간.연간교육안", "상장"],
-    "level-2": ["월간.연간교육안", "상장", "테스트"],
-    "level-3": ["월간.연간교육안", "상장", "테스트"],
+    // D63: 월간교육안 (monthly) · 연간교육안 (plan, the old 월간.연간교육안)
+    beginner: ["월간교육안", "연간교육안", "상장"],
+    "level-1": ["월간교육안", "연간교육안", "상장"],
+    "level-2": ["월간교육안", "연간교육안", "상장", "테스트"],
+    "level-3": ["월간교육안", "연간교육안", "상장", "테스트"],
   };
   const labels = {
     beginner: "Beginner",
@@ -387,7 +390,7 @@ test("resources: each level's page has its fixed buttons; empty = 준비 중", a
   }
   // level-3 has no files: every card a notice (준비 중), no button at all
   const empty = page.locator("#resourceGrid .res-card");
-  for (let i = 0; i < 3; i += 1) {
+  for (let i = 0; i < 4; i += 1) {
     await expect(empty.nth(i)).toHaveAttribute("data-state", "empty");
     await expect(empty.nth(i).locator(".res-meta")).toHaveText("준비 중");
     await expect(empty.nth(i).locator(".res-empty")).toHaveText(EMPTY_TEXT);
@@ -439,7 +442,9 @@ test("resources: a download stays in this tab and keeps the Korean name", async 
   const urlBefore = page.url();
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("button", { name: "월간.연간교육안 내려받기" }).click(),
+    page
+      .getByRole("button", { name: "연간교육안 내려받기", exact: true })
+      .click(),
   ]);
   expect(download.suggestedFilename()).toBe(PLAN_NAME);
   expect(context.pages()).toHaveLength(1);
@@ -533,7 +538,7 @@ test("resources: a reload or bookmark reopens the same resource page", async ({
     "resources",
   );
   await expect(page.locator("#monthLevelTag")).toHaveText("Level 2");
-  await expect(page.locator("#resourceGrid .res-card")).toHaveCount(3);
+  await expect(page.locator("#resourceGrid .res-card")).toHaveCount(4);
   // a bookmark = a fresh browser session opened on that address
   const context = await browser.newContext();
   const tab = await context.newPage();
@@ -617,9 +622,84 @@ test("resources: PDF and Excel icons differ; a missing size or date is just left
   const drawn = (slot) => icon(slot).locator("svg").innerHTML();
   expect(await drawn("plan")).not.toBe(await drawn("award"));
   // the title is the slot's fixed label, as the admin section shows it
+  // (D63: plan = 연간교육안, monthly = 월간교육안)
   await expect(card(page, "plan").locator(".res-name")).toHaveText(
-    "월간.연간교육안",
+    "연간교육안",
   );
+  await expect(card(page, "monthly").locator(".res-name")).toHaveText(
+    "월간교육안",
+  );
+});
+
+// D63 order safety, live step ② (SQL before the push): the page deployed
+// before D63 (commit 4a9b23d — tests/fixtures/teacher-resources-4a9b23d.js,
+// 수정 금지) receives the NEW list with monthly rows. It shows its own slots,
+// ignores monthly, and its 월간.연간교육안 (plan) file still downloads; the admin
+// section still lists its 10 slots.
+test("resources: the pre-D63 page ignores the new monthly rows (live step ②)", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "order safety, run once");
+  const OLD = readFileSync(
+    path.resolve("tests/fixtures/teacher-resources-4a9b23d.js"),
+    "utf8",
+  );
+  expect(OLD).toContain('{ slot: "plan", label: "월간.연간교육안" }');
+  await page.route(/\/teacher-resources\.js(\?.*)?$/, (route) =>
+    route.fulfill({ contentType: "text/javascript", body: OLD }),
+  );
+  const sent = await stubSupabase(page, {
+    role: "teacher",
+    files: {
+      "level-2/monthly": { name: "11월 월간교육안.pdf", size: 1000 },
+      "level-2/plan": { name: "2026 월간.연간교육안.pdf", size: 2000 },
+    },
+  });
+  await page.goto("/#resources/level-2");
+  const cards = page.locator("#resourceGrid .res-card");
+  await expect(cards).toHaveCount(3);
+  await expect(cards.locator(".res-name")).toHaveText([
+    "월간.연간교육안",
+    "상장",
+    "테스트",
+  ]);
+  await expect(card(page, "monthly")).toHaveCount(0);
+  await expect(page.locator("#resourceStatus")).toHaveText("");
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    card(page, "plan").locator(".res-download").click(),
+  ]);
+  expect(download.suggestedFilename()).toBe("2026 월간.연간교육안.pdf");
+  expect(sent.fn.map((f) => f.body)).toEqual([
+    { level: "level-2", slot: "plan" },
+  ]);
+  expect(context.pages()).toHaveLength(1);
+});
+
+test("resources admin: the pre-D63 admin section still shows its 10 slots (live step ②)", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "order safety, run once");
+  const OLD = readFileSync(
+    path.resolve("tests/fixtures/teacher-resources-4a9b23d.js"),
+    "utf8",
+  );
+  await page.route(/\/teacher-resources\.js(\?.*)?$/, (route) =>
+    route.fulfill({ contentType: "text/javascript", body: OLD }),
+  );
+  await stubSupabase(page, {
+    role: "admin",
+    files: { "beginner/monthly": { name: "11월 월간교육안.pdf", size: 1000 } },
+  });
+  await openBannerTab(page);
+  await expect(page.locator("#teacherResAdmin .res-admin-row")).toHaveCount(10);
+  await expect(
+    page.locator(
+      '#teacherResAdmin .res-admin-row[data-level="beginner"] .res-admin-slot',
+    ),
+  ).toHaveText(["월간.연간교육안", "상장"]);
+  await expect(page.locator("#teacherResStatus")).toHaveText("");
 });
 
 test("resources: one card per row, title on one line, 44px buttons, keyboard focus", async ({
@@ -641,7 +721,7 @@ test("resources: one card per row, title on one line, 44px buttons, keyboard foc
     await page.setViewportSize({ width: w, height: h });
     await page.goto("about:blank");
     await page.goto("/#resources/level-2");
-    await expect(page.locator("#resourceGrid .res-card")).toHaveCount(3);
+    await expect(page.locator("#resourceGrid .res-card")).toHaveCount(4);
     await expect(card(page, "plan").locator(".res-download")).toBeVisible();
     const geo = await page.evaluate(() =>
       [...document.querySelectorAll("#resourceGrid .res-card")].map((el) => {
@@ -664,7 +744,7 @@ test("resources: one card per row, title on one line, 44px buttons, keyboard foc
       expect(geo[i].top, `${w}: card ${i}`).toBeGreaterThan(geo[i - 1].bottom);
       expect(Math.abs(geo[i].left - geo[0].left)).toBeLessThan(1);
     }
-    // "월간.연간교육안" (and every title) on one line — never "월간. / 연간교육안"
+    // every title on one line (D58: never "월간. / 연간교육안"; D63 titles are short)
     for (const g of geo) {
       expect(g.nameHeight, `${w}: title lines`).toBeLessThan(
         g.lineHeight * 1.5,
@@ -733,7 +813,7 @@ async function openBannerTab(page) {
   await expect(page.locator("#teacherResAdmin")).toBeVisible();
 }
 
-test("resources admin: 4 levels, 10 slots, current file shown", async ({
+test("resources admin: 4 levels, 14 slots (D63), current file shown", async ({
   page,
 }) => {
   await stubSupabase(page, { role: "admin" });
@@ -746,7 +826,22 @@ test("resources admin: 4 levels, 10 slots, current file shown", async ({
     "Level 3",
   ]);
   const rows = page.locator("#teacherResAdmin .res-admin-row");
-  await expect(rows).toHaveCount(10);
+  await expect(rows).toHaveCount(14);
+  await expect(
+    page.locator(
+      '#teacherResAdmin .res-admin-row[data-level="beginner"] .res-admin-slot',
+    ),
+  ).toHaveText(["월간교육안", "연간교육안", "상장"]);
+  await expect(
+    page.locator(
+      '#teacherResAdmin .res-admin-row[data-level="level-3"] .res-admin-slot',
+    ),
+  ).toHaveText(["월간교육안", "연간교육안", "상장", "테스트"]);
+  await expect(
+    page.locator(
+      '#teacherResAdmin .res-admin-row[data-level="beginner"][data-slot="monthly"] .res-admin-file',
+    ),
+  ).toHaveText("파일 없음");
   const plan = page.locator(
     '#teacherResAdmin .res-admin-row[data-level="beginner"][data-slot="plan"]',
   );
