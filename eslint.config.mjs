@@ -166,6 +166,27 @@ export default [
       "no-undef": "error",
     },
   },
+  // lms-admin.js: classic script after app.js (same shared scope) — the
+  // member / class / branch views of the admin screen (Phase 3.3).
+  {
+    files: ["lms-admin.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "script",
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        sb: "readonly",
+        state: "readonly",
+        adminRole: "readonly",
+        adminViewOpeners: "readonly",
+      },
+    },
+    rules: {
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "no-undef": "error",
+    },
+  },
   {
     files: ["app.js", "scripts/**/*.mjs", "tests/**/*.js"],
     languageOptions: {

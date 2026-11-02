@@ -292,6 +292,51 @@ use_column` + 별칭으로 전부 한정.
   보안 수정 4종(계정별 실패·잠긴 계정 건너뛰기·잠금 해제 범위·반 지정 학생만) = 9종 → 모두 실패 행 발생). 처음엔 "중복 확인이 넘겨받은
   지사를 믿음" 변형을 못 잡아 확인 행을 추가했다.
 
+### LMS 관리자 화면 (Phase 3.3 / 3B-2, 2026-11-01)
+
+- 역할 → 열 수 있는 관리자 뷰는 `app.js` `ADMIN_VIEWS` 한 곳(최고관리자 5개, 지사·선생님 회원·반). `setAdminView`는 목록 밖이면
+  **거부**(false), 메뉴 버튼도 숨김. `#admin`은 **로드 때만** 라우팅된다(hashchange 리스너 없음) → 로드·새로고침마다 `openAdmin`
+  가드: 학생 → 홈, 비로그인 → 로그인. 헤더 버튼 이름 Admin / My Branch / My Class(`updateAdminUI`).
+- 회원·반·지사 뷰는 새 classic script `lms-admin.js`(app.js 다음). ⚠ 같은 전역 이름 공간 → 최상위 이름이 다른 스크립트와 겹치면
+  **스크립트 전체가 멈춘다**(추가 전 이름 대조). ESLint 전역은 `eslint.config.mjs`의 lms-admin.js 블록. app.js `adminViewOpeners`에
+  뷰별 로더를 등록 → 뷰가 열릴 때마다 다시 읽음.
+- ⚠ **`.admin-select`·`.admin-controls`는 `display:flex`라 `hidden` 속성을 덮어쓴다** → `[hidden]{display:none}` 규칙을 따로 둠
+  (지사 계정에게 지사 필터가 보이던 결함). `.admin-member-actions`는 `flex:0 0 auto`(안 줄어듦) → 375폭 반 행이 넘침 →
+  `.lms-admin`에서 `0 1 auto` + `min-width:0`.
+- 선생님 자신의 member_id는 화면이 모른다(`lms_session`에 없음) → "자기 반" = `rpc lms_managed_class_ids()`(anon에 열린 RLS 도우미).
+  지사·관리자의 반 "옮겨 넣기" = 다른 반에서 빼기 → 넣기(RPC 2번, 한 트랜잭션 아님).
+- D50 지사 기억 = `localStorage.cra_lms_branch` `{branch_id, branch_name}`. 로그인 카드는 기억이 없으면 **바이트까지 그대로**(바꾸기 전
+  빌드에서 찍은 `.login-card` 요소 스크린샷 375·1366과 비교 — 같은 빌드 두 번 찍어 결정적인지 먼저 확인).
+- 테스트 함정: 화면은 8자 미만 토큰을 버린다(`LMS_TOKEN_RE`) → 가짜 토큰도 43자처럼. 로그아웃 클릭 뒤 **로그아웃이 끝난 것(버튼
+  숨김)을 확인하고** 이동 — 늦게 끝난 핸들러의 `setHash("home")`이 주소의 `#login`을 지운다. 가짜 LMS = `tests/lms-admin-stub.mjs`.
+- 커밋 못 하는 작업 백업(인덱스 안 건드림): `git diff --binary > 패치` + 새 파일마다 `git diff --no-index --binary /dev/null <파일> >> 패치`
+  → `git apply --check -R 패치`로 검증. 되살리기 = `git apply 패치`. 위치는 로컬 전용 `docs/worker-briefs/`.
+  ⚠ 백업 **뒤에** 문서를 고치면(세션 종료 기록 등) 그 파일만 역적용이 깨진다 → 백업은 마지막에, 또는 다시 만든다(11/01 사례).
+
+### 관리자 화면 틀 (Phase 3B-2b, 2026-11-01)
+
+- `showScreen`이 `body.admin-mode`를 켜고 끈다 → 관리자 화면에서는 **사이트 헤더·푸터가 `display:none`**. 관리자 화면에서 사이트
+  헤더(레벨 버튼·로그아웃)를 누르던 테스트는 `#adminSiteBtn`(사이트 보기 → 홈) 또는 `#adminLogoutBtn`으로 간다. 홈에서는
+  헤더 레벨 메뉴가 원래 숨겨져 있으니 `#levelSection [data-level]`을 누른다.
+- 782px 미만(태블릿 768 포함)은 왼쪽 메뉴가 화면 밖 → `#adminMenuToggle`(☰)을 먼저 누른다. 메뉴 버튼은 그대로
+  `.admin-menu-btn[data-admin-view]`(가드·배너 탭 로더·스모크의 JS 클릭이 이 선택자를 씀 — 바꾸지 말 것).
+- 나눔고딕은 `ensureAdminFont()`가 관리자 첫 진입 때만 `<link id="adminFontLink">`로 붙인다. 사이트 `<link>`에 넣지 말 것(사용자 화면
+  글꼴 요청 0이 조건). 관리자 글꼴 범위 = `#adminScreen *`·관리자 창 2개(`--font-admin`).
+- 사이트 변수(`--muted-ink`·`--macaw-blue`·`--owl-green`)를 `#adminScreen, .admin-modal` 안에서만 관리자 색으로 다시 가리킨다 →
+  옛 관리자 규칙이 AA 대비를 얻는다. `#1cb0f6`(macaw-blue)은 흰 바탕 글자로 AA 미달이라 관리자 강조색은 `#1f66a8`.
+- 고정(fixed) 왼쪽 메뉴는 전체 페이지 캡처에서 첫 화면 높이에서 끊긴다 → `.adm-root` 배경에 메뉴 열 색을 함께 칠함.
+- 목록 표: 반은 **반마다 `<tbody class="lms-class-row">`**(학생 패널 행이 같은 tbody 안 → `row.locator(".lms-class-student")`가 그대로
+  동작). 휴대폰 접기는 `td[data-colname]`만 숨긴다(패널·빈 행 td는 data-colname 없음).
+- (3B-2b-2) 빈 `<select>`를 채우면 브라우저가 **첫 항목을 고른다** → "값이 비면 기본값" 검사는 채운 뒤엔 안 걸린다. 기본값은
+  채우기 **전** 값으로 판단(`prepareMemberForm` 역할 = 학생). flex 항목 맨 앞 공백은 `nowrap`에서 사라진다 → `" · 지사"`는
+  `white-space: pre`. 보드 표지는 배경 그림이 아니라 `<img>`(휴대폰에서 원래 비율, 그림 요청 1번 — 이그레스).
+- 작업 함정(Windows): Python `open(..., "w")`는 CRLF로 쓴다 → `newline=""`. 이 하네스의 bash heredoc은 따옴표가 많은 본문에서
+  "unexpected EOF"로 깨질 때가 있다 → 조각은 파일 도구로 scratchpad에 쓰고 스크립트로 붙인다. `Get-NetTCPConnection`이 Vite의
+  127.0.0.1 대기를 못 볼 때가 있다 → 프로세스 명령줄(`vite/bin/vite.js --port 5173`)로 찾아 끈다.
+- (3B-2b 마무리) `scripts/run-playwright.mjs`(= `test:e2e`)는 **인자를 무시하고 전체를 돈다** → 한 테스트만이면 Vite를 따로 켜고
+  `npx playwright test <파일> -g …`. 학생이 `#admin`으로 오면 홈은 처음부터 켜져 있고 `#admin`은 조금 뒤 지워진다 → 주소 확인은
+  `expect.poll`로 기다린다.
+
 ### LMS 로그인 클라이언트 (Phase 3A / 3.2, 2026-10-24)
 
 - **Supabase 클라이언트는 하나.** `createClient(…, {global:{fetch: lmsFetch}})` — `lmsFetch`가 현재 `lmsToken`을

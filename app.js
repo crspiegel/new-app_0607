@@ -466,6 +466,11 @@ function showScreen(name) {
   document.body.classList.remove(...levelThemeClasses);
   // The login page recolors the shared footer to white (see styles.css).
   document.body.classList.toggle("login-active", name === "login");
+  // The admin screen has its own frame (top bar + left menu): admin-mode
+  // hides the site header and footer while it shows (3B-2b).
+  document.body.classList.toggle("admin-mode", name === "admin");
+  setAdminMenuOpen(false);
+  if (name === "admin") ensureAdminFont();
   if (!screens[name]) {
     document.body.classList.remove("subpage-active");
     screens.home.classList.add("screen-active");
@@ -484,6 +489,35 @@ function showScreen(name) {
   document.body.dataset.screen = name;
   applyPageBackground(name);
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// The admin screen's Korean face (나눔고딕 400/700/800) is fetched the first
+// time the admin screen opens — never for the kid-facing pages. Latin and
+// numbers stay in Inter (already loaded). Scope: --font-admin in styles.css.
+const ADMIN_FONT_URL =
+  "https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap";
+function ensureAdminFont() {
+  if (document.getElementById("adminFontLink")) return;
+  const link = document.createElement("link");
+  link.id = "adminFontLink";
+  link.rel = "stylesheet";
+  link.href = ADMIN_FONT_URL;
+  document.head.append(link);
+}
+
+// Phones (< 782px): the left menu slides in from the ☰ button and closes on a
+// menu choice, the backdrop or Escape. Wider screens always show it.
+function setAdminMenuOpen(open) {
+  const root = document.getElementById("admRoot");
+  if (!root) return;
+  root.classList.toggle("is-menu-open", open);
+  const toggle = document.getElementById("adminMenuToggle");
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.setAttribute("aria-label", open ? "메뉴 닫기" : "메뉴 열기");
+  }
+  const backdrop = document.getElementById("adminBackdrop");
+  if (backdrop) backdrop.hidden = !open;
 }
 
 function applyLevelTheme() {
@@ -1693,11 +1727,30 @@ let isAdmin = false;
 const adminState = { level: "beginner", month: "March" };
 const levels = LEVELS.map((item) => item.key);
 
-// Account-format rule (mirrors the old server rule `^[!-~]{4,}$`): >= 4
-// printable-ASCII chars, no spaces, no Korean. Used by the old admin member tab
-// only (until Phase 3.3); LMS login sends the ID as typed — the server
-// normalizes it and Korean IDs are allowed.
-const ACCOUNT_RE = /^[\x21-\x7E]{4,}$/;
+// Who may open the admin screen, and which of its views (D45, Phase 3.3): the
+// top admin (Auth JWT) → everything; an LMS branch account (role 1) or
+// teacher (2) → members and classes of its own scope (every lms_* RPC checks
+// the caller again on the server). Students (3) and visitors → none.
+const ADMIN_VIEWS = {
+  admin: ["content", "members", "classes", "branches", "banner"],
+  branch: ["members", "classes"],
+  teacher: ["members", "classes"],
+};
+const ADMIN_BUTTON_LABELS = {
+  admin: "Admin",
+  branch: "My Branch",
+  teacher: "My Class",
+};
+function adminRole() {
+  if (isAdmin) return "admin";
+  const role = state.lms ? Number(state.lms.role) : 0;
+  if (role === 1) return "branch";
+  if (role === 2) return "teacher";
+  return null;
+}
+function adminViewsAllowed() {
+  return ADMIN_VIEWS[adminRole()] || [];
+}
 
 // LMS member session (role 1 branch · 2 teacher · 3 student). localStorage
 // keeps the token plus display fields (a cache — the server decides through
@@ -1789,19 +1842,6 @@ const loginForm = document.querySelector("#loginForm");
 const loginId = document.querySelector("#loginId");
 const loginPassword = document.querySelector("#loginPassword");
 const loginError = document.querySelector("#loginError");
-const memberForm = document.querySelector("#memberForm");
-const memberId = document.querySelector("#memberId");
-const memberPw = document.querySelector("#memberPw");
-const memberGrade = document.querySelector("#memberGrade");
-const memberName = document.querySelector("#memberName");
-const memberStatus = document.querySelector("#memberStatus");
-const memberList = document.querySelector("#memberList");
-const memberEditModal = document.querySelector("#memberEditModal");
-const memberEditSub = document.querySelector("#memberEditSub");
-const memberEditGrade = document.querySelector("#memberEditGrade");
-const memberEditPw = document.querySelector("#memberEditPw");
-const memberEditStatus = document.querySelector("#memberEditStatus");
-const memberEditSave = document.querySelector("#memberEditSave");
 const signupToggle = document.querySelector("#signupToggle");
 const loginSignup = document.querySelector("#loginSignup");
 const signupForm = document.querySelector("#signupForm");
@@ -1923,18 +1963,127 @@ function canSeeTeacherResources() {
   return isAdmin || (state.lms != null && [1, 2].includes(state.lms.role));
 }
 
+// The admin menu shows only the views the caller may open (setAdminView
+// refuses the others anyway). Nobody signed in cannot open the admin screen
+// at all (openAdmin), so the full menu is left as it is then.
+function applyAdminMenu() {
+  if (!adminRole()) return;
+  const allowed = adminViewsAllowed();
+  document.querySelectorAll(".admin-menu-btn").forEach((btn) => {
+    btn.hidden = !allowed.includes(btn.dataset.adminView);
+  });
+}
+
 function updateAdminUI() {
-  // signed-in = admin OR an LMS member. The Admin button is admin-only (LMS
-  // roles get only Log out until Phase 3.3 — decision D15); Login hides when
-  // signed in (CSS keys off body.signed-in). Every login / logout / restore
-  // passes through here, so the 교사 자료실 button flips without a reload.
+  // signed-in = admin OR an LMS member. The header button opens the admin
+  // screen for the top admin ("Admin"), a branch account ("My Branch") and a
+  // teacher ("My Class") — decision D8 / Phase 3.3; students get Log out only.
+  // Login hides when signed in (CSS keys off body.signed-in). Every login /
+  // logout / restore passes through here, so the 교사 자료실 button flips
+  // without a reload.
   const signedIn = isAdmin || state.lms != null;
+  const role = adminRole();
   document.body.classList.toggle("is-admin", isAdmin);
   document.body.classList.toggle("signed-in", signedIn);
   document.body.classList.toggle("can-teacher-res", canSeeTeacherResources());
-  if (adminNavBtn) adminNavBtn.hidden = !isAdmin;
+  if (adminNavBtn) {
+    adminNavBtn.hidden = !role;
+    const label = ADMIN_BUTTON_LABELS[role] || ADMIN_BUTTON_LABELS.admin;
+    const text = adminNavBtn.querySelector(".action-label");
+    if (text) text.textContent = label;
+    adminNavBtn.setAttribute(
+      "aria-label",
+      label === ADMIN_BUTTON_LABELS.admin ? "Admin page" : label,
+    );
+  }
   if (logoutBtn) logoutBtn.hidden = !signedIn;
+  // Admin top bar: who is signed in, with the role — "최고관리자",
+  // "<branch> · 지사" or "<teacher's name> · 선생님" (3B-2b-2). Plain text;
+  // a long name is cut with "…" and the role stays readable.
+  // Without a name the role word alone is shown (no "선생님 · 선생님").
+  const who = document.getElementById("adminWho");
+  const whoRole = document.getElementById("adminWhoRole");
+  const lms = state.lms || {};
+  const whoName =
+    role === "branch"
+      ? lms.branch_name
+      : role === "teacher"
+        ? lms.display_name
+        : "";
+  const roleWord =
+    role === "admin"
+      ? "최고관리자"
+      : role === "branch"
+        ? "지사"
+        : role === "teacher"
+          ? "선생님"
+          : "";
+  if (who) {
+    who.textContent = whoName || (role === "branch" ? "지사 계정" : roleWord);
+  }
+  if (whoRole) whoRole.textContent = whoName ? ` · ${roleWord}` : "";
+  applyAdminMenu();
 }
+
+// D50: the branch of the last LMS login on this device (its id and display
+// name only). Later logins send it as p_branch_id, so the server compares
+// only that branch's account — a same-ID account in another branch is never
+// touched (its failure counter stays as it is). Kept on log out; the login
+// card offers "Not <branch>?" to forget it. No automatic retry without it.
+const LMS_BRANCH_KEY = "cra_lms_branch";
+const loginBranchRemembered = document.querySelector("#loginBranchRemembered");
+const loginBranchName = document.querySelector("#loginBranchName");
+const loginBranchForget = document.querySelector("#loginBranchForget");
+function rememberedBranch() {
+  try {
+    const value = JSON.parse(
+      window.localStorage.getItem(LMS_BRANCH_KEY) || "null",
+    );
+    if (
+      value &&
+      typeof value.branch_id === "string" &&
+      value.branch_id &&
+      typeof value.branch_name === "string"
+    ) {
+      return value;
+    }
+  } catch {
+    /* junk in storage = nothing remembered */
+  }
+  return null;
+}
+function rememberBranch(branchId, branchName) {
+  try {
+    window.localStorage.setItem(
+      LMS_BRANCH_KEY,
+      JSON.stringify({ branch_id: branchId, branch_name: branchName }),
+    );
+  } catch {
+    /* private mode: nothing remembered */
+  }
+}
+function showRememberedBranch() {
+  if (!loginBranchRemembered) return;
+  const remembered = rememberedBranch();
+  loginBranchRemembered.hidden = !remembered;
+  if (!remembered) return;
+  if (loginBranchName) loginBranchName.textContent = remembered.branch_name;
+  if (loginBranchForget) {
+    loginBranchForget.textContent = `Not ${remembered.branch_name}?`;
+  }
+}
+if (loginBranchForget) {
+  loginBranchForget.addEventListener("click", () => {
+    try {
+      window.localStorage.removeItem(LMS_BRANCH_KEY);
+    } catch {
+      /* ignore */
+    }
+    showRememberedBranch();
+    if (loginId) loginId.focus();
+  });
+}
+showRememberedBranch();
 
 async function refreshAdminStatus() {
   if (!sb) {
@@ -2041,6 +2190,9 @@ async function lmsLogin(id, pw, branchId) {
     return;
   }
   saveLmsSession(data.token, data);
+  if (data.branch_id) {
+    rememberBranch(String(data.branch_id), String(data.branch_name ?? ""));
+  }
   updateAdminUI();
   if (loginPassword) loginPassword.value = "";
   setHash("home");
@@ -2062,7 +2214,10 @@ if (loginBranchList) {
 // Leaving the login screen (showScreen sets body[data-screen]) drops it too,
 // and empties the password box — a shared classroom tablet must not keep it.
 new window.MutationObserver(() => {
-  if (document.body.dataset.screen === "login") return;
+  if (document.body.dataset.screen === "login") {
+    showRememberedBranch();
+    return;
+  }
   dropPendingLogin();
   if (loginPassword) loginPassword.value = "";
 }).observe(document.body, {
@@ -2096,7 +2251,10 @@ if (loginForm) {
         setLoginError("Login failed. Check your ID and password.");
         return;
       }
-      clearLmsSession(); // an admin session supersedes an LMS session
+      // An admin session supersedes an LMS one: end that one on the server
+      // too (the call needs its header, so before it is dropped here).
+      if (lmsToken) await sb.rpc("lms_logout");
+      clearLmsSession();
       await refreshAdminStatus();
       if (loginPassword) loginPassword.value = "";
       if (isAdmin) {
@@ -2109,24 +2267,26 @@ if (loginForm) {
     }
 
     // LMS member: the server normalizes the ID (Korean allowed) and finds the
-    // branch itself, so there is no client-side format rule here.
+    // branch itself, so there is no client-side format rule here. A branch
+    // remembered on this device is sent along (D50).
     dropPendingLogin();
-    await lmsLogin(id, pw);
+    const remembered = rememberedBranch();
+    await lmsLogin(id, pw, remembered ? remembered.branch_id : undefined);
   });
 }
 
-if (logoutBtn) {
-  logoutBtn.addEventListener("click", async () => {
-    // LMS first (needs the header; the token dies server-side), then Auth.
-    if (sb && lmsToken) await sb.rpc("lms_logout");
-    if (sb) await sb.auth.signOut();
-    isAdmin = false;
-    clearLmsSession();
-    updateAdminUI();
-    setHash("home");
-    showScreen("home");
-  });
+// Log out — the site header's button and the admin top bar's do the same.
+async function logOut() {
+  // LMS first (needs the header; the token dies server-side), then Auth.
+  if (sb && lmsToken) await sb.rpc("lms_logout");
+  if (sb) await sb.auth.signOut();
+  isAdmin = false;
+  clearLmsSession();
+  updateAdminUI();
+  setHash("home");
+  showScreen("home");
 }
+if (logoutBtn) logoutBtn.addEventListener("click", logOut);
 
 function populateAdminSelectors() {
   if (adminLevelSelect && !adminLevelSelect.options.length) {
@@ -2149,233 +2309,143 @@ function populateAdminSelectors() {
   if (adminMonthSelect) adminMonthSelect.value = adminState.month;
 }
 
+// The admin screen for the top admin, a branch account or a teacher (each
+// sees only its views — ADMIN_VIEWS). A visitor goes to the login page, a
+// signed-in student to the home page. The same gate runs on a load or reload
+// of #admin (the boot code below calls this), and setAdminView refuses any
+// view outside the caller's list.
 function openAdmin() {
-  if (!isAdmin) {
-    setHash("login");
-    showScreen("login");
+  const role = adminRole();
+  if (!role) {
+    if (state.lms) {
+      setHash("home");
+      showScreen("home");
+    } else {
+      setHash("login");
+      showScreen("login");
+    }
     return;
   }
-  populateAdminSelectors();
-  setAdminView("content");
-  renderAdminBoard();
-  renderMembers();
-  refreshSignupUI();
+  applyAdminMenu();
+  if (role === "admin") {
+    populateAdminSelectors();
+    renderAdminBoard();
+    refreshSignupUI();
+  }
+  setAdminView(role === "admin" ? "content" : "members");
   setHash("admin");
   showScreen("admin");
 }
 
 if (adminNavBtn) adminNavBtn.addEventListener("click", openAdmin);
 
-/* ---- Admin section tabs (Content / Members) --------------------------- */
+/* ---- Admin section tabs ------------------------------------------------ */
 // In-page tabs (no separate hash route): the top menu toggles which admin
-// panel is visible. Both panels stay populated; only their visibility flips.
+// panel is visible. The member / class / branch panels are built by
+// lms-admin.js, which registers a loader per view in adminViewOpeners (run
+// each time that view opens); the banner panel by hero-banner.js.
 const adminTitle = document.querySelector("#adminTitle");
 const adminMenuButtons = document.querySelectorAll(".admin-menu-btn");
 const adminViews = {
   content: document.querySelector("#adminViewContent"),
   members: document.querySelector("#adminViewMembers"),
-  // The banner panel's contents are rendered/wired by hero-banner.js.
+  classes: document.querySelector("#adminViewClasses"),
+  branches: document.querySelector("#adminViewBranches"),
   banner: document.querySelector("#adminViewBanner"),
 };
 const adminViewTitles = {
   content: "콘텐츠 관리",
   members: "회원 관리",
+  classes: "반 관리",
+  branches: "지사 관리",
   banner: "배너 관리",
 };
+const adminViewOpeners = {};
+// List screens: the title row's 새로 추가 opens / closes this box.
+const adminAddBoxes = {
+  members: document.querySelector("#lmsMemberAddBox"),
+  classes: document.querySelector("#lmsClassAddBox"),
+  branches: document.querySelector("#lmsBranchAddBox"),
+};
+const adminAddNew = document.querySelector("#adminAddNew");
+let adminCurrentView = null;
 
+function setAddBoxOpen(view, open) {
+  const box = adminAddBoxes[view];
+  if (!box) return;
+  box.hidden = !open;
+  if (adminAddNew) adminAddNew.setAttribute("aria-expanded", String(open));
+}
+
+// Returns false (and changes nothing) for a view the caller may not open.
 function setAdminView(view) {
+  if (!adminViewsAllowed().includes(view)) return false;
   Object.entries(adminViews).forEach(([name, el]) => {
     if (el) el.hidden = name !== view;
   });
   adminMenuButtons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.adminView === view);
+    const current = btn.dataset.adminView === view;
+    btn.classList.toggle("active", current);
+    if (current) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
   });
   if (adminTitle && adminViewTitles[view]) {
     adminTitle.textContent = adminViewTitles[view];
   }
+  if (view !== adminCurrentView) {
+    Object.keys(adminAddBoxes).forEach((name) => setAddBoxOpen(name, false));
+  }
+  adminCurrentView = view;
+  if (adminAddNew) adminAddNew.hidden = !adminAddBoxes[view];
+  if (adminViewOpeners[view]) adminViewOpeners[view]();
+  return true;
 }
 
 adminMenuButtons.forEach((btn) => {
-  btn.addEventListener("click", () => setAdminView(btn.dataset.adminView));
+  btn.addEventListener("click", () => {
+    setAdminView(btn.dataset.adminView);
+    setAdminMenuOpen(false);
+  });
 });
 
-/* ---- Member management (admin only) ----------------------------------- */
-
-function setMemberStatus(text) {
-  if (memberStatus) memberStatus.textContent = text || "";
-}
-
-// List all members (admin RLS allows the select). Each row: id · grade · name ·
-// an Activate/Deactivate toggle (set_member_active RPC).
-async function renderMembers() {
-  if (!memberList) return;
-  memberList.innerHTML = "";
-  if (!sb || !isAdmin) return;
-  const { data, error } = await sb
-    .from("members")
-    .select("id,grade,display_name,active")
-    .order("created_at");
-  if (error) {
-    setMemberStatus("회원을 불러올 수 없습니다.");
-    return;
-  }
-  if (!data.length) {
-    memberList.innerHTML =
-      '<p class="admin-member-empty">등록된 회원이 없습니다.</p>';
-    return;
-  }
-  data.forEach((m) => {
-    const row = document.createElement("div");
-    row.className = "admin-member-row";
-    if (!m.active) row.classList.add("is-inactive");
-    const info = document.createElement("span");
-    info.className = "admin-member-info";
-    info.textContent = `${m.id} · 등급 ${m.grade}${
-      m.display_name ? ` · ${m.display_name}` : ""
-    }${m.active ? "" : " · (비활성)"}`;
-    const actions = document.createElement("div");
-    actions.className = "admin-member-actions";
-
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "admin-member-edit";
-    edit.textContent = "수정";
-    edit.addEventListener("click", () => openMemberEditor(m));
-
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "admin-member-toggle";
-    toggle.textContent = m.active ? "비활성화" : "활성화";
-    toggle.addEventListener("click", async () => {
-      toggle.disabled = true;
-      const { error: tErr } = await sb.rpc("set_member_active", {
-        p_id: m.id,
-        p_active: !m.active,
-      });
-      if (tErr) setMemberStatus("회원 정보를 수정할 수 없습니다.");
-      else await renderMembers();
-    });
-    actions.append(edit, toggle);
-    row.append(info, actions);
-    memberList.append(row);
-  });
-}
-
-if (memberForm) {
-  memberForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    setMemberStatus("");
-    if (!sb || !isAdmin) {
-      setMemberStatus("관리자 전용입니다.");
-      return;
-    }
-    const id = memberId ? memberId.value.trim() : "";
-    const pw = memberPw ? memberPw.value : "";
-    const grade = memberGrade ? Number(memberGrade.value) : 0;
-    const name = memberName ? memberName.value.trim() : "";
-    if (!ACCOUNT_RE.test(id) || !ACCOUNT_RE.test(pw)) {
-      setMemberStatus(
-        "아이디와 비밀번호는 공백 없이 4자 이상이어야 합니다(영문·숫자·기호).",
+if (adminAddNew) {
+  adminAddNew.addEventListener("click", () => {
+    const box = adminAddBoxes[adminCurrentView];
+    if (!box) return;
+    setAddBoxOpen(adminCurrentView, box.hidden);
+    if (!box.hidden) {
+      const first = [...box.querySelectorAll("input, select")].find(
+        (el) => !el.hidden,
       );
-      return;
+      if (first) first.focus();
     }
-    if (![1, 2, 3].includes(grade)) {
-      setMemberStatus("등급을 선택하세요 (1-3).");
-      return;
-    }
-    const { error } = await sb.rpc("create_member", {
-      p_id: id,
-      p_password: pw,
-      p_grade: grade,
-      p_display_name: name || null,
-    });
-    if (error) {
-      setMemberStatus("저장할 수 없습니다: " + (error.message || "error"));
-      return;
-    }
-    setMemberStatus(`"${id}" 저장 완료 (등급 ${grade}).`);
-    if (memberPw) memberPw.value = "";
-    if (memberId) memberId.value = "";
-    if (memberName) memberName.value = "";
-    await renderMembers();
   });
 }
 
-/* ---- Member edit modal (grade + password) ----------------------------- */
-// Per-member editor: change the grade (permission) and optionally reset the
-// password. Backed by the update_member RPC (password is re-hashed server-side;
-// a blank password keeps the current one). The id itself is not editable.
-let editingMemberId = null;
-
-function setMemberEditStatus(text) {
-  if (memberEditStatus) memberEditStatus.textContent = text || "";
-}
-
-function openMemberEditor(m) {
-  editingMemberId = m.id;
-  if (memberEditSub)
-    memberEditSub.textContent = `${m.id}${m.display_name ? ` · ${m.display_name}` : ""}`;
-  if (memberEditGrade) memberEditGrade.value = String(m.grade);
-  if (memberEditPw) memberEditPw.value = "";
-  setMemberEditStatus("");
-  if (memberEditModal) memberEditModal.hidden = false;
-  document.body.classList.add("admin-modal-open");
-  if (memberEditGrade) memberEditGrade.focus();
-}
-
-function closeMemberEditor() {
-  editingMemberId = null;
-  if (memberEditModal) memberEditModal.hidden = true;
-  document.body.classList.remove("admin-modal-open");
-}
-
-async function commitMemberEdit() {
-  if (!editingMemberId) return;
-  if (!sb || !isAdmin) {
-    setMemberEditStatus("관리자 전용입니다.");
-    return;
-  }
-  const grade = memberEditGrade ? Number(memberEditGrade.value) : 0;
-  const pw = memberEditPw ? memberEditPw.value : "";
-  if (![1, 2, 3].includes(grade)) {
-    setMemberEditStatus("등급을 선택하세요 (1-3).");
-    return;
-  }
-  if (pw && !ACCOUNT_RE.test(pw)) {
-    setMemberEditStatus(
-      "비밀번호는 공백 없이 4자 이상이어야 합니다(영문·숫자·기호).",
-    );
-    return;
-  }
-  setMemberEditStatus("저장 중…");
-  const { error } = await sb.rpc("update_member", {
-    p_id: editingMemberId,
-    p_grade: grade,
-    p_password: pw ? pw : null,
-  });
-  if (error) {
-    setMemberEditStatus("저장할 수 없습니다: " + (error.message || "error"));
-    return;
-  }
-  const savedId = editingMemberId;
-  closeMemberEditor();
-  setMemberStatus(
-    `"${savedId}" 수정 완료 (등급 ${grade})${pw ? " · 비밀번호 변경됨" : ""}.`,
-  );
-  await renderMembers();
-}
-
-if (memberEditModal) {
-  memberEditModal.querySelectorAll("[data-member-edit-close]").forEach((el) => {
-    el.addEventListener("click", closeMemberEditor);
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !memberEditModal.hidden) closeMemberEditor();
+// Admin top bar + phone menu.
+const adminMenuToggle = document.querySelector("#adminMenuToggle");
+if (adminMenuToggle) {
+  adminMenuToggle.addEventListener("click", () => {
+    const root = document.getElementById("admRoot");
+    setAdminMenuOpen(!(root && root.classList.contains("is-menu-open")));
   });
 }
-if (memberEditSave) {
-  memberEditSave.addEventListener("click", commitMemberEdit);
+const adminBackdrop = document.querySelector("#adminBackdrop");
+if (adminBackdrop) {
+  adminBackdrop.addEventListener("click", () => setAdminMenuOpen(false));
 }
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setAdminMenuOpen(false);
+});
+const adminSiteBtn = document.querySelector("#adminSiteBtn");
+if (adminSiteBtn) {
+  adminSiteBtn.addEventListener("click", () => {
+    setHash("home");
+    showScreen("home");
+  });
+}
+const adminLogoutBtn = document.querySelector("#adminLogoutBtn");
+if (adminLogoutBtn) adminLogoutBtn.addEventListener("click", logOut);
 
 /* ---- Signup visibility (placeholder) ---------------------------------- */
 
@@ -2404,6 +2474,11 @@ async function refreshSignupUI() {
 }
 
 if (signupToggle) {
+  // Its status line is the members view's (the toggle sits in that view).
+  const signupStatus = document.querySelector("#lmsMemberStatus");
+  const say = (text) => {
+    if (signupStatus) signupStatus.textContent = text;
+  };
   signupToggle.addEventListener("change", async () => {
     if (!sb || !isAdmin) return;
     const next = signupToggle.checked;
@@ -2412,11 +2487,11 @@ if (signupToggle) {
       .upsert({ key: "signup_visible", value: next });
     if (error) {
       signupToggle.checked = !next;
-      setMemberStatus("회원가입 표시 설정을 변경할 수 없습니다.");
+      say("회원가입 표시 설정을 변경할 수 없습니다.");
       return;
     }
     if (loginSignup) loginSignup.hidden = !next;
-    setMemberStatus(`회원가입 폼이 ${next ? "표시" : "숨김"} 상태입니다.`);
+    say(`회원가입 폼이 ${next ? "표시" : "숨김"} 상태입니다.`);
   });
 }
 
@@ -2465,16 +2540,28 @@ function adminSlotButton(slot) {
   return button;
 }
 
-// One editable cover dropzone card reflecting the current cover.
+// One editable cover: the dropzone card showing the current cover, and its
+// notes on a line of their own under it (3B-2b-2: never over the picture).
 function adminCoverCard(book) {
   const url = getCover(adminState.level, adminState.month, book);
+  const cell = document.createElement("div");
+  cell.className = "admin-cover-cell";
   const card = document.createElement("div");
   card.className = "admin-cover";
   card.dataset.book = book;
   if (url) {
     card.classList.add("has-cover");
-    card.style.backgroundImage = `url("${url}")`;
+    // An <img> (not a background): a desktop crops it to the card as before,
+    // a phone shows the whole cover at its own shape (styles.css).
+    const art = document.createElement("img");
+    art.className = "admin-cover-img";
+    art.src = url;
+    art.alt = "";
+    art.draggable = false;
+    card.append(art);
   }
+  const notes = document.createElement("div");
+  notes.className = "admin-cover-notes";
   const label = document.createElement("span");
   label.className = "admin-cover-label";
   label.textContent = book === "book-1" ? "표지 1" : "표지 2";
@@ -2488,9 +2575,10 @@ function adminCoverCard(book) {
   const sync = document.createElement("span");
   sync.className = "admin-cover-sync";
   sync.textContent = "학생 QR 페이지 반영: npm run covers:sync 후 배포";
-  card.append(label, hint, sync);
+  notes.append(label, hint, sync);
+  cell.append(card, notes);
   wireCoverCard(card, book);
-  return card;
+  return cell;
 }
 
 function renderAdminBoard() {

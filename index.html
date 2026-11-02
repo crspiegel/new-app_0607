@@ -641,6 +641,16 @@
               <h1 class="login-title" id="loginTitle">Log in</h1>
 
               <form class="login-form" id="loginForm" novalidate>
+                <!-- D50: the branch remembered on this device (shown only when
+                     there is one, so the card is unchanged otherwise). -->
+                <p class="login-remembered" id="loginBranchRemembered" hidden>
+                  Branch: <strong id="loginBranchName"></strong>
+                  <button
+                    type="button"
+                    class="login-remembered-forget"
+                    id="loginBranchForget"
+                  ></button>
+                </p>
                 <div class="login-field">
                   <input
                     class="login-input"
@@ -727,132 +737,413 @@
           </div>
         </section>
 
-        <!-- Admin content manager (admins only). The board is a simplified
-             gray mirror of the user content page, built by app.js. -->
+        <!-- Admin screen (Phase 3B-2b): its own frame, laid out like a common
+             admin console — a dark top bar, a left menu that shows only the
+             caller's views, and a light body of white boxes. body.admin-mode
+             (app.js showScreen) hides the site header and footer meanwhile.
+             The content board is a simplified gray mirror of the user content
+             page, built by app.js. -->
         <section class="screen" id="adminScreen" aria-labelledby="adminTitle">
-          <div class="section-box section-white admin-section">
-            <div class="section-inner admin-inner">
-              <nav class="admin-menu" aria-label="관리자 메뉴">
+          <div class="adm-root" id="admRoot">
+            <header class="adm-bar">
+              <button
+                type="button"
+                class="adm-menu-toggle"
+                id="adminMenuToggle"
+                aria-controls="adminSidebar"
+                aria-expanded="false"
+                aria-label="메뉴 열기"
+              >
+                <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 6h16M4 12h16M4 18h16"></path>
+                </svg>
+              </button>
+              <span class="adm-brand"
+                ><span class="adm-brand-site">Cambridge Reading </span
+                >관리자</span
+              >
+              <div class="adm-bar-actions">
                 <button
                   type="button"
-                  class="admin-menu-btn active"
-                  data-admin-view="content"
+                  class="adm-bar-btn"
+                  id="adminSiteBtn"
+                  aria-label="사이트 보기"
                 >
-                  콘텐츠
+                  <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m3 11 9-8 9 8"></path>
+                    <path d="M5 10v10h14V10"></path>
+                  </svg>
+                  <span class="adm-bar-label">사이트 보기</span>
                 </button>
+                <span class="adm-who"
+                  ><span class="adm-who-name" id="adminWho"></span
+                  ><span class="adm-who-role" id="adminWhoRole"></span
+                ></span>
                 <button
                   type="button"
-                  class="admin-menu-btn"
-                  data-admin-view="members"
+                  class="adm-bar-btn"
+                  id="adminLogoutBtn"
+                  aria-label="로그아웃"
                 >
-                  회원
+                  <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <path d="m16 17 5-5-5-5"></path>
+                    <path d="M21 12H9"></path>
+                  </svg>
+                  <span class="adm-bar-label">로그아웃</span>
                 </button>
-                <button
-                  type="button"
-                  class="admin-menu-btn"
-                  data-admin-view="banner"
-                >
-                  배너
-                </button>
-              </nav>
-              <div class="admin-bar">
+              </div>
+            </header>
+
+            <nav class="adm-side" id="adminSidebar" aria-label="관리자 메뉴">
+              <button
+                type="button"
+                class="admin-menu-btn active"
+                data-admin-view="content"
+              >
+                <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="17" rx="2"></rect>
+                  <path d="M3 9h18M8 2v4M16 2v4"></path>
+                </svg>
+                <span>콘텐츠</span>
+              </button>
+              <button
+                type="button"
+                class="admin-menu-btn"
+                data-admin-view="members"
+              >
+                <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="8" r="4"></circle>
+                  <path d="M4 21a8 8 0 0 1 16 0"></path>
+                </svg>
+                <span>회원</span>
+              </button>
+              <button
+                type="button"
+                class="admin-menu-btn"
+                data-admin-view="classes"
+              >
+                <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="9" cy="8" r="3.5"></circle>
+                  <path d="M2 20a7 7 0 0 1 14 0"></path>
+                  <path
+                    d="M16 4.5a3.5 3.5 0 0 1 0 7M18 13.5a7 7 0 0 1 4 6.5"
+                  ></path>
+                </svg>
+                <span>반</span>
+              </button>
+              <button
+                type="button"
+                class="admin-menu-btn"
+                data-admin-view="branches"
+              >
+                <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 21V6l8-3 8 3v15"></path>
+                  <path
+                    d="M9 21v-5h6v5M8 8h.01M12 8h.01M16 8h.01M8 12h.01M12 12h.01M16 12h.01"
+                  ></path>
+                </svg>
+                <span>지사</span>
+              </button>
+              <button
+                type="button"
+                class="admin-menu-btn"
+                data-admin-view="banner"
+              >
+                <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                  <circle cx="8.5" cy="9.5" r="1.5"></circle>
+                  <path d="m21 16-5-5L5 20"></path>
+                </svg>
+                <span>배너</span>
+              </button>
+            </nav>
+            <div class="adm-backdrop" id="adminBackdrop" hidden></div>
+
+            <div class="adm-body">
+              <div class="adm-head">
                 <h1 class="admin-title" id="adminTitle">콘텐츠 관리</h1>
+                <button
+                  type="button"
+                  class="adm-btn adm-btn-secondary"
+                  id="adminAddNew"
+                  aria-expanded="false"
+                  hidden
+                >
+                  새로 추가
+                </button>
               </div>
 
               <!-- Content view: weekday board + the level/month it edits. -->
               <div class="admin-view" id="adminViewContent">
-                <div class="admin-controls">
-                  <label class="admin-select">
-                    <span>레벨</span>
-                    <select id="adminLevel"></select>
-                  </label>
-                  <label class="admin-select">
-                    <span>월</span>
-                    <select id="adminMonth"></select>
-                  </label>
-                  <button type="button" class="admin-bg-btn" id="adminBgBtn">
-                    배경 편집
-                  </button>
-                  <span
-                    class="admin-status"
-                    id="adminStatus"
-                    aria-live="polite"
-                  ></span>
+                <div class="adm-box">
+                  <div class="admin-controls">
+                    <label class="admin-select">
+                      <span>레벨</span>
+                      <select id="adminLevel"></select>
+                    </label>
+                    <label class="admin-select">
+                      <span>월</span>
+                      <select id="adminMonth"></select>
+                    </label>
+                    <button
+                      type="button"
+                      class="adm-btn adm-btn-secondary admin-bg-btn"
+                      id="adminBgBtn"
+                    >
+                      배경 편집
+                    </button>
+                    <span
+                      class="admin-status"
+                      id="adminStatus"
+                      aria-live="polite"
+                    ></span>
+                  </div>
+                  <p class="admin-hint">
+                    버튼을 클릭하면 영상 URL을 설정할 수 있어요. 표지 카드에
+                    이미지를 끌어다 놓거나 클릭하면 책 표지가 업로드됩니다. 현재
+                    설정된 값은 각 자리에 표시됩니다.
+                  </p>
+                  <div class="admin-board admin-gray" id="adminBoard"></div>
                 </div>
-                <p class="admin-hint">
-                  버튼을 클릭하면 영상 URL을 설정할 수 있어요. 표지 카드에
-                  이미지를 끌어다 놓거나 클릭하면 책 표지가 업로드됩니다. 현재
-                  설정된 값은 각 자리에 표시됩니다.
-                </p>
-                <div class="admin-board admin-gray" id="adminBoard"></div>
               </div>
 
-              <!-- Members view: create / list / activate accounts (grades
-                   1-3). Backed by the admin-only create_member / set_member_active
-                   RPCs; the password hash never leaves the database. -->
-              <div class="admin-view" id="adminViewMembers" hidden>
-                <div class="admin-members">
-                  <h2 class="admin-subtitle">회원 관리</h2>
-                  <form class="admin-member-form" id="memberForm" novalidate>
-                    <input
-                      class="admin-member-input"
-                      type="text"
-                      id="memberId"
-                      autocomplete="off"
-                      placeholder="아이디 (4자 이상)"
-                      aria-label="회원 아이디"
-                    />
-                    <input
-                      class="admin-member-input"
-                      type="text"
-                      id="memberPw"
-                      autocomplete="off"
-                      placeholder="비밀번호 (4자 이상)"
-                      aria-label="회원 비밀번호"
-                    />
-                    <select
-                      class="admin-member-select"
-                      id="memberGrade"
-                      aria-label="등급"
-                    >
-                      <option value="1">등급 1</option>
-                      <option value="2">등급 2</option>
-                      <option value="3">등급 3</option>
-                    </select>
-                    <input
-                      class="admin-member-input"
-                      type="text"
-                      id="memberName"
-                      autocomplete="off"
-                      placeholder="이름 (선택)"
-                      aria-label="표시 이름"
-                    />
-                    <button class="admin-member-add" type="submit">
-                      추가 / 수정
-                    </button>
+              <!-- Members view (3.3): the top admin, a branch account or a
+                   teacher — each sees and manages only its own scope (D45,
+                   lms-admin.js). Every change goes through an lms_* RPC that
+                   checks the caller again; no password or hash is ever shown.
+                   A list screen: notice, the 새로 추가 box, the filter row,
+                   the table, then the sign-up box. -->
+              <div class="admin-view lms-admin" id="adminViewMembers" hidden>
+                <p
+                  class="admin-status adm-notice"
+                  id="lmsMemberStatus"
+                  aria-live="polite"
+                ></p>
+                <div class="adm-box adm-add-box" id="lmsMemberAddBox" hidden>
+                  <h2 class="admin-subtitle">새 회원</h2>
+                  <form class="adm-form" id="lmsMemberForm" novalidate>
+                    <label class="adm-field">
+                      <span>지사</span>
+                      <select
+                        class="admin-member-select"
+                        id="lmsNewBranch"
+                        hidden
+                      ></select>
+                    </label>
+                    <label class="adm-field">
+                      <span>역할</span>
+                      <select
+                        class="admin-member-select"
+                        id="lmsNewRole"
+                      ></select>
+                    </label>
+                    <label class="adm-field">
+                      <span>아이디</span>
+                      <input
+                        class="admin-member-input"
+                        type="text"
+                        id="lmsNewId"
+                        autocomplete="off"
+                        placeholder="2~20자"
+                      />
+                    </label>
+                    <label class="adm-field">
+                      <span>비밀번호</span>
+                      <input
+                        class="admin-member-input"
+                        type="password"
+                        id="lmsNewPw"
+                        autocomplete="new-password"
+                        placeholder="4~10자"
+                      />
+                    </label>
+                    <label class="adm-field">
+                      <span>이름 (선택)</span>
+                      <input
+                        class="admin-member-input"
+                        type="text"
+                        id="lmsNewName"
+                        autocomplete="off"
+                      />
+                    </label>
+                    <div class="adm-form-actions">
+                      <button class="adm-btn adm-btn-primary" type="submit">
+                        만들기
+                      </button>
+                    </div>
                   </form>
-                  <p
-                    class="admin-status"
-                    id="memberStatus"
-                    aria-live="polite"
-                  ></p>
-                  <div class="admin-member-list" id="memberList"></div>
+                  <div class="lms-suggest" id="lmsMemberSuggest" hidden>
+                    <span id="lmsMemberSuggestText"></span>
+                    <button
+                      type="button"
+                      class="adm-btn adm-btn-secondary"
+                      id="lmsMemberSuggestBtn"
+                    ></button>
+                  </div>
+                </div>
 
-                  <!-- Signup visibility (placeholder feature): when ON, a Sign-up
-                     entry point shows on the login page. Accounts are still
-                     created by admins here. -->
-                  <label class="admin-signup-toggle">
+                <div class="adm-filters">
+                  <div class="adm-filter-group">
+                    <label
+                      class="admin-select"
+                      id="lmsMemberBranchFilterRow"
+                      hidden
+                    >
+                      <span>지사</span>
+                      <select id="lmsMemberBranchFilter"></select>
+                    </label>
+                    <label class="admin-select">
+                      <span>반</span>
+                      <select id="lmsMemberClassFilter"></select>
+                    </label>
+                    <label class="admin-select" id="lmsMemberRoleFilterRow">
+                      <span>역할</span>
+                      <select id="lmsMemberRoleFilter"></select>
+                    </label>
+                  </div>
+                  <input
+                    class="admin-member-input lms-search"
+                    type="search"
+                    id="lmsMemberSearch"
+                    autocomplete="off"
+                    placeholder="아이디·이름 검색"
+                    aria-label="회원 검색"
+                  />
+                </div>
+                <div class="admin-member-list" id="lmsMemberList"></div>
+
+                <!-- Signup visibility (placeholder feature, top admin only):
+                     when ON, a Sign-up entry point shows on the login page.
+                     Accounts are still made here. -->
+                <div class="adm-box" id="signupBox" hidden>
+                  <h2 class="admin-subtitle">공개 회원가입</h2>
+                  <label class="admin-signup-toggle" id="signupToggleRow">
                     <input type="checkbox" id="signupToggle" />
                     <span>로그인 페이지에 공개 회원가입 폼 표시</span>
                   </label>
                 </div>
               </div>
 
-              <!-- Banner view: hero banner carousel settings + image list.
-                   Rendered and wired by hero-banner.js; the list rows are
-                   built there from site_settings.hero_banner. -->
+              <!-- Classes view (3.3): create / rename / teacher / students
+                   (in · out · move, D51 + D53) / deactivate; delete is the top
+                   admin's only (D47). -->
+              <div class="admin-view lms-admin" id="adminViewClasses" hidden>
+                <p
+                  class="admin-status adm-notice"
+                  id="lmsClassStatus"
+                  aria-live="polite"
+                ></p>
+                <div class="adm-box adm-add-box" id="lmsClassAddBox" hidden>
+                  <h2 class="admin-subtitle">새 반</h2>
+                  <form class="adm-form" id="lmsClassForm" novalidate>
+                    <label class="adm-field">
+                      <span>지사</span>
+                      <select
+                        class="admin-member-select"
+                        id="lmsClassBranch"
+                        hidden
+                      ></select>
+                    </label>
+                    <label class="adm-field">
+                      <span>반 이름</span>
+                      <input
+                        class="admin-member-input"
+                        type="text"
+                        id="lmsClassName"
+                        autocomplete="off"
+                      />
+                    </label>
+                    <label class="adm-field">
+                      <span>담당 선생님</span>
+                      <select
+                        class="admin-member-select"
+                        id="lmsClassTeacher"
+                        hidden
+                      ></select>
+                    </label>
+                    <div class="adm-form-actions">
+                      <button class="adm-btn adm-btn-primary" type="submit">
+                        만들기
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div class="adm-filters" id="lmsClassFilterRow" hidden>
+                  <div class="adm-filter-group">
+                    <label class="admin-select">
+                      <span>지사</span>
+                      <select id="lmsClassBranchFilter"></select>
+                    </label>
+                  </div>
+                </div>
+                <div class="admin-member-list" id="lmsClassList"></div>
+              </div>
+
+              <!-- Branches view (3.3, top admin only): create (code + name),
+                   rename, deactivate. No delete. -->
+              <div class="admin-view lms-admin" id="adminViewBranches" hidden>
+                <p
+                  class="admin-status adm-notice"
+                  id="lmsBranchStatus"
+                  aria-live="polite"
+                ></p>
+                <div class="adm-box adm-add-box" id="lmsBranchAddBox" hidden>
+                  <h2 class="admin-subtitle">새 지사</h2>
+                  <form class="adm-form" id="lmsBranchForm" novalidate>
+                    <label class="adm-field">
+                      <span>지사 이름</span>
+                      <input
+                        class="admin-member-input"
+                        type="text"
+                        id="lmsBranchName"
+                        autocomplete="off"
+                      />
+                    </label>
+                    <label class="adm-field">
+                      <span>코드 (선택)</span>
+                      <input
+                        class="admin-member-input"
+                        type="text"
+                        id="lmsBranchCode"
+                        autocomplete="off"
+                        placeholder="영문 소문자·숫자·-"
+                      />
+                    </label>
+                    <div class="adm-form-actions">
+                      <button class="adm-btn adm-btn-primary" type="submit">
+                        만들기
+                      </button>
+                    </div>
+                  </form>
+                </div>
+                <div class="admin-member-list" id="lmsBranchList"></div>
+              </div>
+
+              <!-- Banner view, a settings screen of two boxes: ① the teacher
+                   resource files (teacher-resources.js — one file per slot,
+                   10 slots in 4 levels, the admin mirror of the resource
+                   pages; saves immediately), ② the hero banner carousel
+                   settings + image list (hero-banner.js, rows built from
+                   site_settings.hero_banner; saved with its 저장 button). -->
               <div class="admin-view" id="adminViewBanner" hidden>
-                <div class="admin-banner">
+                <div class="adm-box admin-res" id="teacherResAdmin">
+                  <h2 class="admin-subtitle">교사 자료실 파일</h2>
+                  <p class="admin-hint">
+                    PDF · 엑셀(xlsx, xls), 한 파일 <strong>10MB까지</strong>.
+                    올리는 즉시 반영되고, 새 파일을 올리면 이전 파일은
+                    지워집니다. (아래 배너 '저장' 버튼과는 관계없어요.)
+                  </p>
+                  <div class="res-admin-list" id="teacherResAdminList"></div>
+                  <p
+                    class="admin-status"
+                    id="teacherResStatus"
+                    aria-live="polite"
+                  ></p>
+                </div>
+
+                <div class="adm-box admin-banner" id="heroBannerBox">
                   <h2 class="admin-subtitle">메인 히어로 배너</h2>
                   <p class="admin-hint">
                     1번 슬라이드는 항상 기본 히어로(문구 · 앱 버튼 ·
@@ -982,24 +1273,6 @@
                   >
                     저장
                   </button>
-                </div>
-
-                <!-- Teacher resources (teacher-resources.js): one file per
-                     slot, 10 slots in 4 levels — the admin mirror of the
-                     resource pages. Saves immediately, no 저장 button. -->
-                <div class="admin-res" id="teacherResAdmin">
-                  <h2 class="admin-subtitle">교사 자료실 파일</h2>
-                  <p class="admin-hint">
-                    PDF · 엑셀(xlsx, xls), 한 파일 <strong>10MB까지</strong>.
-                    올리는 즉시 반영되고, 새 파일을 올리면 이전 파일은
-                    지워집니다. (위 배너 '저장' 버튼과는 관계없어요.)
-                  </p>
-                  <div class="res-admin-list" id="teacherResAdminList"></div>
-                  <p
-                    class="admin-status"
-                    id="teacherResStatus"
-                    aria-live="polite"
-                  ></p>
                 </div>
               </div>
             </div>
@@ -1637,7 +1910,8 @@
       </div>
     </div>
 
-    <!-- Admin: edit a member's grade (permission) and/or password. -->
+    <!-- Admin: edit a member — login ID (top admin and branch account only,
+         D52), name, a new password. lms-admin.js. -->
     <div class="admin-modal" id="memberEditModal" hidden>
       <div class="admin-modal-overlay" data-member-edit-close></div>
       <div
@@ -1649,25 +1923,41 @@
         <h2 class="admin-modal-title" id="memberEditTitle">회원 수정</h2>
         <p class="admin-modal-sub" id="memberEditSub"></p>
 
-        <label class="admin-modal-label" for="memberEditGrade"
-          >등급 (권한)</label
-        >
-        <select class="admin-modal-input" id="memberEditGrade">
-          <option value="1">등급 1</option>
-          <option value="2">등급 2</option>
-          <option value="3">등급 3</option>
-        </select>
+        <div class="lms-modal-field" id="memberEditIdRow" hidden>
+          <label class="admin-modal-label" for="memberEditId">아이디</label>
+          <input
+            class="admin-modal-input"
+            id="memberEditId"
+            type="text"
+            autocomplete="off"
+          />
+        </div>
+
+        <label class="admin-modal-label" for="memberEditName">이름</label>
+        <input
+          class="admin-modal-input"
+          id="memberEditName"
+          type="text"
+          autocomplete="off"
+          placeholder="비워두면 이름 없음"
+        />
 
         <label class="admin-modal-label" for="memberEditPw">새 비밀번호</label>
         <input
           class="admin-modal-input"
           id="memberEditPw"
-          type="text"
-          autocomplete="off"
+          type="password"
+          autocomplete="new-password"
           placeholder="비워두면 기존 비밀번호 유지"
         />
 
         <p class="admin-status" id="memberEditStatus" aria-live="polite"></p>
+        <button
+          type="button"
+          class="admin-btn admin-btn-ghost"
+          id="memberEditSuggest"
+          hidden
+        ></button>
 
         <div class="admin-modal-actions">
           <button
@@ -1697,5 +1987,6 @@
     <script src="background-editor.js"></script>
     <script src="hero-banner.js"></script>
     <script src="teacher-resources.js"></script>
+    <script src="lms-admin.js"></script>
   </body>
 </html>

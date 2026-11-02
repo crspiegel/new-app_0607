@@ -27,11 +27,10 @@
   --font-ui: "Nunito", "Segoe UI", "Noto Sans", Arial, sans-serif;
   --font-nav: "Inter", "Segoe UI", "Noto Sans", Arial, sans-serif;
   --font-google-sans: "Google Sans", "Google Sans Text", var(--font-nav);
-  /* Admin tool font: Latin/numbers in Google Sans, Korean in Noto Sans KR
-     (high readability) — the admin UI is Korean-labelled. */
-  --font-admin:
-    "Google Sans", "Google Sans Text", "Noto Sans KR", "Malgun Gothic",
-    var(--font-nav);
+  /* Admin tool font (3B-2b): Latin and numbers in Inter, Korean in
+     나눔고딕 — the admin UI is Korean-labelled. 나눔고딕 is fetched only when
+     the admin screen first opens (app.js ensureAdminFont). */
+  --font-admin: "Inter", "Nanum Gothic", sans-serif;
   --font-google-sans-flex:
     "Google Sans Flex", "Google Sans", "Google Sans Text", var(--font-nav);
   --font-sniglet: "Sniglet", var(--font-nav);
@@ -4154,15 +4153,65 @@ body.game-open {
   outline: none;
 }
 
-/* Admin screen shell. */
+/* D50: the branch remembered on this device, above the ID box. Hidden when
+   there is none, so the card is unchanged then. */
+.login-remembered {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  text-align: center;
+}
+.login-remembered[hidden] {
+  display: none;
+}
+.login-remembered-forget {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--macaw-blue);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  cursor: pointer;
+}
 
-/* Admin body area: unify ALL text (title, hint, members, board, slot names,
-   etc.) to the admin font so the tool reads distinctly from the kid-facing site
-   AND its Korean labels render in a high-readability face (Noto Sans KR). The id
-   + universal selector outranks the per-element class fonts below (Sniglet /
-   Nunito / Inter) without needing !important. The two admin-only modals
+/* ==== Admin screen (Phase 3B-2b) ==========================================
+   Its own frame, laid out like a common admin console: a dark top bar (46px),
+   a dark left menu (170px; under 782px it slides in from ☰) and a light body
+   of white boxes. Neutral grays + one accent (links, primary buttons); every
+   text color pair is WCAG AA or better; none of the site's pills, lips or deep
+   shadows. body.admin-mode (app.js showScreen) hides the site header and
+   footer while the admin screen shows. The site variables the older admin
+   rules use (--muted-ink, --macaw-blue …) are re-pointed here, inside the
+   admin only — the kid-facing pages keep theirs. */
+#adminScreen,
+.admin-modal {
+  --adm-bar-bg: #1e2227;
+  --adm-side-bg: #2b3036;
+  --adm-side-text: #e8e9ea;
+  --adm-side-hover: #383e45;
+  --adm-bg: #f0f0f1;
+  --adm-box: #ffffff;
+  --adm-line: #dcdcde;
+  --adm-field-line: #8c8f94;
+  --adm-text: #1d2327;
+  --adm-muted: #50575e;
+  --adm-accent: #1f66a8;
+  --adm-accent-dark: #174f84;
+  --adm-accent-soft: #eaf2fa;
+  --adm-danger: #b32d2e;
+  --muted-ink: var(--adm-muted);
+  --macaw-blue: var(--adm-accent);
+  --macaw-blue-shadow: var(--adm-accent-dark);
+  --owl-green: var(--adm-accent);
+}
+
+/* One admin face everywhere in the admin (the id + universal selector
+   outranks the per-element site fonts below). The two admin-only dialogs
    (#adminSlotModal, #memberEditModal) live outside #adminScreen, so they are
-   included explicitly here for the same Korean-readable typography. */
+   named here too. --font-admin = Inter (Latin, numbers) + 나눔고딕 (Korean). */
 #adminScreen,
 #adminScreen *,
 #adminSlotModal,
@@ -4172,247 +4221,717 @@ body.game-open {
   font-family: var(--font-admin);
 }
 
-.admin-inner {
+body.admin-mode .topbar,
+body.admin-mode .site-footer {
+  display: none;
+}
+body.admin-mode .app-shell {
+  background: #f0f0f1;
+}
+#adminScreen {
+  min-height: 100vh;
+  background: var(--adm-bg);
+  color: var(--adm-text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+/* The menu column is also painted on the frame, so it runs to the bottom of
+   a long page (and of a full-page capture), not only of the window. */
+.adm-root {
+  min-height: 100vh;
+  background: linear-gradient(
+    to right,
+    var(--adm-side-bg) 170px,
+    transparent 170px
+  );
+}
+#adminScreen :focus-visible {
+  outline: 2px solid var(--adm-accent);
+  outline-offset: 1px;
+}
+.adm-bar :focus-visible,
+.adm-side :focus-visible {
+  outline-color: #72aee6;
+}
+.adm-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Top bar. */
+.adm-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 46px;
+  padding: 0 8px 0 16px;
+  background: var(--adm-bar-bg);
+  color: #f0f0f1;
+}
+.adm-brand {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.adm-bar-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.adm-bar-btn,
+.adm-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: #f0f0f1;
+  font-size: 13px;
+  cursor: pointer;
+}
+.adm-bar-btn:hover,
+.adm-menu-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.adm-menu-toggle {
+  display: none;
+  justify-content: center;
+  width: 40px;
+  margin-left: -8px;
+  padding: 0;
+}
+/* Who is signed in: plain bar text (not a link), the name cut with "…" when
+   long, the role word always whole (3B-2b-2). */
+.adm-who {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 260px;
+  padding: 0 8px;
+  color: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: default;
+}
+.adm-who-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.adm-who-role {
+  flex: none;
+  white-space: pre; /* keeps the space in " · 지사" */
+}
+
+/* Left menu: icon + label per view; the current one in the accent. */
+.adm-side {
+  position: fixed;
+  top: 46px;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: 170px;
+  padding: 8px 0;
+  overflow-y: auto;
+  background: var(--adm-side-bg);
+}
+.adm-side .admin-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 16px;
+  border: 0;
+  background: none;
+  color: var(--adm-side-text);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+.adm-side .admin-menu-btn:hover {
+  background: var(--adm-side-hover);
+  color: #fff;
+}
+.adm-side .admin-menu-btn.active {
+  background: var(--adm-accent);
+  color: #fff;
+  font-weight: 700;
+}
+.admin-menu-btn[hidden] {
+  display: none;
+}
+.adm-backdrop {
+  display: none;
+}
+
+/* Body: the title row, then the view's white boxes. */
+.adm-body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+  margin-left: 170px;
+  padding: 70px 28px 48px;
 }
-
-/* Admin body uses (nearly) the full viewport width instead of the site's 80%
-   content width, so the weekday board has room and never needs a horizontal
-   scrollbar. Capped at the site max and centered, with a >=50px side gutter.
-   Overrides only the inline padding of .section-inner (higher specificity);
-   the block padding from .section-inner is kept. Admin-only via #adminScreen. */
-#adminScreen .admin-inner {
-  width: 100%;
-  max-width: var(--site-max-width);
-  margin-inline: auto;
-  padding-right: max(50px, 4vw);
-  padding-left: max(50px, 4vw);
-}
-
-.admin-bar {
+.adm-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
 }
-
-/* Admin section menu: centered, plain-text tabs at the very top of the admin
-   body that switch between the Content and Members panels (each a .admin-view).
-   Deliberately text-only (no pill/box) so it reads differently from the
-   kid-facing header nav buttons. The .admin-view[hidden] guard keeps a hidden
-   panel collapsed even though .admin-view sets display:flex. */
-.admin-menu {
-  display: flex;
-  justify-content: center;
-  gap: 28px;
-}
-.admin-menu-btn {
-  padding: 2px 2px 6px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: #9a9a9a;
+.admin-title {
+  margin: 0;
+  color: var(--adm-text);
   font-weight: 700;
-  font-size: 16px;
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    border-color 0.15s ease;
-}
-.admin-menu-btn:hover {
-  color: var(--macaw-blue);
-}
-.admin-menu-btn.active {
-  color: var(--ink);
-  border-bottom-color: var(--macaw-blue);
+  font-size: 23px;
+  line-height: 1.3;
 }
 .admin-view {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
 }
 .admin-view[hidden] {
   display: none;
 }
-
-.admin-title {
-  margin: 0;
-  font-family: "Sniglet", sans-serif;
-  font-weight: 800;
-  font-size: 30px;
-  color: #3a3a3a;
+.adm-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
+  background: var(--adm-box);
 }
-.admin-controls {
+.adm-box[hidden] {
+  display: none;
+}
+.admin-subtitle {
+  margin: 0;
+  color: var(--adm-text);
+  font-weight: 700;
+  font-size: 16px;
+}
+.admin-hint {
+  margin: 0;
+  color: var(--adm-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.admin-status {
+  margin: 0;
+  color: var(--adm-accent);
+  font-weight: 700;
+  font-size: 14px;
+}
+.admin-status:empty {
+  display: none;
+}
+.adm-notice {
+  padding: 10px 14px;
+  border-left: 4px solid var(--adm-accent);
+  background: var(--adm-box);
+  color: var(--adm-text);
+  font-weight: 400;
+}
+
+/* Buttons and links. */
+.adm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--adm-accent);
+  border-radius: 3px;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.adm-btn[hidden] {
+  display: none;
+}
+.adm-btn-primary {
+  background: var(--adm-accent);
+  color: #fff;
+}
+.adm-btn-primary:hover {
+  border-color: var(--adm-accent-dark);
+  background: var(--adm-accent-dark);
+}
+.adm-btn-secondary {
+  background: #fff;
+  color: var(--adm-accent);
+}
+.adm-btn-secondary:hover {
+  border-color: var(--adm-accent-dark);
+  background: var(--adm-accent-soft);
+  color: var(--adm-accent-dark);
+}
+.adm-btn-small {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+.adm-link {
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--adm-accent);
+  font-weight: 400;
+  font-size: 13px;
+  cursor: pointer;
+}
+.adm-link:hover {
+  color: var(--adm-accent-dark);
+  text-decoration: underline;
+}
+.adm-link-danger {
+  color: var(--adm-danger);
+}
+.lms-admin [data-armed] {
+  background: var(--adm-danger);
+  color: #fff;
+}
+
+/* Fields: 36px boxes with a visible label above (forms) or beside
+   (filters). */
+.admin-member-input,
+.admin-member-select,
+.admin-select select {
+  height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--adm-field-line);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--adm-text);
+  font-weight: 400;
+  font-size: 14px;
+}
+.admin-member-input:focus,
+.admin-member-select:focus,
+.admin-select select:focus {
+  border-color: var(--adm-accent);
+  box-shadow: 0 0 0 1px var(--adm-accent);
+  outline: 2px solid transparent;
+}
+.admin-member-select,
+.admin-select select {
+  cursor: pointer;
+}
+.adm-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+.adm-field {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+  max-width: 260px;
+  color: var(--adm-text);
+  font-weight: 700;
+  font-size: 13px;
+}
+.adm-field[hidden] {
+  display: none;
+}
+.adm-field > .admin-member-input,
+.adm-field > .admin-member-select {
+  width: 100%;
+}
+.adm-form-actions {
+  display: flex;
+  align-items: flex-end;
+}
+.admin-controls,
+.adm-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px 16px;
+}
+.adm-filters {
+  justify-content: space-between;
+}
+.admin-controls[hidden],
+.adm-filters[hidden] {
+  display: none;
+}
+.adm-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
 }
 .admin-select {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-family: "Nunito", sans-serif;
+  gap: 6px;
+  color: var(--adm-text);
   font-weight: 700;
-  font-size: 14px;
-  color: #555;
+  font-size: 13px;
 }
-.admin-select select {
-  font-family: "Nunito", sans-serif;
-  font-weight: 700;
-  font-size: 14px;
-  padding: 8px 12px;
-  border: 1.5px solid #d6d6d6;
-  border-radius: 12px;
-  background: #fff;
-  color: #333;
-  cursor: pointer;
+.admin-select[hidden] {
+  display: none;
 }
-.admin-status {
-  font-family: "Nunito", sans-serif;
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--macaw-blue);
-  min-width: 70px;
+.lms-search {
+  width: 240px;
+  max-width: 100%;
 }
-.admin-hint {
-  margin: 0;
-  font-family: "Nunito", sans-serif;
-  font-weight: 600;
-  font-size: 14px;
-  color: #777;
-}
-
-/* Member management panel (admin screen). */
-.admin-members {
-  margin-top: 28px;
-  padding-top: 22px;
-  border-top: 2px solid #eee;
-}
-.admin-subtitle {
-  margin: 0 0 14px;
-  font-family: "Nunito", sans-serif;
-  font-weight: 900;
-  font-size: 20px;
-  color: #444;
-}
-.admin-member-form {
+.lms-suggest {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
-  align-items: center;
-}
-.admin-member-input,
-.admin-member-select {
-  height: 42px;
-  padding: 0 14px;
-  border: 2px solid #e2e2e2;
-  border-radius: 12px;
-  background: #fafafa;
-  font-family: "Nunito", sans-serif;
-  font-weight: 700;
+  color: var(--adm-text);
   font-size: 14px;
-  color: #333;
 }
-.admin-member-input {
-  flex: 1 1 150px;
-  min-width: 120px;
-}
-.admin-member-input:focus,
-.admin-member-select:focus {
-  outline: none;
-  border-color: var(--macaw-blue);
-}
-.admin-member-add {
-  height: 42px;
-  padding: 0 20px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--macaw-blue);
-  box-shadow: 0 4px 0 var(--macaw-blue-shadow);
-  color: var(--canvas);
-  font-family: "Nunito", sans-serif;
-  font-weight: 800;
-  font-size: 14px;
-  cursor: pointer;
-}
-.admin-member-add:active {
-  transform: translateY(4px);
-  box-shadow: none;
-}
-.admin-member-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
-}
-.admin-member-empty {
-  margin: 4px 0;
-  font-family: "Nunito", sans-serif;
-  font-weight: 600;
-  font-size: 14px;
-  color: #999;
-}
-.admin-member-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  background: #f4f4f4;
-  border-radius: 12px;
-}
-.admin-member-row.is-inactive {
-  opacity: 0.55;
-}
-.admin-member-info {
-  font-family: "Nunito", sans-serif;
-  font-weight: 700;
-  font-size: 14px;
-  color: #333;
-}
-.admin-member-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-}
-.admin-member-toggle,
-.admin-member-edit {
-  flex: 0 0 auto;
-  height: 34px;
-  padding: 0 14px;
-  border: 2px solid #d8d8d8;
-  border-radius: 10px;
-  background: #fff;
-  font-family: "Nunito", sans-serif;
-  font-weight: 800;
-  font-size: 13px;
-  color: #555;
-  cursor: pointer;
-}
-.admin-member-toggle:hover,
-.admin-member-edit:hover {
-  border-color: var(--macaw-blue);
-  color: var(--macaw-blue);
+.lms-suggest[hidden],
+.lms-modal-field[hidden] {
+  display: none;
 }
 .admin-signup-toggle {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 18px;
-  font-family: "Nunito", sans-serif;
-  font-weight: 700;
+  min-height: 44px;
+  color: var(--adm-text);
   font-size: 14px;
-  color: #555;
   cursor: pointer;
 }
 .admin-signup-toggle input {
   width: 18px;
   height: 18px;
-  accent-color: var(--macaw-blue);
+  accent-color: var(--adm-accent);
+}
+
+/* List tables (회원 · 반 · 지사): rows of 44px or more; the row actions sit
+   under the first column. */
+.lms-admin .admin-member-list {
+  overflow-x: auto;
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
+  background: var(--adm-box);
+}
+.adm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.adm-table th {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--adm-line);
+  color: var(--adm-text);
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+.adm-table td {
+  height: 44px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--adm-bg);
+  color: var(--adm-text);
+  vertical-align: top;
+}
+.adm-table tbody tr:hover td {
+  background: #f6f7f7;
+}
+.adm-table tr.is-inactive td {
+  background: #f6f7f7;
+  color: var(--adm-muted);
+}
+.adm-row-title {
+  font-weight: 700;
+}
+/* Row action text buttons: the text as before (13px), each press area 44 ×
+   44px or more, side by side without overlapping (3B-2b-2). */
+.adm-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 2px 0 0 -10px;
+}
+.adm-row-actions .adm-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+}
+.adm-row-toggle {
+  display: none;
+}
+.adm-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 3px;
+  background: #e7f5ea;
+  color: #1a5e33;
+  font-weight: 700;
+  font-size: 13px;
+}
+.adm-badge.is-off {
+  background: #f0f0f1;
+  color: var(--adm-muted);
+}
+.lms-member-lock {
+  display: block;
+  margin-top: 4px;
+  color: var(--adm-danger);
+  font-weight: 700;
+  font-size: 13px;
+}
+.admin-member-empty {
+  margin: 0;
+  padding: 16px 12px;
+  color: var(--adm-muted);
+  font-size: 14px;
+}
+.lms-class-teacher {
+  height: 32px;
+  max-width: 220px;
+}
+.adm-table .lms-class-panel-row td {
+  height: auto;
+  padding: 0 12px 14px;
+  background: #f6f7f7;
+}
+.lms-class-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
+  background: #fff;
+}
+.lms-class-panel-title {
+  margin: 0;
+  font-weight: 700;
+}
+.lms-class-student {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  min-height: 44px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--adm-bg);
+}
+.lms-class-student-actions,
+.lms-class-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.lms-class-add {
+  padding-top: 8px;
+}
+.lms-class-student-actions .admin-member-select,
+.lms-class-add .admin-member-select {
+  height: 32px;
+  max-width: 100%;
+}
+.lms-rename {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.lms-rename-input {
+  width: 180px;
+  max-width: 100%;
+  height: 32px;
+}
+
+/* Phones and narrow tablets (< 782px): ☰ opens the left menu over the body;
+   the tables fold into one block per row — the first column plus a
+   fold-out button that shows the other columns as "label  value". */
+@media (max-width: 781.98px) {
+  .adm-menu-toggle {
+    display: inline-flex;
+  }
+  .adm-bar {
+    padding-left: 8px;
+  }
+  .adm-bar-label,
+  .adm-brand-site {
+    display: none; /* the title reads "관리자" on a phone */
+  }
+  .adm-who {
+    max-width: 40vw;
+    padding: 0 4px;
+  }
+  .adm-side {
+    width: 220px;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition:
+      transform 0.2s ease,
+      visibility 0s linear 0.2s;
+  }
+  .adm-root.is-menu-open .adm-side {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.2s ease;
+  }
+  .adm-backdrop:not([hidden]) {
+    position: fixed;
+    inset: 46px 0 0;
+    z-index: 29;
+    display: block;
+    background: rgba(0, 0, 0, 0.4);
+  }
+  .adm-root {
+    background: none;
+  }
+  .adm-body {
+    margin-left: 0;
+    padding: 62px 12px 40px;
+  }
+  .admin-title {
+    font-size: 20px;
+  }
+  .adm-box {
+    padding: 14px;
+  }
+  .adm-field {
+    max-width: none;
+    flex-basis: 100%;
+  }
+  .adm-filters .lms-search {
+    width: 100%;
+  }
+  .adm-btn,
+  .adm-link {
+    min-height: 40px;
+  }
+  /* A class's student panel (옮기기 · 빼기 · 넣기): 44 px press areas, the
+     text as before (3B-2b final). */
+  .lms-class-student-actions .adm-btn,
+  .lms-class-add .adm-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .lms-admin .admin-member-list {
+    overflow-x: visible;
+  }
+  .adm-table thead {
+    display: none;
+  }
+  .adm-table,
+  .adm-table tbody,
+  .adm-table tr,
+  .adm-table td {
+    display: block;
+    width: auto;
+  }
+  .adm-table tr {
+    position: relative;
+    border-bottom: 1px solid var(--adm-line);
+  }
+  .adm-table td {
+    height: auto;
+    border-bottom: 0;
+  }
+  .adm-table td.adm-col-primary {
+    min-height: 44px;
+    padding: 10px 52px 10px 12px;
+  }
+  .adm-table td[data-colname]:not(.adm-col-primary) {
+    display: none;
+  }
+  .adm-table tr.is-expanded td[data-colname]:not(.adm-col-primary) {
+    position: relative;
+    display: block;
+    padding: 6px 12px 6px calc(36% + 12px);
+  }
+  .adm-table tr.is-expanded td[data-colname]:not(.adm-col-primary)::before {
+    content: attr(data-colname);
+    position: absolute;
+    left: 12px;
+    width: 34%;
+    color: var(--adm-muted);
+    font-weight: 700;
+  }
+  .adm-row-toggle {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+  .adm-row-toggle::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border: solid var(--adm-text);
+    border-width: 0 2px 2px 0;
+    transform: translateY(-2px) rotate(45deg);
+  }
+  .adm-table tr.is-expanded .adm-row-toggle::before {
+    transform: translateY(2px) rotate(-135deg);
+  }
+  .lms-class-teacher {
+    max-width: 100%;
+  }
+  /* The content board keeps its arrangement; on a phone it keeps a readable
+     width and scrolls sideways inside its box instead of crushing the slots. */
+  #adminBoard {
+    overflow-x: auto;
+  }
+  #adminBoard > .admin-songs,
+  #adminBoard > .admin-grid {
+    min-width: 600px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .adm-side,
+  .adm-root.is-menu-open .adm-side {
+    transition: none;
+  }
 }
 
 /* Sign-up entry point on the login page (placeholder, hidden by default). */
@@ -4437,14 +4956,15 @@ body.game-open {
   text-align: center;
 }
 
-/* The gray board. */
+/* The gray board (structure unchanged in 3B-2b; admin corners, colors). */
 .admin-board {
   display: flex;
   flex-direction: column;
   gap: 18px;
   padding: 18px;
-  background: #f4f4f4;
-  border-radius: 20px;
+  background: #f6f7f7;
+  border: 1px solid var(--adm-line, #dcdcde);
+  border-radius: 4px;
 }
 .admin-songs {
   display: grid;
@@ -4465,7 +4985,7 @@ body.game-open {
 }
 /* Level 1 single-cover block: keep the one cover at its current size and center
    it vertically against the four week rows instead of stretching it full-height. */
-.admin-book--single .admin-cover {
+.admin-book--single .admin-cover-cell {
   align-self: center;
 }
 .admin-weeks {
@@ -4487,9 +5007,9 @@ body.game-open {
   font-family: "Nunito", sans-serif;
   font-weight: 800;
   font-size: 14px;
-  color: #777;
-  background: #e9e9e9;
-  border-radius: 12px;
+  color: var(--adm-muted, #50575e);
+  background: #e9e9ea;
+  border-radius: 4px;
 }
 
 /* Editable slot button. */
@@ -4502,8 +5022,8 @@ body.game-open {
   padding: 9px 12px;
   text-align: left;
   background: #fff;
-  border: 1.5px solid #dcdcdc;
-  border-radius: 12px;
+  border: 1px solid var(--adm-field-line, #8c8f94);
+  border-radius: 4px;
   cursor: pointer;
   transition:
     border-color 0.15s ease,
@@ -4511,11 +5031,11 @@ body.game-open {
 }
 .admin-slot:hover {
   border-color: var(--macaw-blue);
-  box-shadow: 0 0 0 2px rgba(40, 160, 220, 0.15);
+  box-shadow: 0 0 0 1px var(--macaw-blue);
 }
 .admin-slot[data-filled="true"] {
   border-color: var(--macaw-blue);
-  background: #f2fbff;
+  background: var(--adm-accent-soft, #eaf2fa);
 }
 .admin-slot-name {
   font-family: "Nunito", sans-serif;
@@ -4527,7 +5047,7 @@ body.game-open {
   font-family: "Inter", sans-serif;
   font-weight: 400;
   font-size: 11px;
-  color: #8a8a8a;
+  color: var(--adm-muted, #50575e);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4536,22 +5056,32 @@ body.game-open {
   color: var(--macaw-blue);
 }
 
-/* Cover dropzone card. */
+/* Cover: the card is the picture and the drop / click area; its notes sit on
+   a line of their own under it, never over the picture (3B-2b-2). */
+.admin-cover-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
 .admin-cover {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 2px;
+  flex: 1 1 auto;
   min-height: 150px;
-  padding: 10px;
   background: #fff;
-  background-size: cover;
-  background-position: center;
-  border: 2px dashed #cfcfcf;
-  border-radius: 16px;
+  border: 2px dashed var(--adm-field-line, #8c8f94);
+  border-radius: 4px;
   cursor: pointer;
   overflow: hidden;
+}
+/* Desktop: the cover fills the card, cropped as the old background was. */
+.admin-cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
 }
 .admin-cover.has-cover {
   border-style: solid;
@@ -4559,21 +5089,14 @@ body.game-open {
 }
 .admin-cover.is-dragover {
   border-color: var(--macaw-blue);
-  box-shadow: 0 0 0 3px rgba(40, 160, 220, 0.2);
+  box-shadow: 0 0 0 1px var(--macaw-blue);
 }
-.admin-cover-label,
-.admin-cover-hint {
-  position: relative;
-  font-family: "Nunito", sans-serif;
+.admin-cover-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.35;
   text-align: center;
-}
-
-.admin-cover-sync {
-  display: block;
-  margin-top: 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #8a8a8a;
 }
 .admin-cover-label {
   font-weight: 800;
@@ -4583,13 +5106,12 @@ body.game-open {
 .admin-cover-hint {
   font-weight: 600;
   font-size: 11px;
-  color: #999;
+  color: var(--adm-muted, #50575e);
 }
-/* On an uploaded cover, sit the labels on a readable scrim. */
-.admin-cover.has-cover .admin-cover-label,
-.admin-cover.has-cover .admin-cover-hint {
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+.admin-cover-sync {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--adm-muted, #50575e);
 }
 
 /* Slot editor modal. */
@@ -4612,7 +5134,6 @@ body.admin-modal-open {
   position: absolute;
   inset: 0;
   background: rgba(28, 28, 28, 0.55);
-  backdrop-filter: blur(2px);
 }
 .admin-modal-card {
   position: relative;
@@ -4621,16 +5142,16 @@ body.admin-modal-open {
   flex-direction: column;
   gap: 10px;
   padding: 24px;
-  background: var(--canvas);
-  border-radius: var(--radius-card);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
 }
 .admin-modal-title {
   margin: 0;
   font-family: "Sniglet", sans-serif;
-  font-weight: 800;
-  font-size: 22px;
-  color: #3a3a3a;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--adm-text);
 }
 .admin-modal-sub {
   margin: 0;
@@ -4649,16 +5170,17 @@ body.admin-modal-open {
 .admin-modal-input {
   font-family: "Inter", sans-serif;
   font-size: 14px;
-  padding: 12px 14px;
-  border: 1.5px solid #d6d6d6;
-  border-radius: 12px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--adm-field-line);
+  border-radius: 4px;
   background: #fff;
-  color: #333;
+  color: var(--adm-text);
 }
 .admin-modal-input:focus {
-  outline: none;
+  outline: 2px solid transparent;
   border-color: var(--macaw-blue);
-  box-shadow: 0 0 0 3px rgba(40, 160, 220, 0.18);
+  box-shadow: 0 0 0 1px var(--macaw-blue);
 }
 /* Apply-to-whole-level checkbox row under each modal field. */
 .admin-modal-check {
@@ -4687,35 +5209,59 @@ body.admin-modal-open {
   margin-top: 8px;
 }
 .admin-btn {
-  padding: 10px 18px;
+  min-height: 36px;
+  padding: 0 16px;
   font-family: "Nunito", sans-serif;
-  font-weight: 800;
+  font-weight: 700;
   font-size: 14px;
-  border: 0;
-  border-radius: 999px;
+  border: 1px solid var(--adm-accent);
+  border-radius: 3px;
   cursor: pointer;
 }
 .admin-btn-ghost {
-  color: #555;
-  background: #ededed;
+  color: var(--adm-accent);
+  background: #fff;
 }
 .admin-btn-ghost:hover {
-  background: #e0e0e0;
+  background: var(--adm-accent-soft);
 }
 .admin-btn-primary {
-  color: var(--canvas);
-  background: var(--macaw-blue);
+  color: #fff;
+  background: var(--adm-accent);
 }
 .admin-btn-primary:hover {
-  background: var(--macaw-blue-shadow);
+  background: var(--adm-accent-dark);
 }
 
 @media (max-width: 760px) {
+  /* One column: the cover sits above its weeks at a set width and its own
+     shape, centred in the visible part of the board; only the weeks (and
+     the toolbar row) keep the scrolling 600px (3B-2b-2). */
   .admin-book {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  #adminBoard > .admin-grid {
+    min-width: 0;
+  }
+  #adminBoard .admin-weeks {
+    min-width: 600px;
+  }
+  .admin-cover-cell {
+    align-items: center;
   }
   .admin-cover {
-    min-height: 120px;
+    flex: none;
+    width: 160px;
+    min-height: 0;
+    aspect-ratio: 530 / 648; /* an empty card: the usual cover shape */
+  }
+  .admin-cover.has-cover {
+    aspect-ratio: auto;
+  }
+  .admin-cover-img {
+    position: static;
+    display: block;
+    height: auto;
   }
   .admin-week-row {
     grid-template-columns: 56px repeat(5, minmax(0, 1fr));
@@ -5298,14 +5844,6 @@ body.bg-editing.bg-ghost .site-footer {
 .admin-banner {
   display: grid;
   gap: 12px;
-  max-width: 720px;
-  font-family: var(--font-admin);
-}
-.admin-hint {
-  margin: 0;
-  color: var(--muted-ink);
-  font-size: 13px;
-  line-height: 1.5;
 }
 .admin-banner-opts {
   display: grid;
@@ -5408,10 +5946,11 @@ body.bg-editing.bg-ghost .site-footer {
   gap: 4px;
 }
 .admin-banner-acts button {
-  min-width: 30px;
+  min-width: 32px;
+  min-height: 32px;
   padding: 5px 7px;
-  border: 1px solid #ccc;
-  border-radius: 7px;
+  border: 1px solid var(--adm-field-line);
+  border-radius: 3px;
   background: #fff;
   font: inherit;
   font-size: 12px;
@@ -5422,46 +5961,41 @@ body.bg-editing.bg-ghost .site-footer {
   cursor: default;
 }
 #heroBannerUpload {
-  padding: 9px 12px;
-  border: 1px solid #ccc;
-  border-radius: 9px;
-  background: #fafafa;
+  justify-self: start;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--adm-accent);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--adm-accent);
   font: inherit;
-  font-size: 13px;
+  font-weight: 700;
+  font-size: 14px;
   cursor: pointer;
+}
+#heroBannerUpload:hover {
+  background: var(--adm-accent-soft);
 }
 .admin-banner-save {
   justify-self: start;
-  padding: 9px 22px;
-  border: 1px solid var(--owl-green, #2e7d32);
-  border-radius: 9px;
-  background: var(--owl-green, #2e7d32);
+  min-height: 36px;
+  padding: 0 22px;
+  border: 1px solid var(--adm-accent);
+  border-radius: 3px;
+  background: var(--adm-accent);
   color: #fff;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
 }
 /* Enabled only while the draft differs from what is saved, so the button
    itself tells the admin whether there is anything pending. */
 .admin-banner-save:disabled {
-  border-color: #c8c8c8;
-  background: #c8c8c8;
-  color: #f2f2f2;
+  border-color: var(--adm-line);
+  background: #f6f7f7;
+  color: #8c8f94;
   cursor: default;
-}
-
-.admin-bg-btn {
-  padding: 8px 14px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background: #fff;
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-.admin-bg-btn:hover {
-  background: #f2f6ff;
 }
 
 /* ==========================================================================
@@ -5617,11 +6151,6 @@ body[data-screen="resources"] #resourceStatus {
 .admin-res {
   display: grid;
   gap: 12px;
-  max-width: 720px;
-  margin-top: 36px;
-  padding-top: 24px;
-  border-top: 2px solid #eee;
-  font-family: var(--font-admin);
 }
 
 .res-admin-list {
@@ -5646,9 +6175,10 @@ body[data-screen="resources"] #resourceStatus {
   grid-template-columns: 130px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid #e3e3e3;
-  border-radius: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
   background: #fff;
   font-size: 13px;
 }
@@ -5668,10 +6198,12 @@ body[data-screen="resources"] #resourceStatus {
 }
 
 .res-admin-actions button {
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  border-radius: 9px;
-  background: #fafafa;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--adm-accent);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--adm-accent);
   font: inherit;
   font-size: 13px;
   white-space: nowrap;
@@ -5679,8 +6211,8 @@ body[data-screen="resources"] #resourceStatus {
 }
 
 .res-admin-actions .res-admin-delete[data-armed] {
-  border-color: #e04444;
-  background: #ff4b4b;
+  border-color: var(--adm-danger);
+  background: var(--adm-danger);
   color: #fff;
   font-weight: 700;
 }

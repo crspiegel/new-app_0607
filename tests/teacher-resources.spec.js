@@ -281,7 +281,10 @@ test("resources: logging in and out flips the button without a reload", async ({
   await page.locator("#loginPassword").fill("pw");
   await page.locator("#loginForm .login-submit").click();
   await expect(page.locator("#adminScreen")).toHaveClass(/screen-active/);
-  await page.locator('.top-nav [data-level="level-1"]').click({ force: true });
+  // the admin screen hides the site header (3B-2b): back via 사이트 보기
+  await page.locator("#adminSiteBtn").click();
+  await expect(page.locator("#homeScreen")).toHaveClass(/screen-active/);
+  await page.locator('#levelSection [data-level="level-1"]').click();
   await expect(button).toBeVisible();
   expect(await page.evaluate(() => window.__noReload)).toBe(marker);
 });
@@ -561,6 +564,9 @@ async function openBannerTab(page) {
   await page.waitForFunction(() => window.craTeacherRes?.ready);
   await page.evaluate(() => openAdmin());
   await expect(page.locator("#adminScreen")).toHaveClass(/screen-active/);
+  // under 782px the admin menu opens from ☰ first (3B-2b)
+  const menuToggle = page.locator("#adminMenuToggle");
+  if (await menuToggle.isVisible()) await menuToggle.click();
   await page.locator('.admin-menu-btn[data-admin-view="banner"]').click();
   await expect(page.locator("#teacherResAdmin")).toBeVisible();
 }
