@@ -260,7 +260,7 @@ Menu button requirements:
   스크립트 (`script`) · 그림 자료실 (`pictures`) · 플래쉬카드 (`flashcards`). Card order: 월간교육안 →
   연간교육안 → 상장 → 테스트 (Level 2/3 only) → 핵심문장 스크립트 → 그림 자료실 → 플래쉬카드 (6 cards on
   Beginner / Level 1, 7 on Level 2 / 3; 15 / 15 / 16 / 16 = 62 slots). Cards in a grid: 2 per row on a
-  PC, 1 on a phone. [월간교육안] ("3월~12월 · N개 등록", [월 선택 ▾]) opens a full-width panel under the
+  PC, 1 on a phone. [월간교육안] ("3월~12월 · N개 등록", [3~12월 보기 ▾]) opens a full-width panel under the
   grid with the ten month buttons (5 × 2 on a PC): a month with a file or a link is a level-colored
   button (file = our download, Drive = new tab), an empty month is a dim button that cannot be pressed;
   pressing again closes it. D63's single `monthly` slot is gone — its files are deleted in the admin

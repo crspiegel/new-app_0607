@@ -33,15 +33,26 @@
 
 const RES_BUCKET = "teacher-resources";
 const RES_MAX_BYTES = 10 * 1024 * 1024; // = the bucket's file_size_limit
-// The slots in card order (D63, 2026-11-02): 월간교육안 is new (monthly);
-// plan = 연간교육안 — the old '월간.연간교육안' slot key, kept so the files
-// already uploaded (rows and Storage paths <level>/plan/…) stay put.
-// Beginner / Level 1: 3 slots, Level 2 / 3: 4 (test) — 14 in all.
+// D65 (2026-11-02): 월간교육안 is one slot per month, 3월~12월 (monthly-03 …
+// monthly-12) — one card that opens the ten month buttons (teachers) / one
+// foldable group of ten rows (admin).
+const RES_MONTHS = Array.from({ length: 10 }, (_, i) => ({
+  slot: `monthly-${String(i + 3).padStart(2, "0")}`,
+  label: `${i + 3}월`,
+}));
+// The cards in order (D65): 월간교육안 (the months; "monthly" is the card's
+// key, not a slot) → 연간교육안 (plan — the old '월간.연간교육안' slot key,
+// kept so the files already uploaded stay put) → 상장 → 테스트 (Level 2 / 3)
+// → 핵심문장 스크립트 → 그림 자료실 → 플래쉬카드. 6 cards on Beginner /
+// Level 1, 7 on Level 2 / 3; 15 / 15 / 16 / 16 slots.
 const RES_SLOTS = [
-  { slot: "monthly", label: "월간교육안" },
+  { slot: "monthly", label: "월간교육안", months: RES_MONTHS },
   { slot: "plan", label: "연간교육안" },
   { slot: "award", label: "상장" },
   { slot: "test", label: "테스트", levels: ["level-2", "level-3"] },
+  { slot: "script", label: "핵심문장 스크립트" },
+  { slot: "pictures", label: "그림 자료실" },
+  { slot: "flashcards", label: "플래쉬카드" },
 ];
 const RES_TYPES = {
   pdf: "application/pdf",
@@ -74,11 +85,24 @@ const resourceStatus = document.querySelector("#resourceStatus");
 const teacherResAdminList = document.querySelector("#teacherResAdminList");
 const teacherResStatus = document.querySelector("#teacherResStatus");
 
-// The slots a level has, in button order (test = Level 2 / 3 only).
+// The cards a level has, in order (test = Level 2 / 3 only).
 function resourceSlots(level) {
   return RES_SLOTS.filter(
     (item) => !item.levels || item.levels.includes(level),
   );
+}
+
+// A slot's row in a list answer (undefined when the list has none).
+function resourceRow(rows, slot) {
+  return rows ? rows.find((r) => r.slot === slot) : undefined;
+}
+
+// How many of the ten months hold a file or a Drive link.
+function filledMonths(rows) {
+  return RES_MONTHS.filter((m) => {
+    const row = resourceRow(rows, m.slot);
+    return Boolean((row && row.file_name) || resourceDriveId(row));
+  }).length;
 }
 
 function resourceExt(name) {
@@ -135,10 +159,16 @@ function resourceKind(name) {
 }
 
 /* ---- Resource page ------------------------------------------------------ */
-/* D58 (2026-11-02): one card per slot, one per row — file icon (PDF / Excel)
-   · title + "PDF · 1.2MB · 11/02 업데이트" · [내려받기]. A slot without a
-   file says so instead (a notice, not a button). The title is the slot's
-   fixed label (RES_SLOTS — the admin section shows the same one). */
+/* D58 (2026-11-02): one card per slot — file icon (PDF / Excel) · title +
+   "PDF · 1.2MB · 11/02 업데이트" · [내려받기]. A slot without a file says so
+   instead (a notice, not a button). The title is the slot's fixed label
+   (RES_SLOTS — the admin section shows the same one).
+   D65: the cards in a grid (2 per row on a PC, 1 on a phone). The first one,
+   월간교육안, says "3월~12월 · N개 등록" and its [3~12월 보기 ▾] opens a panel
+   right under its row, full width: the ten month buttons (5 × 2) — a month
+   with a file downloads (the function, as a card does), a month with a Drive
+   link opens Google in a new tab, an empty month is a dim button that cannot
+   be pressed ("준비 중"). */
 
 const RES_KIND_TEXT = { pdf: "PDF", excel: "엑셀" }; // the meta line
 const RES_ICON_TEXT = { pdf: "PDF", excel: "XLS", drive: "LINK" }; // in the icon
@@ -146,7 +176,7 @@ const RES_EMPTY_TEXT = "아직 올라온 자료가 없어요";
 const RES_SVG_NS = "http://www.w3.org/2000/svg";
 // A page with a folded corner, then what is on it: text lines (PDF), a
 // table grid (Excel) or an arrow out (a Google Drive link, D64); nothing on
-// an empty slot's page.
+// an empty slot's page. 월간교육안 (D65) is a calendar, not a page.
 const RES_ICON_PATHS = {
   page: [
     "M7 3h8l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z",
@@ -155,9 +185,19 @@ const RES_ICON_PATHS = {
   pdf: ["M8.5 12.5h7", "M8.5 15.5h7", "M8.5 18.5h4"],
   excel: ["M8.5 11.5h7v7h-7Z", "M8.5 15h7", "M12 11.5v7"],
   drive: ["M9 18.5 15.5 12", "M11 12h4.5v4.5"],
+  monthly: [
+    "M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z",
+    "M4 10h16",
+    "M8.5 3v4",
+    "M15.5 3v4",
+    "M8 14h2",
+    "M14 14h2",
+    "M8 17h2",
+  ],
 };
 
 let resLoad = 0; // bumped per open: a late list for another level is dropped
+let resMonthsOpen = false; // the 월간교육안 month panel (closed on each open)
 
 function setResourceStatus(text) {
   if (resourceStatus) resourceStatus.textContent = text || "";
@@ -180,20 +220,30 @@ function formatResDay(iso) {
   return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
 }
 
+function resourceSvg(className, paths) {
+  const svg = document.createElementNS(RES_SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  if (className) svg.classList.add(className);
+  paths.forEach((d) => {
+    const path = document.createElementNS(RES_SVG_NS, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  });
+  return svg;
+}
+
 function resourceIcon(kind) {
   const box = document.createElement("span");
   box.className = "res-icon";
   box.dataset.kind = kind;
   box.setAttribute("aria-hidden", "true");
-  const svg = document.createElementNS(RES_SVG_NS, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("focusable", "false");
-  [...RES_ICON_PATHS.page, ...(RES_ICON_PATHS[kind] || [])].forEach((d) => {
-    const path = document.createElementNS(RES_SVG_NS, "path");
-    path.setAttribute("d", d);
-    svg.append(path);
-  });
-  box.append(svg);
+  const paths =
+    kind === "monthly"
+      ? RES_ICON_PATHS.monthly
+      : [...RES_ICON_PATHS.page, ...(RES_ICON_PATHS[kind] || [])];
+  box.append(resourceSvg("", paths));
   if (RES_ICON_TEXT[kind]) {
     const label = document.createElement("span");
     label.className = "res-icon-label";
@@ -222,86 +272,173 @@ function resourceTitle(label) {
 
 // The 내려받기 icon + text (a button for a file, a link for a Drive file).
 function downloadLabel() {
-  const icon = document.createElementNS(RES_SVG_NS, "svg");
-  icon.setAttribute("viewBox", "0 0 24 24");
-  icon.setAttribute("aria-hidden", "true");
-  icon.setAttribute("focusable", "false");
-  icon.classList.add("res-download-icon");
-  ["M12 4v11", "m7 10 5 5 5-5", "M5 20h14"].forEach((d) => {
-    const path = document.createElementNS(RES_SVG_NS, "path");
-    path.setAttribute("d", d);
-    icon.append(path);
-  });
   const label = document.createElement("span");
   label.textContent = "내려받기";
-  return [icon, label];
+  return [
+    resourceSvg("res-download-icon", ["M12 4v11", "m7 10 5 5 5-5", "M5 20h14"]),
+    label,
+  ];
 }
 
-// rows = the teacher_resources_list answer, or null while it loads.
+// "PDF · 1.2MB · 11/02 업데이트" / "구글 드라이브 · 11/02 업데이트".
+function resourceMeta(row, file, drive) {
+  const day = formatResDay(row.updated_at);
+  const parts = drive
+    ? ["구글 드라이브"]
+    : [RES_KIND_TEXT[resourceKind(file)], formatResSizeShort(row.file_size)];
+  return [...parts, day && `${day} 업데이트`].filter(Boolean).join(" · ");
+}
+
+// One card: a file (button → the function, this tab), a Drive file (link →
+// Google, new tab, D64) or a notice. rows = null while the list loads.
+function resourceCard(item, rows) {
+  const row = resourceRow(rows, item.slot);
+  const file = row && row.file_name;
+  const drive = resourceDriveId(row);
+  const kind = file ? resourceKind(file) : drive ? "drive" : "none";
+  const card = document.createElement("div");
+  card.className = "res-card";
+  card.dataset.slot = item.slot;
+  card.dataset.state = file || drive ? "ready" : rows ? "empty" : "loading";
+
+  const text = document.createElement("div");
+  text.className = "res-text";
+  const meta = document.createElement("span");
+  meta.className = "res-meta";
+  if (file || drive) meta.textContent = resourceMeta(row, file, drive);
+  else if (rows) meta.textContent = "준비 중";
+  text.append(resourceTitle(item.label), meta);
+  card.append(resourceIcon(kind), text);
+
+  if (file) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "res-download";
+    button.dataset.slot = item.slot;
+    button.setAttribute("aria-label", `${item.label} 내려받기`);
+    button.append(...downloadLabel());
+    card.append(button);
+  } else if (drive) {
+    // Straight from Google, in a new tab (D64) — this page stays.
+    const link = document.createElement("a");
+    link.className = "res-download";
+    link.href = driveDownloadUrl(drive);
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.setAttribute("aria-label", `${item.label} 내려받기 (새 탭)`);
+    link.append(...downloadLabel());
+    card.append(link);
+  } else if (rows) {
+    const empty = document.createElement("p");
+    empty.className = "res-empty";
+    empty.textContent = RES_EMPTY_TEXT;
+    card.append(empty);
+  }
+  return card;
+}
+
+// The 월간교육안 card (D65): how many months are in, and [3~12월 보기 ▾]
+// (not "월 선택" — that is the ◂ button back to the month page).
+function monthlyCard(item, rows) {
+  const card = document.createElement("div");
+  card.className = "res-card res-card-monthly";
+  card.dataset.slot = item.slot;
+  card.dataset.state = rows ? "ready" : "loading";
+  const text = document.createElement("div");
+  text.className = "res-text";
+  const meta = document.createElement("span");
+  meta.className = "res-meta";
+  if (rows) meta.textContent = `3월~12월 · ${filledMonths(rows)}개 등록`;
+  text.append(resourceTitle(item.label), meta);
+  card.append(resourceIcon("monthly"), text);
+  if (rows) {
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "res-download res-month-toggle";
+    toggle.setAttribute("aria-label", `${item.label} 3~12월 보기`);
+    toggle.setAttribute("aria-expanded", String(resMonthsOpen));
+    toggle.setAttribute("aria-controls", "resourceMonths");
+    const label = document.createElement("span");
+    label.textContent = "3~12월 보기";
+    toggle.append(label, resourceSvg("res-month-chevron", ["m6 9 6 6 6-6"]));
+    card.append(toggle);
+  }
+  return card;
+}
+
+// One month in the panel: a file (button → the function), a Drive file
+// (link → Google, new tab) or a dim button that cannot be pressed.
+function monthButton(item, month, row) {
+  const file = row && row.file_name;
+  const drive = resourceDriveId(row);
+  const name = document.createElement("span");
+  name.className = "res-month-name";
+  name.textContent = month.label;
+  const note = document.createElement("span");
+  note.className = "res-month-note";
+  let el;
+  if (drive) {
+    el = document.createElement("a");
+    el.href = driveDownloadUrl(drive);
+    el.target = "_blank";
+    el.rel = "noopener noreferrer";
+    el.setAttribute(
+      "aria-label",
+      `${month.label} ${item.label} 내려받기 (새 탭)`,
+    );
+    note.textContent = "드라이브";
+  } else {
+    el = document.createElement("button");
+    el.type = "button";
+    if (file) {
+      el.dataset.slot = month.slot;
+      el.setAttribute("aria-label", `${month.label} ${item.label} 내려받기`);
+      note.textContent = RES_KIND_TEXT[resourceKind(file)] || "파일";
+    } else {
+      el.disabled = true;
+      note.textContent = "준비 중";
+    }
+  }
+  el.className = "res-month";
+  el.dataset.month = month.slot;
+  el.dataset.state = file || drive ? "ready" : "empty";
+  el.append(name, note);
+  return el;
+}
+
+function monthPanel(item, rows) {
+  const panel = document.createElement("div");
+  panel.className = "res-months";
+  panel.id = "resourceMonths";
+  panel.hidden = !resMonthsOpen;
+  panel.setAttribute("role", "group");
+  panel.setAttribute("aria-label", `${item.label} 3월~12월`);
+  panel.append(
+    ...item.months.map((m) => monthButton(item, m, resourceRow(rows, m.slot))),
+  );
+  return panel;
+}
+
+// rows = the teacher_resources_list answer, or null while it loads. The
+// month panel follows its card in the page order (keyboard and phones: right
+// under it); on a PC the grid fills the card beside it first (dense).
 function renderResourceButtons(level, rows) {
   if (!resourceGrid) return;
   resourceGrid.replaceChildren(
-    ...resourceSlots(level).map((item) => {
-      const row = rows && rows.find((r) => r.slot === item.slot);
-      const file = row && row.file_name;
-      const drive = resourceDriveId(row);
-      const kind = file ? resourceKind(file) : drive ? "drive" : "none";
-      const card = document.createElement("div");
-      card.className = "res-card";
-      card.dataset.slot = item.slot;
-      card.dataset.state = file || drive ? "ready" : rows ? "empty" : "loading";
-
-      const text = document.createElement("div");
-      text.className = "res-text";
-      const meta = document.createElement("span");
-      meta.className = "res-meta";
-      if (file) {
-        const day = formatResDay(row.updated_at);
-        meta.textContent = [
-          RES_KIND_TEXT[kind],
-          formatResSizeShort(row.file_size),
-          day && `${day} 업데이트`,
-        ]
-          .filter(Boolean)
-          .join(" · ");
-      } else if (drive) {
-        const day = formatResDay(row.updated_at);
-        meta.textContent = ["구글 드라이브", day && `${day} 업데이트`]
-          .filter(Boolean)
-          .join(" · ");
-      } else if (rows) {
-        meta.textContent = "준비 중";
-      }
-      text.append(resourceTitle(item.label), meta);
-      card.append(resourceIcon(kind), text);
-
-      if (file) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "res-download";
-        button.dataset.slot = item.slot;
-        button.setAttribute("aria-label", `${item.label} 내려받기`);
-        button.append(...downloadLabel());
-        card.append(button);
-      } else if (drive) {
-        // Straight from Google, in a new tab (D64) — this page stays.
-        const link = document.createElement("a");
-        link.className = "res-download";
-        link.href = driveDownloadUrl(drive);
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.setAttribute("aria-label", `${item.label} 내려받기 (새 탭)`);
-        link.append(...downloadLabel());
-        card.append(link);
-      } else if (rows) {
-        const empty = document.createElement("p");
-        empty.className = "res-empty";
-        empty.textContent = RES_EMPTY_TEXT;
-        card.append(empty);
-      }
-      return card;
+    ...resourceSlots(level).flatMap((item) => {
+      if (!item.months) return [resourceCard(item, rows)];
+      const card = monthlyCard(item, rows);
+      return rows ? [card, monthPanel(item, rows)] : [card];
     }),
   );
+}
+
+function toggleMonths(toggle) {
+  const panel = document.querySelector("#resourceMonths");
+  if (!panel) return;
+  resMonthsOpen = panel.hidden;
+  panel.hidden = !resMonthsOpen;
+  toggle.setAttribute("aria-expanded", String(resMonthsOpen));
 }
 
 function showMonthsFor(level) {
@@ -323,6 +460,7 @@ async function openTeacherResources(level) {
   monthLevelTag.textContent = levelLabel(level);
   applyLevelTheme();
   setResourceStatus("");
+  resMonthsOpen = false;
   renderResourceButtons(level, null);
   setHash("resources");
   showScreen("resources");
@@ -386,8 +524,14 @@ if (resourceBackBtn) {
 }
 if (resourceGrid) {
   resourceGrid.addEventListener("click", (event) => {
-    // a Drive slot's link (an <a>) just opens Google — only buttons ask
-    const button = event.target.closest("button.res-download");
+    const toggle = event.target.closest(".res-month-toggle");
+    if (toggle) {
+      toggleMonths(toggle);
+      return;
+    }
+    // A file's button (a card, or a month in the panel) carries its slot; a
+    // Drive link (an <a>) just opens Google; an empty month is disabled.
+    const button = event.target.closest("button[data-slot]");
     if (!button || button.disabled) return;
     downloadResource(state.level, button.dataset.slot, button);
   });
@@ -646,27 +790,125 @@ async function loadResourceAdmin() {
   if (answers.some((answer) => answer.error)) {
     setTeacherResStatus(RES_MSG.listFailed);
   }
-  resDriveEditor = null; // its row is redrawn below
-  teacherResAdminList.replaceChildren(
-    ...LEVELS.map(({ key, label }, i) => {
-      const rows = Array.isArray(answers[i].data) ? answers[i].data : [];
-      const group = document.createElement("section");
-      group.className = "res-admin-level";
-      const title = document.createElement("h3");
-      title.textContent = label;
-      group.append(
-        title,
-        ...resourceSlots(key).map((item) =>
-          buildResAdminRow(
-            key,
-            item,
-            rows.find((r) => r.slot === item.slot),
-          ),
-        ),
-      );
-      return group;
-    }),
+  resAdminRows = Object.fromEntries(
+    LEVELS.map(({ key }, i) => [
+      key,
+      Array.isArray(answers[i].data) ? answers[i].data : [],
+    ]),
   );
+  renderResourceAdmin();
+}
+
+/* D65: one level at a time behind level tabs; 월간교육안 = a foldable group
+   of ten month rows ("N/10 등록"), then the other slots. The tab and the
+   fold stay as they are when a save redraws the list. */
+let resAdminLevel = LEVELS[0].key;
+let resAdminMonthsOpen = false;
+let resAdminRows = {}; // level → the last list answer
+
+function renderResourceAdmin() {
+  if (!teacherResAdminList) return;
+  resDriveEditor = null; // its row is redrawn below
+  const level = resAdminLevel;
+  const rows = resAdminRows[level] || [];
+
+  const tabs = document.createElement("div");
+  tabs.className = "res-admin-tabs";
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "레벨");
+  const tabButtons = LEVELS.map(({ key, label }) => {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = "res-admin-tab";
+    tab.id = `resAdminTab-${key}`;
+    tab.dataset.level = key;
+    tab.textContent = label;
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", String(key === level));
+    tab.setAttribute("aria-controls", "resAdminPanel");
+    tab.tabIndex = key === level ? 0 : -1;
+    return tab;
+  });
+  tabs.append(...tabButtons);
+  tabs.addEventListener("click", (event) => {
+    const tab = event.target.closest(".res-admin-tab");
+    if (tab) selectResAdminLevel(tab.dataset.level);
+  });
+  // ← / → move between the tabs (the usual tab keys)
+  tabs.addEventListener("keydown", (event) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    const i = LEVELS.findIndex(({ key }) => key === resAdminLevel);
+    const next = LEVELS[(i + step + LEVELS.length) % LEVELS.length].key;
+    selectResAdminLevel(next);
+    document.querySelector(`#resAdminTab-${next}`)?.focus();
+  });
+
+  const panel = document.createElement("section");
+  panel.className = "res-admin-level";
+  panel.id = "resAdminPanel";
+  panel.dataset.level = level;
+  panel.setAttribute("role", "tabpanel");
+  panel.setAttribute("aria-labelledby", `resAdminTab-${level}`);
+  panel.append(
+    ...resourceSlots(level).map((item) =>
+      item.months
+        ? buildResAdminMonths(level, item, rows)
+        : buildResAdminRow(level, item, resourceRow(rows, item.slot)),
+    ),
+  );
+  teacherResAdminList.replaceChildren(tabs, panel);
+}
+
+function selectResAdminLevel(level) {
+  if (level === resAdminLevel || !LEVELS.some(({ key }) => key === level)) {
+    return;
+  }
+  resAdminLevel = level;
+  renderResourceAdmin();
+}
+
+// 월간교육안: a header button (fold / unfold, "N/10 등록") over ten rows.
+function buildResAdminMonths(level, item, rows) {
+  const group = document.createElement("section");
+  group.className = "res-admin-group";
+  group.dataset.slot = item.slot;
+  const head = document.createElement("button");
+  head.type = "button";
+  head.className = "res-admin-group-toggle";
+  head.setAttribute("aria-expanded", String(resAdminMonthsOpen));
+  head.setAttribute("aria-controls", `resAdminMonths-${level}`);
+  const title = document.createElement("span");
+  title.className = "res-admin-group-title";
+  title.textContent = item.label;
+  const count = document.createElement("span");
+  count.className = "res-admin-group-count";
+  count.textContent = `${filledMonths(rows)}/10 등록`;
+  head.append(
+    title,
+    count,
+    resourceSvg("res-admin-group-chevron", ["m6 9 6 6 6-6"]),
+  );
+  const body = document.createElement("div");
+  body.className = "res-admin-group-body";
+  body.id = `resAdminMonths-${level}`;
+  body.hidden = !resAdminMonthsOpen;
+  body.append(
+    ...item.months.map((m) =>
+      buildResAdminRow(level, m, resourceRow(rows, m.slot)),
+    ),
+  );
+  head.addEventListener("click", () => {
+    resAdminMonthsOpen = body.hidden;
+    if (!resAdminMonthsOpen && body.contains(resDriveEditor?.form)) {
+      closeDriveEditor();
+    }
+    body.hidden = !resAdminMonthsOpen;
+    head.setAttribute("aria-expanded", String(resAdminMonthsOpen));
+  });
+  group.append(head, body);
+  return group;
 }
 
 async function uploadResource(level, slot, file) {

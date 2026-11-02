@@ -1177,6 +1177,12 @@ not exists` 안의 CHECK는 이미 있는 표를 안 바꾼다 → 그 아래 `d
   `SLOT_RE`는 형식만 본다(DB가 판단, 없는 칸 = "empty" = 404). 칸을 **없앨** 때는 그 칸의 행이 남아 있으면 CHECK를 다시 거는
   ALTER가 실패한다 → `migration.sql`에 그 행이 있으면 문구로 멈추는 DO 블록(파일 전체가 한 트랜잭션이라 아무것도 안 바뀜),
   운영 precheck가 미리 알려 줌. 행은 관리자 화면에서 지워야 Storage 파일도 같이 정리된다(SQL로 지우면 파일이 남음).
+- (D65 화면) 월 패널(`#resourceMonths`)은 DOM에서 월간교육안 카드 **바로 뒤**(키보드·휴대폰 순서), 격자는
+  `grid-auto-flow: row dense` → PC에서는 옆 카드(연간교육안)가 첫 줄을 채우고 패널은 그 아래 전체 폭. `.res-months { display:
+grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none }` 필요(관리자 묶음 본문도 같음). 펼침 버튼 이름 =
+  "월간교육안 3~12월 보기"(aria-label; 처음엔 "월 선택"이었으나 뒤로 가기 "◂ 월 선택"과 겹쳐 빅웨이브 결정으로 바꿈) — 뒤로 가기는 테스트에서 `exact: true`. 320px에서 월 버튼 44px를 지키려면
+  휴대폰 간격 6px. 관리자는 레벨 탭 = 그 레벨의 행만 DOM에 있음(Beginner 15 · Level 2 16) → 테스트는 탭부터 누른다. 저장 뒤
+  다시 그려도 탭·묶음 펼침 상태는 유지(`resAdminLevel`·`resAdminMonthsOpen`).
 - 옛 화면은 목록에 모르는 칸이 와도 **무시**한다(`resourceSlots`를 돌며 `rows.find`) → 칸 추가는 "SQL 먼저, 화면 나중"이 안전.
   `tests/fixtures/teacher-resources-4a9b23d.js`(D63 전 운영 화면, 수정 금지)로 확인. 운영 SQL Editor용 반영본은 DO 블록 하나로
   migration.sql에서 잘라 만든다(로컬 `docs/worker-briefs/2026-11-02-d63-sql-check.mjs` — 전체 카탈로그 비교).

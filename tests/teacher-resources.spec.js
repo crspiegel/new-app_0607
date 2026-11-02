@@ -48,12 +48,23 @@ const DRIVE_BAD = "구글 드라이브 파일 링크만 넣을 수 있어요.";
 // The resource list per level as teacher_resources_list returns it. A file
 // may say `updated: null` (or a time) to test the date; default 10/29 KST.
 // `{ drive: <ID> }` is a Google Drive slot (D64: no file name, no size).
+// D65 slots (= supabase/migration.sql): 월간교육안 3~12월 (monthly-03 …
+// monthly-12), plan, award, test (level-2/3), script, pictures, flashcards.
+const MONTH_SLOTS = Array.from(
+  { length: 10 },
+  (_, i) => `monthly-${String(i + 3).padStart(2, "0")}`,
+);
+const slotsOf = (level) => [
+  ...MONTH_SLOTS,
+  "plan",
+  "award",
+  ...(level === "level-2" || level === "level-3" ? ["test"] : []),
+  "script",
+  "pictures",
+  "flashcards",
+];
 function listFor(level, files = {}) {
-  const slots =
-    level === "level-2" || level === "level-3"
-      ? ["monthly", "plan", "award", "test"]
-      : ["monthly", "plan", "award"];
-  return slots.map((slot) => {
+  return slotsOf(level).map((slot) => {
     const file = files[`${level}/${slot}`];
     const drive = file?.drive ?? null;
     return {
@@ -239,6 +250,17 @@ async function stubSupabase(
         contentType:
           method === "DELETE" ? null : request.headers()["content-type"],
       });
+      // D65 upload policy: the single 'monthly' slot is gone
+      if (method !== "DELETE" && pathname.includes("/monthly/")) {
+        return route.fulfill({
+          status: 400,
+          json: {
+            statusCode: "403",
+            error: "Unauthorized",
+            message: "new row violates row-level security policy",
+          },
+        });
+      }
       return route.fulfill({ json: method === "DELETE" ? [] : { Key: "k" } });
     }
     if (pathname.startsWith("/storage/v1/object/list")) {
@@ -391,12 +413,15 @@ test("resources: each level's page has its fixed buttons; empty = 준비 중", a
       "level-2/test": { name: "Level 2 테스트.xlsx", size: 51200 },
     },
   });
+  // D65: 월간교육안 (the ten months) · 연간교육안 (plan, the old
+  // 월간.연간교육안) · 상장 · 테스트 (Level 2/3) · 핵심문장 스크립트 · 그림
+  // 자료실 · 플래쉬카드 — 6 or 7 cards
+  const common = ["핵심문장 스크립트", "그림 자료실", "플래쉬카드"];
   const expected = {
-    // D63: 월간교육안 (monthly) · 연간교육안 (plan, the old 월간.연간교육안)
-    beginner: ["월간교육안", "연간교육안", "상장"],
-    "level-1": ["월간교육안", "연간교육안", "상장"],
-    "level-2": ["월간교육안", "연간교육안", "상장", "테스트"],
-    "level-3": ["월간교육안", "연간교육안", "상장", "테스트"],
+    beginner: ["월간교육안", "연간교육안", "상장", ...common],
+    "level-1": ["월간교육안", "연간교육안", "상장", ...common],
+    "level-2": ["월간교육안", "연간교육안", "상장", "테스트", ...common],
+    "level-3": ["월간교육안", "연간교육안", "상장", "테스트", ...common],
   };
   const labels = {
     beginner: "Beginner",
@@ -424,14 +449,19 @@ test("resources: each level's page has its fixed buttons; empty = 준비 중", a
     await expect(cards).toHaveCount(names.length);
     await expect(cards.locator(".res-name")).toHaveText(names);
   }
-  // level-3 has no files: every card a notice (준비 중), no button at all
-  const empty = page.locator("#resourceGrid .res-card");
-  for (let i = 0; i < 4; i += 1) {
+  // level-3 has no files: every card but 월간교육안 a notice (준비 중), no
+  // button; 월간교육안 says 0 of its months are in
+  const empty = page.locator("#resourceGrid .res-card:not(.res-card-monthly)");
+  await expect(empty).toHaveCount(6);
+  for (let i = 0; i < 6; i += 1) {
     await expect(empty.nth(i)).toHaveAttribute("data-state", "empty");
     await expect(empty.nth(i).locator(".res-meta")).toHaveText("준비 중");
     await expect(empty.nth(i).locator(".res-empty")).toHaveText(EMPTY_TEXT);
     await expect(empty.nth(i).locator("button")).toHaveCount(0);
   }
+  await expect(card(page, "monthly").locator(".res-meta")).toHaveText(
+    "3월~12월 · 0개 등록",
+  );
   // level-2: the filled test slot is an Excel card with its button, the rest
   // notices
   await page.goto("about:blank");
@@ -453,7 +483,7 @@ test("resources: each level's page has its fixed buttons; empty = 준비 중", a
       .map((r) => r.token),
   ).not.toContain(null);
   // ◂ 월 선택 goes back to the month page of the same level
-  await page.getByRole("button", { name: "월 선택" }).click();
+  await page.getByRole("button", { name: "월 선택", exact: true }).click();
   await expect(page).toHaveURL(/#months\/level-2$/);
   await expect(page.locator("body")).toHaveAttribute("data-screen", "months");
   await expect(page.locator("#monthGrid .month-button")).toHaveCount(10);
@@ -574,7 +604,8 @@ test("resources: a reload or bookmark reopens the same resource page", async ({
     "resources",
   );
   await expect(page.locator("#monthLevelTag")).toHaveText("Level 2");
-  await expect(page.locator("#resourceGrid .res-card")).toHaveCount(4);
+  // D65: Level 2 has 7 cards
+  await expect(page.locator("#resourceGrid .res-card")).toHaveCount(7);
   // a bookmark = a fresh browser session opened on that address
   const context = await browser.newContext();
   const tab = await context.newPage();
@@ -688,7 +719,7 @@ test("resources: the pre-D63 page ignores the new monthly rows (live step ②)",
   const sent = await stubSupabase(page, {
     role: "teacher",
     files: {
-      "level-2/monthly": { name: "11월 월간교육안.pdf", size: 1000 },
+      "level-2/monthly-11": { name: "11월 월간교육안.pdf", size: 1000 },
       "level-2/plan": { name: "2026 월간.연간교육안.pdf", size: 2000 },
     },
   });
@@ -726,7 +757,9 @@ test("resources admin: the pre-D63 admin section still shows its 10 slots (live 
   );
   await stubSupabase(page, {
     role: "admin",
-    files: { "beginner/monthly": { name: "11월 월간교육안.pdf", size: 1000 } },
+    files: {
+      "beginner/monthly-11": { name: "11월 월간교육안.pdf", size: 1000 },
+    },
   });
   await openBannerTab(page);
   await expect(page.locator("#teacherResAdmin .res-admin-row")).toHaveCount(10);
@@ -748,12 +781,12 @@ test("resources: a Drive slot downloads from Google in a new tab, not the functi
   const sent = await stubSupabase(page, {
     role: "teacher",
     files: {
-      "level-2/monthly": { drive: DRIVE_A, updated: "2026-11-02T03:00:00Z" },
+      "level-2/script": { drive: DRIVE_A, updated: "2026-11-02T03:00:00Z" },
       "level-2/plan": { name: PLAN_NAME, size: 4404019 },
     },
   });
   await page.goto("/#resources/level-2");
-  const drive = card(page, "monthly");
+  const drive = card(page, "script");
   await expect(drive).toHaveAttribute("data-state", "ready");
   await expect(drive.locator(".res-meta")).toHaveText(
     "구글 드라이브 · 11/02 업데이트",
@@ -772,7 +805,7 @@ test("resources: a Drive slot downloads from Google in a new tab, not the functi
   await expect(link).toHaveAttribute("href", driveDownload(DRIVE_A));
   await expect(link).toHaveAttribute("target", "_blank");
   await expect(link).toHaveAttribute("rel", /\bnoopener\b/);
-  await expect(link).toHaveAccessibleName("월간교육안 내려받기 (새 탭)");
+  await expect(link).toHaveAccessibleName("핵심문장 스크립트 내려받기 (새 탭)");
   const [tab] = await Promise.all([context.waitForEvent("page"), link.click()]);
   await expect(tab).toHaveURL(driveDownload(DRIVE_A));
   await tab.close();
@@ -802,7 +835,10 @@ test("resources: students and visitors never get a Drive link (D64)", async ({
     const page = await context.newPage();
     const sent = await stubSupabase(page, {
       role,
-      files: { "level-2/monthly": { drive: DRIVE_A } },
+      files: {
+        "level-2/script": { drive: DRIVE_A },
+        "level-2/monthly-03": { drive: DRIVE_A },
+      },
     });
     await page.goto("/#resources/level-2");
     await expect(page).toHaveURL(/#months\/level-2$/);
@@ -814,11 +850,12 @@ test("resources: students and visitors never get a Drive link (D64)", async ({
   }
 });
 
-// D64 order safety, live step ① → ④ (SQL before the push): the page deployed
-// now (commit 6c32cd8 — tests/fixtures/teacher-resources-6c32cd8.js, 수정 금지)
-// receives the new list with drive_id. A Drive slot (no file name) is just
-// 준비 중 to it; files still download, upload and delete as before.
-test("resources: the pre-D64 page shows a Drive slot as 준비 중 (live step ①)", async ({
+// D64 + D65 order safety (SQL before the push): the page deployed now
+// (commit 6c32cd8 — tests/fixtures/teacher-resources-6c32cd8.js, 수정 금지)
+// receives the new list — drive_id, month slots, the three new kinds. It
+// looks up its own four slots: 'monthly' has no row any more (준비 중), the
+// unknown slots are ignored, plan / award / test download as before.
+test("resources: the live page (6c32cd8) after the D64 + D65 SQL — monthly 준비 중, the rest as before (live step ③)", async ({
   page,
   context,
 }, testInfo) => {
@@ -835,7 +872,9 @@ test("resources: the pre-D64 page shows a Drive slot as 준비 중 (live step �
   const sent = await stubSupabase(page, {
     role: "teacher",
     files: {
-      "level-2/monthly": { drive: DRIVE_A },
+      "level-2/monthly-03": { drive: DRIVE_A },
+      "level-2/monthly-04": { name: "4월.pdf", size: 1000 },
+      "level-2/script": { name: "스크립트.pdf", size: 1000 },
       "level-2/plan": { name: PLAN_NAME, size: 4404019 },
     },
   });
@@ -859,7 +898,7 @@ test("resources: the pre-D64 page shows a Drive slot as 준비 중 (live step �
   expect(context.pages()).toHaveLength(1);
 });
 
-test("resources admin: the pre-D64 admin section still works beside Drive slots (live step ①)", async ({
+test("resources admin: the live admin (6c32cd8) after the D64 + D65 SQL — 14 rows, monthly refuses uploads, the rest works (live step ③)", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "order safety, run once");
@@ -873,7 +912,7 @@ test("resources admin: the pre-D64 admin section still works beside Drive slots 
   const sent = await stubSupabase(page, {
     role: "admin",
     files: {
-      "beginner/monthly": { drive: DRIVE_A },
+      "beginner/monthly-03": { drive: DRIVE_A },
       "beginner/plan": { name: PLAN_NAME, size: 4404019 },
     },
     clearAnswer: () => PLAN_PATH,
@@ -886,18 +925,20 @@ test("resources admin: the pre-D64 admin section still works beside Drive slots 
   await expect(monthly.locator(".res-admin-file")).toHaveText("파일 없음");
   await expect(monthly.getByRole("button", { name: "업로드" })).toBeVisible();
   await expect(page.locator("#teacherResStatus")).toHaveText("");
-  // uploading over the Drive slot is the old upload (the SQL drops the link)
+  // its 월간교육안 row: Storage refuses the old 'monthly' path (D65 policy),
+  // nothing is registered — the guide says not to upload there before the
+  // push
   await markRows(page);
   await monthly.locator('input[type="file"]').setInputFiles({
     name: "11월 월간교육안.pdf",
     mimeType: "application/pdf",
     buffer: Buffer.from("%PDF-1.4 new"),
   });
-  await expect(page.locator("#teacherResStatus")).toHaveText("올렸어요.");
+  await expect(page.locator("#teacherResStatus")).toHaveText(
+    "업로드하지 못했어요.",
+  );
   await redrawn(page);
-  expect(
-    sent.rpc.find((r) => r.name === "teacher_resource_set").args.p_slot,
-  ).toBe("monthly");
+  expect(sent.rpc.filter((r) => r.name === "teacher_resource_set")).toEqual([]);
   // and a file slot still deletes (two presses)
   const plan = page.locator(
     '#teacherResAdmin .res-admin-row[data-level="beginner"][data-slot="plan"]',
@@ -908,7 +949,7 @@ test("resources admin: the pre-D64 admin section still works beside Drive slots 
   expect(sent.google).toEqual([]);
 });
 
-test("resources: one card per row, title on one line, 44px buttons, keyboard focus", async ({
+test("resources: D65 grid — 2 cards per row (PC, tablet), 1 on phones; one-line titles, 44px buttons, keyboard focus", async ({
   page,
 }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "layout by viewport, once");
@@ -918,44 +959,76 @@ test("resources: one card per row, title on one line, 44px buttons, keyboard foc
       "level-2/plan": { name: PLAN_NAME, size: 4404019 },
       "level-2/award": { drive: DRIVE_A }, // D64: a link, sized like a button
       "level-2/test": { name: "Level 2 테스트.xlsx", size: 51200 },
+      "level-2/script": { name: "핵심문장 스크립트 2학기.pdf", size: 2048000 },
+      "level-2/monthly-03": { name: "3월.pdf", size: 1000 },
     },
   });
-  for (const [w, h] of [
-    [1366, 900],
-    [390, 844],
-    [320, 700],
+  for (const [w, h, perRow] of [
+    [1366, 900, 2],
+    [1024, 768, 2],
+    [768, 1024, 2],
+    [390, 844, 1],
+    [320, 700, 1],
   ]) {
     await page.setViewportSize({ width: w, height: h });
     await page.goto("about:blank");
     await page.goto("/#resources/level-2");
-    await expect(page.locator("#resourceGrid .res-card")).toHaveCount(4);
+    await expect(page.locator("#resourceGrid .res-card")).toHaveCount(7);
     await expect(card(page, "plan").locator(".res-download")).toBeVisible();
     const geo = await page.evaluate(() =>
       [...document.querySelectorAll("#resourceGrid .res-card")].map((el) => {
         const box = el.getBoundingClientRect();
         const name = el.querySelector(".res-name");
+        const meta = el.querySelector(".res-meta");
         const button = el.querySelector(".res-download");
         const b = button && button.getBoundingClientRect();
         return {
           left: box.left,
+          right: box.right,
           top: box.top,
           bottom: box.bottom,
+          height: box.height,
           nameHeight: name.getBoundingClientRect().height,
           lineHeight: parseFloat(getComputedStyle(name).lineHeight),
+          metaHeight: meta.getBoundingClientRect().height,
+          metaLine: parseFloat(getComputedStyle(meta).lineHeight),
           button: b && { width: b.width, height: b.height },
         };
       }),
     );
-    // one card per row: each below the last, same left edge
-    for (let i = 1; i < geo.length; i += 1) {
-      expect(geo[i].top, `${w}: card ${i}`).toBeGreaterThan(geo[i - 1].bottom);
-      expect(Math.abs(geo[i].left - geo[0].left)).toBeLessThan(1);
+    // rows of `perRow`: same top and height inside a row, the next row below
+    for (let i = 0; i < geo.length; i += 1) {
+      const first = geo[i - (i % perRow)];
+      expect(
+        Math.abs(geo[i].top - first.top),
+        `${w}: card ${i} top`,
+      ).toBeLessThan(1);
+      expect(
+        Math.abs(geo[i].height - first.height),
+        `${w}: card ${i} height`,
+      ).toBeLessThan(1);
+      if (i % perRow) {
+        expect(geo[i].left, `${w}: card ${i} beside`).toBeGreaterThan(
+          geo[i - 1].right,
+        );
+      }
+      if (i >= perRow) {
+        expect(geo[i].top, `${w}: card ${i} below`).toBeGreaterThan(
+          geo[i - perRow].bottom,
+        );
+      }
     }
-    // every title on one line (D58: never "월간. / 연간교육안"; D63 titles are short)
-    for (const g of geo) {
-      expect(g.nameHeight, `${w}: title lines`).toBeLessThan(
+    // every title on one line (D58: never "월간. / 연간교육안"); the meta line
+    // too from 390px up (a 320px phone may wrap it)
+    for (const [i, g] of geo.entries()) {
+      expect(g.nameHeight, `${w}: title ${i} lines`).toBeLessThan(
         g.lineHeight * 1.5,
       );
+      if (w >= 390) {
+        expect(g.metaHeight, `${w}: meta ${i} lines`).toBeLessThan(
+          g.metaLine * 1.5,
+        );
+      }
     }
     // press areas 44px or more
     for (const g of geo.filter((x) => x.button)) {
@@ -966,7 +1039,8 @@ test("resources: one card per row, title on one line, 44px buttons, keyboard foc
       await page.evaluate(() => document.documentElement.scrollWidth),
     ).toBeLessThanOrEqual(w);
   }
-  // keyboard: Tab reaches the download button, and its focus ring shows
+  // keyboard: Tab reaches the first button (월간교육안's 3~12월 보기), and its
+  // focus ring shows
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("about:blank");
   await page.goto("/#resources/level-2");
@@ -985,6 +1059,162 @@ test("resources: one card per row, title on one line, 44px buttons, keyboard foc
   });
   expect(ring.style).not.toBe("none");
   expect(ring.width).toBeGreaterThanOrEqual(2);
+});
+
+test("resources: D65 월간교육안 — [3~12월 보기] opens 3~12월 under its row (5 × 2); file months download, Drive months open Google, empty months are dim", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "flow + layout, run once");
+  const sent = await stubSupabase(page, {
+    role: "teacher",
+    files: {
+      "level-2/monthly-03": {
+        name: "3월 월간교육안.pdf",
+        size: 1000,
+        updated: "2026-11-02T03:00:00Z",
+      },
+      "level-2/monthly-05": { drive: DRIVE_B },
+      "level-2/monthly-12": { name: "12월 월간교육안.xlsx", size: 2000 },
+      "level-2/plan": { name: PLAN_NAME, size: 4404019 },
+    },
+  });
+  await page.goto("/#resources/level-2");
+  const monthly = card(page, "monthly");
+  await expect(monthly.locator(".res-name")).toHaveText("월간교육안");
+  await expect(monthly.locator(".res-meta")).toHaveText("3월~12월 · 3개 등록");
+  await expect(monthly.locator(".res-icon")).toHaveAttribute(
+    "data-kind",
+    "monthly",
+  );
+  const toggle = monthly.getByRole("button", {
+    name: "월간교육안 3~12월 보기",
+  });
+  await expect(toggle).toHaveText("3~12월 보기");
+  // "월 선택" is only the ◂ button back to the month page (빅웨이브 11/02)
+  await expect(page.getByRole("button", { name: "월 선택" })).toHaveCount(1);
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle).toHaveAttribute("aria-controls", "resourceMonths");
+  const panel = page.locator("#resourceMonths");
+  await expect(panel).toBeHidden();
+
+  // open with the keyboard
+  await toggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(panel).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const months = panel.locator(".res-month");
+  await expect(months.locator(".res-month-name")).toHaveText(
+    Array.from({ length: 10 }, (_, i) => `${i + 3}월`),
+  );
+  await expect(months.locator(".res-month-note")).toHaveText([
+    "PDF",
+    "준비 중",
+    "드라이브",
+    "준비 중",
+    "준비 중",
+    "준비 중",
+    "준비 중",
+    "준비 중",
+    "준비 중",
+    "엑셀",
+  ]);
+  // empty months: dim, cannot be pressed
+  const april = panel.locator('[data-month="monthly-04"]');
+  await expect(april).toBeDisabled();
+  await expect(april).toHaveAttribute("data-state", "empty");
+  // layout: right under the 월간교육안 card's row, full width, 5 × 2, 44px+
+  const geo = await page.evaluate(() => {
+    const r = (el) => el.getBoundingClientRect().toJSON();
+    const q = (s) => document.querySelector(s);
+    return {
+      grid: r(q("#resourceGrid")),
+      monthly: r(q('.res-card[data-slot="monthly"]')),
+      plan: r(q('.res-card[data-slot="plan"]')),
+      award: r(q('.res-card[data-slot="award"]')),
+      panel: r(q("#resourceMonths")),
+      months: [...document.querySelectorAll(".res-month")].map(r),
+    };
+  });
+  expect(Math.abs(geo.plan.top - geo.monthly.top)).toBeLessThan(1); // beside
+  expect(geo.panel.top).toBeGreaterThan(geo.monthly.bottom);
+  expect(geo.award.top).toBeGreaterThan(geo.panel.bottom);
+  expect(Math.abs(geo.panel.left - geo.grid.left)).toBeLessThan(1);
+  expect(Math.abs(geo.panel.right - geo.grid.right)).toBeLessThan(1);
+  const tops = [...new Set(geo.months.map((m) => Math.round(m.top)))];
+  expect(tops).toHaveLength(2);
+  expect(geo.months.filter((m) => Math.round(m.top) === tops[0])).toHaveLength(
+    5,
+  );
+  for (const m of geo.months) {
+    expect(m.height).toBeGreaterThanOrEqual(44);
+    expect(m.width).toBeGreaterThanOrEqual(44);
+  }
+
+  // a file month downloads through the function, in this tab
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    panel.getByRole("button", { name: "3월 월간교육안 내려받기" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe("3월 월간교육안.pdf");
+  expect(sent.fn.map((f) => f.body)).toEqual([
+    { level: "level-2", slot: "monthly-03" },
+  ]);
+  // a Drive month opens Google in a new tab, no function call
+  const may = panel.getByRole("link", {
+    name: "5월 월간교육안 내려받기 (새 탭)",
+  });
+  await expect(may).toHaveAttribute("href", driveDownload(DRIVE_B));
+  await expect(may).toHaveAttribute("target", "_blank");
+  await expect(may).toHaveAttribute("rel", /\bnoopener\b/);
+  const [tab] = await Promise.all([context.waitForEvent("page"), may.click()]);
+  await expect(tab).toHaveURL(driveDownload(DRIVE_B));
+  await tab.close();
+  expect(sent.fn).toHaveLength(1);
+  expect(sent.google).toEqual([driveDownload(DRIVE_B)]);
+  await expect(page.locator("#resourceStatus")).toHaveText("");
+
+  // pressing again closes it
+  await toggle.click();
+  await expect(panel).toBeHidden();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+  // phones: one column, the panel right under the 월간교육안 card, 5 × 2 with
+  // 44px press areas, nothing wider than the screen
+  for (const [w, h] of [
+    [390, 844],
+    [320, 700],
+  ]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto("about:blank");
+    await page.goto("/#resources/level-2");
+    await card(page, "monthly")
+      .getByRole("button", { name: "월간교육안 3~12월 보기" })
+      .click();
+    await expect(panel).toBeVisible();
+    const phone = await page.evaluate(() => {
+      const r = (el) => el.getBoundingClientRect().toJSON();
+      return {
+        monthly: r(document.querySelector('.res-card[data-slot="monthly"]')),
+        plan: r(document.querySelector('.res-card[data-slot="plan"]')),
+        panel: r(document.querySelector("#resourceMonths")),
+        months: [...document.querySelectorAll(".res-month")].map((el) => ({
+          ...r(el),
+          overflow: el.scrollWidth > el.clientWidth + 1,
+        })),
+        scroll: document.documentElement.scrollWidth,
+      };
+    });
+    expect(phone.panel.top, `${w}`).toBeGreaterThan(phone.monthly.bottom);
+    expect(phone.plan.top, `${w}`).toBeGreaterThan(phone.panel.bottom);
+    expect(new Set(phone.months.map((m) => Math.round(m.top))).size).toBe(2);
+    for (const m of phone.months) {
+      expect(m.height, `${w}`).toBeGreaterThanOrEqual(44);
+      expect(m.width, `${w}`).toBeGreaterThanOrEqual(44);
+      expect(m.overflow, `${w}: text inside`).toBe(false);
+    }
+    expect(phone.scroll).toBeLessThanOrEqual(w);
+  }
 });
 
 test("resources: the month page button is filled with the level color, folder icon kept", async ({
@@ -1020,54 +1250,219 @@ async function openBannerTab(page) {
   await expect(page.locator("#teacherResAdmin")).toBeVisible();
 }
 
-test("resources admin: 4 levels, 14 slots (D63), current file shown", async ({
+test("resources admin: D65 level tabs — one level at a time, 월간교육안 folds its ten months (N/10 등록), current files shown", async ({
   page,
 }) => {
-  await stubSupabase(page, { role: "admin" });
+  await stubSupabase(page, {
+    role: "admin",
+    files: {
+      "beginner/plan": { name: PLAN_NAME, size: 4404019 },
+      "beginner/monthly-03": { name: "3월.pdf", size: 1000 },
+      "beginner/monthly-12": { drive: DRIVE_A },
+      "level-3/flashcards": { drive: DRIVE_B },
+    },
+  });
   await openBannerTab(page);
-  const groups = page.locator("#teacherResAdmin .res-admin-level");
-  await expect(groups.locator("h3")).toHaveText([
-    "Beginner",
-    "Level 1",
-    "Level 2",
-    "Level 3",
-  ]);
-  const rows = page.locator("#teacherResAdmin .res-admin-row");
-  await expect(rows).toHaveCount(14);
-  await expect(
-    page.locator(
-      '#teacherResAdmin .res-admin-row[data-level="beginner"] .res-admin-slot',
-    ),
-  ).toHaveText(["월간교육안", "연간교육안", "상장"]);
-  await expect(
-    page.locator(
-      '#teacherResAdmin .res-admin-row[data-level="level-3"] .res-admin-slot',
-    ),
-  ).toHaveText(["월간교육안", "연간교육안", "상장", "테스트"]);
-  await expect(
-    page.locator(
-      '#teacherResAdmin .res-admin-row[data-level="beginner"][data-slot="monthly"] .res-admin-file',
-    ),
-  ).toHaveText("파일 없음");
-  const plan = page.locator(
-    '#teacherResAdmin .res-admin-row[data-level="beginner"][data-slot="plan"]',
+  const tabs = page.getByRole("tab");
+  await expect(tabs).toHaveText(["Beginner", "Level 1", "Level 2", "Level 3"]);
+  await expect(page.getByRole("tab", { name: "Beginner" })).toHaveAttribute(
+    "aria-selected",
+    "true",
   );
+  const panel = page.getByRole("tabpanel");
+  await expect(panel).toHaveAttribute("data-level", "beginner");
+  // Beginner: the 월간교육안 group (folded), then five slots
+  const group = panel.locator(".res-admin-group");
+  const head = group.locator(".res-admin-group-toggle");
+  await expect(head).toHaveText(/월간교육안\s*2\/10 등록/);
+  await expect(head).toHaveAttribute("aria-expanded", "false");
+  const visibleRows = panel.locator(".res-admin-row:visible");
+  await expect(visibleRows.locator(".res-admin-slot")).toHaveText([
+    "연간교육안",
+    "상장",
+    "핵심문장 스크립트",
+    "그림 자료실",
+    "플래쉬카드",
+  ]);
+  // unfolded: 3월~12월 first, each with its own state
+  await head.click();
+  await expect(head).toHaveAttribute("aria-expanded", "true");
+  await expect(visibleRows.locator(".res-admin-slot")).toHaveText([
+    ...Array.from({ length: 10 }, (_, i) => `${i + 3}월`),
+    "연간교육안",
+    "상장",
+    "핵심문장 스크립트",
+    "그림 자료실",
+    "플래쉬카드",
+  ]);
+  await expect(
+    resRow(page, "beginner", "monthly-03").locator(".res-admin-file"),
+  ).toHaveText("3월.pdf · 1 KB · 2026-10-29");
+  await expect(
+    resRow(page, "beginner", "monthly-12").locator(".res-admin-file"),
+  ).toHaveText("구글 드라이브 · 2026-10-29");
+  await expect(
+    resRow(page, "beginner", "monthly-04").locator(".res-admin-file"),
+  ).toHaveText("파일 없음");
+  const plan = resRow(page, "beginner", "plan");
   await expect(plan.locator(".res-admin-file")).toHaveText(
     `${PLAN_NAME} · 4.2 MB · 2026-10-29`,
   );
-  await expect(plan.getByRole("button", { name: "교체" })).toBeVisible();
-  await expect(plan.getByRole("button", { name: "삭제" })).toBeVisible();
-  const award = page.locator(
-    '#teacherResAdmin .res-admin-row[data-level="beginner"][data-slot="award"]',
-  );
+  await expect(plan.getByRole("button")).toHaveText([
+    "교체",
+    "드라이브 링크",
+    "삭제",
+  ]);
+  const award = resRow(page, "beginner", "award");
   await expect(award.locator(".res-admin-file")).toHaveText("파일 없음");
-  await expect(award.getByRole("button", { name: "업로드" })).toBeVisible();
-  await expect(award.getByRole("button", { name: "삭제" })).toHaveCount(0);
+  await expect(award.getByRole("button")).toHaveText([
+    "업로드",
+    "드라이브 링크",
+  ]);
+  await expect(page.locator("#teacherResAdmin .res-admin-row")).toHaveCount(15);
+
+  // Level 3 (keyboard →→→): 테스트 after 상장; the fold stays as it was
+  await page.getByRole("tab", { name: "Beginner" }).focus();
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Level 3" })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Level 3" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(panel).toHaveAttribute("data-level", "level-3");
+  await expect(panel.locator(".res-admin-group-toggle")).toHaveText(
+    /월간교육안\s*0\/10 등록/,
+  );
   await expect(
-    page.locator(
-      '#teacherResAdmin .res-admin-row[data-level="level-1"][data-slot="test"]',
+    panel.locator(
+      ".res-admin-row:not(.res-admin-group .res-admin-row) .res-admin-slot",
     ),
-  ).toHaveCount(0);
+  ).toHaveText([
+    "연간교육안",
+    "상장",
+    "테스트",
+    "핵심문장 스크립트",
+    "그림 자료실",
+    "플래쉬카드",
+  ]);
+  await expect(page.locator("#teacherResAdmin .res-admin-row")).toHaveCount(16);
+  await expect(
+    resRow(page, "level-3", "flashcards").locator(".res-admin-file"),
+  ).toHaveText("구글 드라이브 · 2026-10-29");
+  // Level 1 has no 테스트
+  await page.getByRole("tab", { name: "Level 1" }).click();
+  await expect(resRow(page, "level-1", "test")).toHaveCount(0);
+  await expect(page.locator("#teacherResAdmin .res-admin-row")).toHaveCount(15);
+});
+
+test("resources admin: D65 a month row uploads to its own slot and takes a Drive link; the tab and the fold stay after a save", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "flow only, run once");
+  const sent = await stubSupabase(page, { role: "admin" });
+  await openBannerTab(page);
+  await page.getByRole("tab", { name: "Level 2" }).click();
+  await page.locator(".res-admin-group-toggle").click();
+  await markRows(page);
+  await resRow(page, "level-2", "monthly-05")
+    .locator('input[type="file"]')
+    .setInputFiles({
+      name: "5월 월간교육안.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4 may"),
+    });
+  await expect(page.locator("#teacherResStatus")).toHaveText("올렸어요.");
+  await redrawn(page);
+  const upload = sent.storage.find((s) => s.op === "upload");
+  expect(upload.path).toMatch(
+    /^\/storage\/v1\/object\/teacher-resources\/level-2\/monthly-05\/\d{13}\.pdf$/,
+  );
+  expect(
+    sent.rpc.find((r) => r.name === "teacher_resource_set").args,
+  ).toMatchObject({ p_level: "level-2", p_slot: "monthly-05" });
+  // still on Level 2, months still unfolded
+  await expect(page.getByRole("tab", { name: "Level 2" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.locator(".res-admin-group-toggle")).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  // a Drive link on 12월
+  const dec = resRow(page, "level-2", "monthly-12");
+  await dec.getByRole("button", { name: "드라이브 링크" }).click();
+  await dec
+    .getByRole("textbox", { name: "구글 드라이브 파일 링크" })
+    .fill(driveView(DRIVE_A));
+  await markRows(page);
+  await dec.getByRole("button", { name: "저장" }).click();
+  await expect(page.locator("#teacherResStatus")).toHaveText(
+    "링크를 저장했어요.",
+  );
+  await redrawn(page);
+  expect(
+    sent.rpc.find((r) => r.name === "teacher_resource_set_drive").args,
+  ).toEqual({ p_level: "level-2", p_slot: "monthly-12", p_drive_id: DRIVE_A });
+  expect(sent.google).toEqual([]);
+});
+
+test("resources admin: D65 on a phone — tabs and month rows fit the screen", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "layout by viewport, once");
+  await stubSupabase(page, {
+    role: "admin",
+    files: {
+      "level-2/plan": { name: PLAN_NAME, size: 4404019 },
+      "level-2/monthly-03": { drive: DRIVE_A },
+    },
+  });
+  for (const [w, h] of [
+    [390, 844],
+    [320, 700],
+  ]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto("about:blank");
+    await openBannerTab(page);
+    await page.getByRole("tab", { name: "Level 2" }).click();
+    await page.locator(".res-admin-group-toggle").click();
+    await resRow(page, "level-2", "monthly-03")
+      .getByRole("button", { name: "드라이브 링크" })
+      .click();
+    const geo = await page.evaluate(() => {
+      const r = (el) => el.getBoundingClientRect().toJSON();
+      return {
+        scroll: document.documentElement.scrollWidth,
+        box: r(document.querySelector("#teacherResAdmin")),
+        tabs: [...document.querySelectorAll(".res-admin-tab")].map(r),
+        toggle: r(document.querySelector(".res-admin-group-toggle")),
+        inside: [
+          ...document.querySelectorAll(
+            "#teacherResAdmin .res-admin-row, #teacherResAdmin .res-admin-row *",
+          ),
+        ]
+          .filter((el) => el.getClientRects().length)
+          .every(
+            (el) =>
+              el.getBoundingClientRect().right <=
+              document.querySelector("#teacherResAdmin").getBoundingClientRect()
+                .right +
+                0.5,
+          ),
+      };
+    });
+    expect(geo.scroll, `${w}`).toBeLessThanOrEqual(w);
+    expect(geo.inside, `${w}: rows inside the box`).toBe(true);
+    for (const t of geo.tabs) {
+      expect(t.right, `${w}: tab`).toBeLessThanOrEqual(geo.box.right + 0.5);
+    }
+    // the four tabs on one line on a usual phone (390px)
+    if (w >= 390) {
+      expect(new Set(geo.tabs.map((t) => Math.round(t.top))).size).toBe(1);
+    }
+    expect(geo.toggle.height).toBeGreaterThanOrEqual(44);
+  }
 });
 
 test("resources admin: upload replaces the old file and deletes it from storage", async ({
@@ -1114,6 +1509,7 @@ test("resources admin: too big or wrong type is refused before uploading", async
   test.skip(testInfo.project.name !== "desktop", "flow only, run once");
   const sent = await stubSupabase(page, { role: "admin" });
   await openBannerTab(page);
+  await page.getByRole("tab", { name: "Level 3" }).click(); // D65 tabs
   const input = page.locator(
     '#teacherResAdmin .res-admin-row[data-level="level-3"][data-slot="test"] input[type="file"]',
   );
@@ -1222,10 +1618,11 @@ test("resources admin: a Drive slot says 구글 드라이브 · date and opens i
   await expect(tab).toHaveURL(driveView(DRIVE_A));
   await tab.close();
   expect(sent.google).toEqual([driveView(DRIVE_A)]);
-  // every row offers the link; a file row and an empty one keep their buttons
+  // every row offers the link (Beginner tab: 15 rows, D65); a file row and
+  // an empty one keep their buttons
   await expect(
     page.locator("#teacherResAdmin .res-admin-row .res-admin-drive"),
-  ).toHaveCount(14);
+  ).toHaveCount(15);
   const plan = resRow(page, "beginner", "plan");
   await expect(plan.getByRole("link")).toHaveCount(0);
   await expect(plan.getByRole("button")).toHaveText([
@@ -1234,7 +1631,7 @@ test("resources admin: a Drive slot says 구글 드라이브 · date and opens i
     "삭제",
   ]);
   await expect(
-    resRow(page, "beginner", "monthly").getByRole("button"),
+    resRow(page, "beginner", "script").getByRole("button"),
   ).toHaveText(["업로드", "드라이브 링크"]);
   // deleting a Drive slot only unlinks it (nothing in Storage to remove) —
   // and says the file and its sharing stay in Google Drive
@@ -1255,6 +1652,7 @@ test("resources admin: the three Drive link forms all save the file ID (D64)", a
   test.skip(testInfo.project.name !== "desktop", "flow only, run once");
   const sent = await stubSupabase(page, { role: "admin" });
   await openBannerTab(page);
+  await page.getByRole("tab", { name: "Level 1" }).click(); // D65 tabs
   const row = resRow(page, "level-1", "award"); // an empty slot
   const box = () =>
     row.getByRole("textbox", { name: "구글 드라이브 파일 링크" });
@@ -1301,6 +1699,7 @@ test("resources admin: Docs links and anything else are refused before saving (D
   test.skip(testInfo.project.name !== "desktop", "flow only, run once");
   const sent = await stubSupabase(page, { role: "admin" });
   await openBannerTab(page);
+  await page.getByRole("tab", { name: "Level 3" }).click(); // D65 tabs
   const row = resRow(page, "level-3", "test");
   await row.getByRole("button", { name: "드라이브 링크" }).click();
   const editor = row.locator(".res-drive-editor");
@@ -1418,7 +1817,7 @@ test("resources admin: file ⇄ Drive asks twice before switching (D64)", async 
     sent.rpc.find((r) => r.name === "teacher_resource_set").args.p_slot,
   ).toBe("award");
   // an empty slot switches nothing, so it never asks
-  const monthly = resRow(page, "beginner", "monthly");
+  const monthly = resRow(page, "beginner", "script");
   await monthly.getByRole("button", { name: "드라이브 링크" }).click();
   await monthly
     .getByRole("textbox", { name: "구글 드라이브 파일 링크" })

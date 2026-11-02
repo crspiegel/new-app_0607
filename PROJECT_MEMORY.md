@@ -30,8 +30,9 @@ Live = **`6c32cd8`** (`2026-11-02`: 3B `4a9b23d` + D63 — live SQL first, then 
   - B live: '교사 자료실' (admin + LMS role 1/2) → private bucket; download via Edge Function
     `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). D58 cards, **D63 live** (14 slots).
     Local, not live: **D64** (`4cbb87b` + `28b15cb`: a slot = a file OR a Google Drive file ID, downloaded from Google)
-    - **D65 in progress** (월간 3~12월 + script · pictures · flashcards = 62 slots; 2-column cards + month panel).
-      Live together: delete 'monthly' files → Edge redeploy → precheck → apply DO → verify → push.
+    and **D65** (`fa7d784` SQL + Edge, then the approved screen: 월간 3~12월 + script · pictures · flashcards =
+    62 slots, 2-column cards + [3~12월 보기] month panel, admin level tabs). Live together: delete 'monthly' files → Edge redeploy →
+    precheck → apply DO → verify → push.
 - **Student page header fix** live (`8176966`), PC check done 10/31.
 - **User:** iPhone real-device check (2B); Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own
   Vimeo (`vimeo.com/<id>` in admin).
