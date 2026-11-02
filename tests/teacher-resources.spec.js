@@ -29,19 +29,33 @@ const ROLE_SESSION = {
 };
 const TOKEN = "tok-test-00000000000000000000000000000000000";
 
-// The resource list per level as teacher_resources_list returns it.
+// The resource list per level as teacher_resources_list returns it. A file
+// may say `updated: null` (or a time) to test the date; default 10/29 KST.
 function listFor(level, files = {}) {
   const slots =
     level === "level-2" || level === "level-3"
       ? ["plan", "award", "test"]
       : ["plan", "award"];
-  return slots.map((slot) => ({
-    slot,
-    file_name: files[`${level}/${slot}`]?.name ?? null,
-    file_size: files[`${level}/${slot}`]?.size ?? null,
-    updated_at: files[`${level}/${slot}`] ? "2026-10-29T03:00:00Z" : null,
-  }));
+  return slots.map((slot) => {
+    const file = files[`${level}/${slot}`];
+    return {
+      slot,
+      file_name: file?.name ?? null,
+      file_size: file?.size ?? null,
+      updated_at: !file
+        ? null
+        : file.updated === undefined
+          ? "2026-10-29T03:00:00Z"
+          : file.updated,
+    };
+  });
 }
+
+// A slot's card on the resource page (D58: a card, its 내려받기 button only
+// when a file is there, else a notice that is not a button).
+const card = (page, slot) =>
+  page.locator(`#resourceGrid .res-card[data-slot="${slot}"]`);
+const EMPTY_TEXT = "아직 올라온 자료가 없어요";
 
 function fakeJwt(sub) {
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
@@ -367,25 +381,33 @@ test("resources: each level's page has its fixed buttons; empty = 준비 중", a
     await expect(page.locator("#monthLevelTag")).toHaveText(labels[level]);
     await expect(page.locator("#monthGrid")).toBeHidden();
     await expect(page.getByRole("button", { name: BUTTON })).toBeHidden();
-    const buttons = page.locator("#resourceGrid .res-button");
-    await expect(buttons).toHaveCount(names.length);
-    await expect(buttons.locator(".res-name")).toHaveText(names);
+    const cards = page.locator("#resourceGrid .res-card");
+    await expect(cards).toHaveCount(names.length);
+    await expect(cards.locator(".res-name")).toHaveText(names);
   }
-  // level-3 has no files: every button disabled, "준비 중"
-  const empty = page.locator("#resourceGrid .res-button");
+  // level-3 has no files: every card a notice (준비 중), no button at all
+  const empty = page.locator("#resourceGrid .res-card");
   for (let i = 0; i < 3; i += 1) {
-    await expect(empty.nth(i)).toBeDisabled();
-    await expect(empty.nth(i).locator(".res-kind")).toHaveText("준비 중");
+    await expect(empty.nth(i)).toHaveAttribute("data-state", "empty");
+    await expect(empty.nth(i).locator(".res-meta")).toHaveText("준비 중");
+    await expect(empty.nth(i).locator(".res-empty")).toHaveText(EMPTY_TEXT);
+    await expect(empty.nth(i).locator("button")).toHaveCount(0);
   }
-  // level-2: the filled test slot is an EXCEL button, the rest empty
+  // level-2: the filled test slot is an Excel card with its button, the rest
+  // notices
   await page.goto("about:blank");
   await page.goto("/#resources/level-2");
-  const test2 = page.locator('#resourceGrid .res-button[data-slot="test"]');
-  await expect(test2).toBeEnabled();
-  await expect(test2.locator(".res-kind")).toHaveText("EXCEL");
-  await expect(
-    page.locator('#resourceGrid .res-button[data-slot="plan"]'),
-  ).toBeDisabled();
+  const test2 = card(page, "test");
+  await expect(test2.locator(".res-download")).toBeEnabled();
+  await expect(test2.locator(".res-icon")).toHaveAttribute(
+    "data-kind",
+    "excel",
+  );
+  await expect(test2.locator(".res-meta")).toHaveText(
+    "엑셀 · 50KB · 10/29 업데이트",
+  );
+  await expect(card(page, "plan").locator(".res-download")).toHaveCount(0);
+  await expect(card(page, "plan").locator(".res-empty")).toHaveText(EMPTY_TEXT);
   expect(
     sent.rpc
       .filter((r) => r.name === "teacher_resources_list")
@@ -409,12 +431,15 @@ test("resources: a download stays in this tab and keeps the Korean name", async 
     "data-screen",
     "resources",
   );
-  const plan = page.locator('#resourceGrid .res-button[data-slot="plan"]');
-  await expect(plan.locator(".res-kind")).toHaveText("PDF");
+  const plan = card(page, "plan");
+  await expect(plan.locator(".res-icon")).toHaveAttribute("data-kind", "pdf");
+  await expect(plan.locator(".res-meta")).toHaveText(
+    "PDF · 4.2MB · 10/29 업데이트",
+  );
   const urlBefore = page.url();
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    plan.click(),
+    page.getByRole("button", { name: "월간.연간교육안 내려받기" }).click(),
   ]);
   expect(download.suggestedFilename()).toBe(PLAN_NAME);
   expect(context.pages()).toHaveLength(1);
@@ -454,7 +479,7 @@ test("resources: failed downloads say so and never leave the page", async ({
     const sent = await stubSupabase(page, { role: "teacher", ...options });
     await page.goto("about:blank");
     await page.goto("/#resources/beginner");
-    const plan = page.locator('#resourceGrid .res-button[data-slot="plan"]');
+    const plan = card(page, "plan").locator(".res-download");
     await expect(plan).toBeEnabled();
     await plan.click();
     await expect(page.locator("#resourceStatus")).toHaveText(message);
@@ -508,7 +533,7 @@ test("resources: a reload or bookmark reopens the same resource page", async ({
     "resources",
   );
   await expect(page.locator("#monthLevelTag")).toHaveText("Level 2");
-  await expect(page.locator("#resourceGrid .res-button")).toHaveCount(3);
+  await expect(page.locator("#resourceGrid .res-card")).toHaveCount(3);
   // a bookmark = a fresh browser session opened on that address
   const context = await browser.newContext();
   const tab = await context.newPage();
@@ -555,6 +580,143 @@ test("resources: the LMS token rides on the download function only", async ({
   expect(
     tokenOf("/storage/v1/object/teacher-resources/beginner/plan/1.pdf"),
   ).toBeNull();
+});
+
+// ---- D58 design (2026-11-02): cards, icons, meta line, layout ------------
+
+test("resources: PDF and Excel icons differ; a missing size or date is just left out", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "content only, run once");
+  await stubSupabase(page, {
+    role: "teacher",
+    files: {
+      "level-2/plan": { name: "교육안.pdf", size: null, updated: null },
+      "level-2/award": {
+        name: "상장.xls",
+        size: 860160,
+        updated: "2026-11-02T03:00:00Z",
+      },
+      "level-2/test": { name: "테스트.xlsx", size: 1258291, updated: null },
+    },
+  });
+  await page.goto("/#resources/level-2");
+  await expect(card(page, "plan").locator(".res-meta")).toHaveText("PDF");
+  await expect(card(page, "award").locator(".res-meta")).toHaveText(
+    "엑셀 · 840KB · 11/02 업데이트",
+  );
+  await expect(card(page, "test").locator(".res-meta")).toHaveText(
+    "엑셀 · 1.2MB",
+  );
+  const icon = (slot) => card(page, slot).locator(".res-icon");
+  await expect(icon("plan")).toHaveAttribute("data-kind", "pdf");
+  await expect(icon("award")).toHaveAttribute("data-kind", "excel");
+  await expect(icon("plan").locator(".res-icon-label")).toHaveText("PDF");
+  await expect(icon("award").locator(".res-icon-label")).toHaveText("XLS");
+  // drawn differently, not only labelled
+  const drawn = (slot) => icon(slot).locator("svg").innerHTML();
+  expect(await drawn("plan")).not.toBe(await drawn("award"));
+  // the title is the slot's fixed label, as the admin section shows it
+  await expect(card(page, "plan").locator(".res-name")).toHaveText(
+    "월간.연간교육안",
+  );
+});
+
+test("resources: one card per row, title on one line, 44px buttons, keyboard focus", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "layout by viewport, once");
+  await stubSupabase(page, {
+    role: "teacher",
+    files: {
+      "level-2/plan": { name: PLAN_NAME, size: 4404019 },
+      "level-2/test": { name: "Level 2 테스트.xlsx", size: 51200 },
+    },
+  });
+  for (const [w, h] of [
+    [1366, 900],
+    [390, 844],
+    [320, 700],
+  ]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.goto("about:blank");
+    await page.goto("/#resources/level-2");
+    await expect(page.locator("#resourceGrid .res-card")).toHaveCount(3);
+    await expect(card(page, "plan").locator(".res-download")).toBeVisible();
+    const geo = await page.evaluate(() =>
+      [...document.querySelectorAll("#resourceGrid .res-card")].map((el) => {
+        const box = el.getBoundingClientRect();
+        const name = el.querySelector(".res-name");
+        const button = el.querySelector(".res-download");
+        const b = button && button.getBoundingClientRect();
+        return {
+          left: box.left,
+          top: box.top,
+          bottom: box.bottom,
+          nameHeight: name.getBoundingClientRect().height,
+          lineHeight: parseFloat(getComputedStyle(name).lineHeight),
+          button: b && { width: b.width, height: b.height },
+        };
+      }),
+    );
+    // one card per row: each below the last, same left edge
+    for (let i = 1; i < geo.length; i += 1) {
+      expect(geo[i].top, `${w}: card ${i}`).toBeGreaterThan(geo[i - 1].bottom);
+      expect(Math.abs(geo[i].left - geo[0].left)).toBeLessThan(1);
+    }
+    // "월간.연간교육안" (and every title) on one line — never "월간. / 연간교육안"
+    for (const g of geo) {
+      expect(g.nameHeight, `${w}: title lines`).toBeLessThan(
+        g.lineHeight * 1.5,
+      );
+    }
+    // press areas 44px or more
+    for (const g of geo.filter((x) => x.button)) {
+      expect(g.button.height).toBeGreaterThanOrEqual(44);
+      expect(g.button.width).toBeGreaterThanOrEqual(44);
+    }
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(w);
+  }
+  // keyboard: Tab reaches the download button, and its focus ring shows
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto("about:blank");
+  await page.goto("/#resources/level-2");
+  await expect(card(page, "plan").locator(".res-download")).toBeVisible();
+  let onDownload = false;
+  for (let i = 0; i < 40 && !onDownload; i += 1) {
+    await page.keyboard.press("Tab");
+    onDownload = await page.evaluate(() =>
+      document.activeElement?.classList.contains("res-download"),
+    );
+  }
+  expect(onDownload).toBe(true);
+  const ring = await page.evaluate(() => {
+    const s = getComputedStyle(document.activeElement);
+    return { style: s.outlineStyle, width: parseFloat(s.outlineWidth) };
+  });
+  expect(ring.style).not.toBe("none");
+  expect(ring.width).toBeGreaterThanOrEqual(2);
+});
+
+test("resources: the month page button is filled with the level color, folder icon kept", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "style only, run once");
+  await stubSupabase(page, { role: "teacher" });
+  for (const [level, color] of [
+    ["beginner", "rgb(255, 200, 0)"], // --sunny-yellow
+    ["level-2", "rgb(28, 176, 246)"], // --macaw-blue
+  ]) {
+    await page.goto("about:blank");
+    await openMonths(page, level);
+    const button = page.locator("#teacherResBtn");
+    await expect(button).toBeVisible();
+    await expect(button).toHaveCSS("background-color", color);
+    await expect(button.locator("svg.teacher-res-icon")).toHaveCount(1);
+    await expect(button).toHaveText(BUTTON);
+  }
 });
 
 // ---- Admin: 배너 tab section ----------------------------------------------

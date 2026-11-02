@@ -31,10 +31,10 @@ Live = **`8176966`** (`2026-10-31`); local master ahead, unpushed. Older: archiv
     `page_backgrounds_level_key`; admin saves allowed again.
   - B live: '교사 자료실' (admin + LMS role 1/2) → private bucket; download via Edge Function
     `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). **0 files live now.**
-    Test account `tps-teacher-test` **exists live**.
+    Test account `tps-teacher-test` **exists live**. Redesign D58 = approved, local commit; goes in the 3B push (D60).
   - **Next (user, design doc "최종 운영 순서" 8):** upload the real 10 files → iPhone Safari download →
     delete the test account **right away** → monthly Usage (egress) check.
-- **Student page header fix** live (`8176966`); PC check done 10/31 (logo "Reading" orange, Level line gap OK).
+- **Student page header fix** live (`8176966`), PC check done 10/31.
 - **User:** iPhone real-device check (2B); Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own
   Vimeo (`vimeo.com/<id>` in admin).
 - **Home hero cast** stage 2 (AI video) awaits a PM brief; stage 1 lives only on the local branch

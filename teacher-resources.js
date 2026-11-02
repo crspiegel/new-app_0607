@@ -68,18 +68,95 @@ function resourceExt(name) {
   return match ? match[1].toLowerCase() : "";
 }
 
+// "pdf" | "excel" | "file" — what the card's icon and meta line say.
 function resourceKind(name) {
   const ext = resourceExt(name);
-  if (ext === "pdf") return "PDF";
-  return ext === "xlsx" || ext === "xls" ? "EXCEL" : "FILE";
+  if (ext === "pdf") return "pdf";
+  return ext === "xlsx" || ext === "xls" ? "excel" : "file";
 }
 
 /* ---- Resource page ------------------------------------------------------ */
+/* D58 (2026-11-02): one card per slot, one per row — file icon (PDF / Excel)
+   · title + "PDF · 1.2MB · 11/02 업데이트" · [내려받기]. A slot without a
+   file says so instead (a notice, not a button). The title is the slot's
+   fixed label (RES_SLOTS — the admin section shows the same one). */
+
+const RES_KIND_TEXT = { pdf: "PDF", excel: "엑셀" }; // the meta line
+const RES_ICON_TEXT = { pdf: "PDF", excel: "XLS" }; // inside the icon
+const RES_EMPTY_TEXT = "아직 올라온 자료가 없어요";
+const RES_SVG_NS = "http://www.w3.org/2000/svg";
+// A page with a folded corner, then what is on it: text lines (PDF) or a
+// table grid (Excel); nothing on an empty slot's page.
+const RES_ICON_PATHS = {
+  page: [
+    "M7 3h8l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z",
+    "M15 3v5h5",
+  ],
+  pdf: ["M8.5 12.5h7", "M8.5 15.5h7", "M8.5 18.5h4"],
+  excel: ["M8.5 11.5h7v7h-7Z", "M8.5 15h7", "M12 11.5v7"],
+};
 
 let resLoad = 0; // bumped per open: a late list for another level is dropped
 
 function setResourceStatus(text) {
   if (resourceStatus) resourceStatus.textContent = text || "";
+}
+
+// 1.2MB / 840KB; nothing for a size the server did not give.
+function formatResSizeShort(bytes) {
+  const n = Number(bytes);
+  if (!bytes || !Number.isFinite(n) || n <= 0) return "";
+  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)}MB`;
+  return `${Math.max(1, Math.round(n / 1024))}KB`;
+}
+
+// MM/DD in the viewer's time (Korea); nothing without a date.
+function formatResDay(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
+}
+
+function resourceIcon(kind) {
+  const box = document.createElement("span");
+  box.className = "res-icon";
+  box.dataset.kind = kind;
+  box.setAttribute("aria-hidden", "true");
+  const svg = document.createElementNS(RES_SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("focusable", "false");
+  [...RES_ICON_PATHS.page, ...(RES_ICON_PATHS[kind] || [])].forEach((d) => {
+    const path = document.createElementNS(RES_SVG_NS, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  });
+  box.append(svg);
+  if (RES_ICON_TEXT[kind]) {
+    const label = document.createElement("span");
+    label.className = "res-icon-label";
+    label.textContent = RES_ICON_TEXT[kind];
+    box.append(label);
+  }
+  return box;
+}
+
+// The title, kept whole word by word: it may wrap only at a space — never
+// inside a word such as "월간.연간교육안" (no "월간. / 연간교육안").
+function resourceTitle(label) {
+  const title = document.createElement("strong");
+  title.className = "res-name";
+  String(label)
+    .split(" ")
+    .forEach((word, i) => {
+      if (i) title.append(" ");
+      const part = document.createElement("span");
+      part.className = "res-word";
+      part.textContent = word;
+      title.append(part);
+    });
+  return title;
 }
 
 // rows = the teacher_resources_list answer, or null while it loads.
@@ -89,19 +166,58 @@ function renderResourceButtons(level, rows) {
     ...resourceSlots(level).map((item) => {
       const row = rows && rows.find((r) => r.slot === item.slot);
       const file = row && row.file_name;
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "month-button res-button";
-      button.dataset.slot = item.slot;
-      button.disabled = !file;
-      const kind = document.createElement("span");
-      kind.className = "res-kind";
-      kind.textContent = file ? resourceKind(file) : rows ? "준비 중" : "";
-      const name = document.createElement("strong");
-      name.className = "res-name";
-      name.textContent = item.label;
-      button.append(kind, name);
-      return button;
+      const kind = file ? resourceKind(file) : "none";
+      const card = document.createElement("div");
+      card.className = "res-card";
+      card.dataset.slot = item.slot;
+      card.dataset.state = file ? "ready" : rows ? "empty" : "loading";
+
+      const text = document.createElement("div");
+      text.className = "res-text";
+      const meta = document.createElement("span");
+      meta.className = "res-meta";
+      if (file) {
+        const day = formatResDay(row.updated_at);
+        meta.textContent = [
+          RES_KIND_TEXT[kind],
+          formatResSizeShort(row.file_size),
+          day && `${day} 업데이트`,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+      } else if (rows) {
+        meta.textContent = "준비 중";
+      }
+      text.append(resourceTitle(item.label), meta);
+      card.append(resourceIcon(kind), text);
+
+      if (file) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "res-download";
+        button.dataset.slot = item.slot;
+        button.setAttribute("aria-label", `${item.label} 내려받기`);
+        const icon = document.createElementNS(RES_SVG_NS, "svg");
+        icon.setAttribute("viewBox", "0 0 24 24");
+        icon.setAttribute("aria-hidden", "true");
+        icon.setAttribute("focusable", "false");
+        icon.classList.add("res-download-icon");
+        ["M12 4v11", "m7 10 5 5 5-5", "M5 20h14"].forEach((d) => {
+          const path = document.createElementNS(RES_SVG_NS, "path");
+          path.setAttribute("d", d);
+          icon.append(path);
+        });
+        const label = document.createElement("span");
+        label.textContent = "내려받기";
+        button.append(icon, label);
+        card.append(button);
+      } else if (rows) {
+        const empty = document.createElement("p");
+        empty.className = "res-empty";
+        empty.textContent = RES_EMPTY_TEXT;
+        card.append(empty);
+      }
+      return card;
     }),
   );
 }
@@ -188,7 +304,7 @@ if (resourceBackBtn) {
 }
 if (resourceGrid) {
   resourceGrid.addEventListener("click", (event) => {
-    const button = event.target.closest(".res-button");
+    const button = event.target.closest(".res-download");
     if (!button || button.disabled) return;
     downloadResource(state.level, button.dataset.slot, button);
   });
