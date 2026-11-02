@@ -1598,10 +1598,13 @@ declare
   v_name text;
   v_set  boolean := coalesce(p_set_teacher, false);
 begin
-  if not public.lms_can_manage_class(p_class_id) then
+  -- The caller first, and no caller = no entry (security review of D53, same
+  -- as lms_class_add_member): a session ended between two statements would
+  -- leave c empty and skip the teacher-change check below.
+  select * into c from public.lms_caller();
+  if not found or not public.lms_can_manage_class(p_class_id) then
     raise exception 'not allowed' using errcode = '42501';
   end if;
-  select * into c from public.lms_caller();
   if v_set and not (c.is_admin or c.role = 1) then
     raise exception 'not allowed' using errcode = '42501';
   end if;

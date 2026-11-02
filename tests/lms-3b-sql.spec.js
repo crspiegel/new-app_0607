@@ -215,6 +215,12 @@ async function verify3b(db) {
   expect(
     result.filter((r) => String(r.check_case).includes("D53")).length,
   ).toBeGreaterThanOrEqual(8);
+  // lms_class_update reads the caller first (security review of D53, M1)
+  expect(
+    result.filter((r) =>
+      String(r.check_case).includes("update: the caller is read"),
+    ),
+  ).toHaveLength(1);
   expect(result[result.length - 1]).toMatchObject({
     area: "trace",
     actual: "branches=0 members=0 classes=0 attempts=0",

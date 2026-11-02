@@ -750,6 +750,16 @@ begin
      format('public.lms_class_update(%L, p_active => false)', k_b), 'ok'],
     ['class', 'ta1', 'a class that does not exist', 'j',
      format('public.lms_class_update(%L, p_name => %L)', ghost, 'x'), 'denied 42501'],
+    ['class', 'none', 'change the teacher of a class', 'j',
+     format('public.lms_class_update(%L, p_set_teacher => true, p_teacher_id => %L)', k_a1, m_ta2),
+     'denied 42501'],
+    -- security review of D53 (M1, same shape as lms_class_add_member): the
+    -- caller first, and no caller = 42501 — a session ended between two
+    -- statements would leave c empty and skip the teacher-change check
+    ['class', 'owner', 'update: the caller is read (and checked) before anything else', 'q',
+     $q$select (pg_get_functiondef('public.lms_class_update(uuid,text,boolean,boolean,uuid)'::regprocedure)
+                ~ 'select \* into c from public\.lms_caller\(\);\s+if not found or not public\.lms_can_manage_class\(p_class_id\)')::text$q$,
+     'true'],
     ['class', 'ba', 'delete (D47: admin only)', 'j', format('public.lms_class_delete(%L)', k_a5), 'denied 42501'],
     ['class', 'ta1', 'delete its own class', 'j', format('public.lms_class_delete(%L)', k_a6), 'denied 42501'],
     ['class', 'admin', 'delete', 'j', format('public.lms_class_delete(%L)', k_a6), 'ok'],
