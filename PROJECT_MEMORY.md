@@ -31,6 +31,7 @@ Live = **`6c32cd8`** (`2026-11-02`: 3B `4a9b23d` + D63 — live SQL first, then 
     `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). Card design D58, **D63 live** (14 slots:
     `monthly` 월간교육안 + `plan` = 연간교육안, the old key). **D64 in progress:** a slot = a file OR a Google Drive file
     (ID only; teachers download from Google — no egress, no limit); live order = SQL (DO block) → push, no Edge redeploy.
+    SQL `4cbb87b` + screen committed (local, 11/02); live held — goes live together with D65.
 - **Student page header fix** live (`8176966`), PC check done 10/31.
 - **User:** iPhone real-device check (2B); Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own
   Vimeo (`vimeo.com/<id>` in admin).

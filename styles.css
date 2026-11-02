@@ -6328,6 +6328,11 @@ body[data-screen="resources"] #resourceStatus {
   transform: translateY(3px);
 }
 
+/* D64: a Google Drive card's 내려받기 is a link (new tab), drawn the same */
+a.res-download {
+  text-decoration: none;
+}
+
 .res-download-icon {
   flex: 0 0 auto;
   width: 20px;
@@ -6477,6 +6482,7 @@ body[data-screen="resources"] #resourceStatus {
 
 .res-admin-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -6500,8 +6506,107 @@ body[data-screen="resources"] #resourceStatus {
   font-weight: 700;
 }
 
+/* D64: Google Drive links — 링크 열기 (a link drawn as the row buttons), a
+   switch of kind armed like 삭제, and the link box under the row. */
+.res-admin-actions .res-admin-open {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--adm-accent);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--adm-accent);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.res-admin-actions .res-admin-upload[data-armed],
+.res-drive-line .res-drive-save[data-armed] {
+  border-color: var(--adm-danger);
+  background: var(--adm-danger);
+  color: #fff;
+  font-weight: 700;
+}
+
+.res-drive-editor {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 6px;
+  margin: 0;
+}
+
+.res-drive-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.res-drive-input {
+  flex: 1 1 280px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--adm-line);
+  border-radius: 3px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+
+.res-drive-input:focus-visible {
+  outline: 2px solid var(--adm-accent);
+  outline-offset: 1px;
+}
+
+.res-drive-line button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--adm-accent);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--adm-accent);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.res-drive-line .res-drive-save {
+  background: var(--adm-accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.res-drive-help,
+.res-drive-msg {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.res-drive-help {
+  color: var(--adm-muted);
+}
+
+.res-drive-msg {
+  color: var(--adm-danger);
+  font-weight: 700;
+}
+
+.res-drive-msg:empty {
+  display: none;
+}
+
 @media (max-width: 760px) {
   .res-admin-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* iPhone Safari zooms into a text box under 16px */
+  .res-drive-input {
+    font-size: 16px;
   }
 }

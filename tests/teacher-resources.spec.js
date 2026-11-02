@@ -31,8 +31,23 @@ const ROLE_SESSION = {
 };
 const TOKEN = "tok-test-00000000000000000000000000000000000";
 
+// D64 (2026-11-02): a slot may hold a Google Drive file instead — only its ID
+// is stored. Every Google request is answered here too (none leaves the test).
+const GOOGLE = /^https:\/\/(drive|docs)\.google\.com\//;
+const DRIVE_A = "1AbC-dEf_GhIjKlMnOpQrStUvWxYz012";
+const DRIVE_B = "0B9xYzAbCdEfGhIjKlMnOpQrStU";
+const driveDownload = (id) =>
+  `https://drive.google.com/uc?export=download&id=${id}`;
+const driveView = (id) => `https://drive.google.com/file/d/${id}/view`;
+const DRIVE_HELP =
+  "구글 드라이브 → 공유 → '링크가 있는 모든 사용자' → 링크 복사 후 붙여 넣기";
+const DRIVE_DOCS =
+  "PDF나 엑셀 파일로 드라이브에 올린 뒤 그 파일 링크를 넣어 주세요";
+const DRIVE_BAD = "구글 드라이브 파일 링크만 넣을 수 있어요.";
+
 // The resource list per level as teacher_resources_list returns it. A file
 // may say `updated: null` (or a time) to test the date; default 10/29 KST.
+// `{ drive: <ID> }` is a Google Drive slot (D64: no file name, no size).
 function listFor(level, files = {}) {
   const slots =
     level === "level-2" || level === "level-3"
@@ -40,15 +55,17 @@ function listFor(level, files = {}) {
       : ["monthly", "plan", "award"];
   return slots.map((slot) => {
     const file = files[`${level}/${slot}`];
+    const drive = file?.drive ?? null;
     return {
       slot,
-      file_name: file?.name ?? null,
-      file_size: file?.size ?? null,
+      file_name: drive ? null : (file?.name ?? null),
+      file_size: drive ? null : (file?.size ?? null),
       updated_at: !file
         ? null
         : file.updated === undefined
           ? "2026-10-29T03:00:00Z"
           : file.updated,
+      drive_id: drive,
     };
   });
 }
@@ -74,11 +91,27 @@ async function stubSupabase(
     files = { [`beginner/plan`]: { name: PLAN_NAME, size: 4404019 } },
     fn = "ok", // the Edge Function's answer: ok | denied | empty | limit | abort
     setAnswer = () => null,
+    setDriveAnswer = () => null,
     clearAnswer = () => null,
     adminLogin = false,
   } = {},
 ) {
-  const sent = { rpc: [], storage: [], tokens: [], downloads: [], fn: [] };
+  const sent = {
+    rpc: [],
+    storage: [],
+    tokens: [],
+    downloads: [],
+    fn: [],
+    google: [],
+  };
+  // Google (D64): a new tab opened on a Drive link lands here, never online.
+  await page.context().route(GOOGLE, (route) => {
+    sent.google.push(route.request().url());
+    return route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><title>Google (test)</title>",
+    });
+  });
   await page.addInitScript(
     ({ role, token, session }) => {
       try {
@@ -123,6 +156,9 @@ async function stubSupabase(
       }
       if (name === "teacher_resource_set") {
         return route.fulfill({ json: setAnswer(args) });
+      }
+      if (name === "teacher_resource_set_drive") {
+        return route.fulfill({ json: setDriveAnswer(args) });
       }
       if (name === "teacher_resource_clear") {
         return route.fulfill({ json: clearAnswer(args) });
@@ -702,6 +738,176 @@ test("resources admin: the pre-D63 admin section still shows its 10 slots (live 
   await expect(page.locator("#teacherResStatus")).toHaveText("");
 });
 
+// ---- D64 (2026-11-02): Google Drive slots --------------------------------
+
+test("resources: a Drive slot downloads from Google in a new tab, not the function (D64)", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "flow only, run once");
+  const sent = await stubSupabase(page, {
+    role: "teacher",
+    files: {
+      "level-2/monthly": { drive: DRIVE_A, updated: "2026-11-02T03:00:00Z" },
+      "level-2/plan": { name: PLAN_NAME, size: 4404019 },
+    },
+  });
+  await page.goto("/#resources/level-2");
+  const drive = card(page, "monthly");
+  await expect(drive).toHaveAttribute("data-state", "ready");
+  await expect(drive.locator(".res-meta")).toHaveText(
+    "구글 드라이브 · 11/02 업데이트",
+  );
+  await expect(drive.locator(".res-icon")).toHaveAttribute(
+    "data-kind",
+    "drive",
+  );
+  await expect(drive.locator(".res-icon-label")).toHaveText("LINK");
+  // drawn differently from the PDF card next to it
+  expect(await drive.locator(".res-icon svg").innerHTML()).not.toBe(
+    await card(page, "plan").locator(".res-icon svg").innerHTML(),
+  );
+  const link = drive.locator(".res-download");
+  await expect(link).toHaveText("내려받기");
+  await expect(link).toHaveAttribute("href", driveDownload(DRIVE_A));
+  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(link).toHaveAttribute("rel", /\bnoopener\b/);
+  await expect(link).toHaveAccessibleName("월간교육안 내려받기 (새 탭)");
+  const [tab] = await Promise.all([context.waitForEvent("page"), link.click()]);
+  await expect(tab).toHaveURL(driveDownload(DRIVE_A));
+  await tab.close();
+  // this page stays where it was; no Edge Function call for a Drive slot
+  await expect(page).toHaveURL(/#resources\/level-2$/);
+  await expect(page.locator("#resourceStatus")).toHaveText("");
+  expect(sent.fn).toEqual([]);
+  expect(sent.google).toEqual([driveDownload(DRIVE_A)]);
+  // the file slot beside it still goes through the function, in this tab
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    card(page, "plan").locator(".res-download").click(),
+  ]);
+  expect(download.suggestedFilename()).toBe(PLAN_NAME);
+  expect(sent.fn.map((f) => f.body)).toEqual([
+    { level: "level-2", slot: "plan" },
+  ]);
+  expect(context.pages()).toHaveLength(1);
+});
+
+test("resources: students and visitors never get a Drive link (D64)", async ({
+  browser,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "routing only, run once");
+  for (const role of [null, "student"]) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const sent = await stubSupabase(page, {
+      role,
+      files: { "level-2/monthly": { drive: DRIVE_A } },
+    });
+    await page.goto("/#resources/level-2");
+    await expect(page).toHaveURL(/#months\/level-2$/);
+    await page.waitForFunction(() => window.craTeacherRes?.ready);
+    await expect(page.locator('a[href*="google.com"]')).toHaveCount(0);
+    expect(sent.rpc.map((r) => r.name)).not.toContain("teacher_resources_list");
+    expect(sent.google).toEqual([]);
+    await context.close();
+  }
+});
+
+// D64 order safety, live step ① → ④ (SQL before the push): the page deployed
+// now (commit 6c32cd8 — tests/fixtures/teacher-resources-6c32cd8.js, 수정 금지)
+// receives the new list with drive_id. A Drive slot (no file name) is just
+// 준비 중 to it; files still download, upload and delete as before.
+test("resources: the pre-D64 page shows a Drive slot as 준비 중 (live step ①)", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "order safety, run once");
+  const OLD = readFileSync(
+    path.resolve("tests/fixtures/teacher-resources-6c32cd8.js"),
+    "utf8",
+  );
+  expect(OLD).toContain('{ slot: "monthly", label: "월간교육안" }');
+  expect(OLD).not.toContain("drive");
+  await page.route(/\/teacher-resources\.js(\?.*)?$/, (route) =>
+    route.fulfill({ contentType: "text/javascript", body: OLD }),
+  );
+  const sent = await stubSupabase(page, {
+    role: "teacher",
+    files: {
+      "level-2/monthly": { drive: DRIVE_A },
+      "level-2/plan": { name: PLAN_NAME, size: 4404019 },
+    },
+  });
+  await page.goto("/#resources/level-2");
+  await expect(page.locator("#resourceGrid .res-card")).toHaveCount(4);
+  await expect(card(page, "monthly")).toHaveAttribute("data-state", "empty");
+  await expect(card(page, "monthly").locator(".res-meta")).toHaveText(
+    "준비 중",
+  );
+  await expect(card(page, "monthly").locator(".res-download")).toHaveCount(0);
+  await expect(page.locator("#resourceStatus")).toHaveText("");
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    card(page, "plan").locator(".res-download").click(),
+  ]);
+  expect(download.suggestedFilename()).toBe(PLAN_NAME);
+  expect(sent.fn.map((f) => f.body)).toEqual([
+    { level: "level-2", slot: "plan" },
+  ]);
+  expect(sent.google).toEqual([]);
+  expect(context.pages()).toHaveLength(1);
+});
+
+test("resources admin: the pre-D64 admin section still works beside Drive slots (live step ①)", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "order safety, run once");
+  const OLD = readFileSync(
+    path.resolve("tests/fixtures/teacher-resources-6c32cd8.js"),
+    "utf8",
+  );
+  await page.route(/\/teacher-resources\.js(\?.*)?$/, (route) =>
+    route.fulfill({ contentType: "text/javascript", body: OLD }),
+  );
+  const sent = await stubSupabase(page, {
+    role: "admin",
+    files: {
+      "beginner/monthly": { drive: DRIVE_A },
+      "beginner/plan": { name: PLAN_NAME, size: 4404019 },
+    },
+    clearAnswer: () => PLAN_PATH,
+  });
+  await openBannerTab(page);
+  await expect(page.locator("#teacherResAdmin .res-admin-row")).toHaveCount(14);
+  const monthly = page.locator(
+    '#teacherResAdmin .res-admin-row[data-level="beginner"][data-slot="monthly"]',
+  );
+  await expect(monthly.locator(".res-admin-file")).toHaveText("파일 없음");
+  await expect(monthly.getByRole("button", { name: "업로드" })).toBeVisible();
+  await expect(page.locator("#teacherResStatus")).toHaveText("");
+  // uploading over the Drive slot is the old upload (the SQL drops the link)
+  await markRows(page);
+  await monthly.locator('input[type="file"]').setInputFiles({
+    name: "11월 월간교육안.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4 new"),
+  });
+  await expect(page.locator("#teacherResStatus")).toHaveText("올렸어요.");
+  await redrawn(page);
+  expect(
+    sent.rpc.find((r) => r.name === "teacher_resource_set").args.p_slot,
+  ).toBe("monthly");
+  // and a file slot still deletes (two presses)
+  const plan = page.locator(
+    '#teacherResAdmin .res-admin-row[data-level="beginner"][data-slot="plan"]',
+  );
+  await plan.getByRole("button", { name: "삭제" }).click();
+  await plan.getByRole("button", { name: "한 번 더 누르면 삭제" }).click();
+  await expect(page.locator("#teacherResStatus")).toHaveText("삭제했어요.");
+  expect(sent.google).toEqual([]);
+});
+
 test("resources: one card per row, title on one line, 44px buttons, keyboard focus", async ({
   page,
 }, testInfo) => {
@@ -710,6 +916,7 @@ test("resources: one card per row, title on one line, 44px buttons, keyboard foc
     role: "teacher",
     files: {
       "level-2/plan": { name: PLAN_NAME, size: 4404019 },
+      "level-2/award": { drive: DRIVE_A }, // D64: a link, sized like a button
       "level-2/test": { name: "Level 2 테스트.xlsx", size: 51200 },
     },
   });
@@ -963,4 +1170,261 @@ test("resources admin: delete asks twice, then clears the row and the object", a
       contentType: null,
     },
   ]);
+});
+
+// ---- Admin, D64: Google Drive links ---------------------------------------
+
+// Each save reloads the admin list: mark the rows, then wait for new ones, so
+// the next click lands on a redrawn row (not on one about to be replaced).
+const markRows = (page) =>
+  page.locator("#teacherResAdminList").evaluate((list) => {
+    list.querySelectorAll(".res-admin-row").forEach((row) => {
+      row.dataset.stale = "1";
+    });
+  });
+const redrawn = (page) =>
+  expect(
+    page.locator("#teacherResAdmin .res-admin-row[data-stale]"),
+  ).toHaveCount(0);
+
+const resRow = (page, level, slot) =>
+  page.locator(
+    `#teacherResAdmin .res-admin-row[data-level="${level}"][data-slot="${slot}"]`,
+  );
+
+test("resources admin: a Drive slot says 구글 드라이브 · date and opens in a new tab (D64)", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "flow only, run once");
+  const sent = await stubSupabase(page, {
+    role: "admin",
+    files: {
+      "beginner/plan": { name: PLAN_NAME, size: 4404019 },
+      "beginner/award": { drive: DRIVE_A, updated: "2026-11-02T03:00:00Z" },
+    },
+  });
+  await openBannerTab(page);
+  const row = resRow(page, "beginner", "award");
+  await expect(row.locator(".res-admin-file")).toHaveText(
+    "구글 드라이브 · 2026-11-02",
+  );
+  const open = row.getByRole("link", { name: "링크 열기" });
+  await expect(open).toHaveAttribute("href", driveView(DRIVE_A));
+  await expect(open).toHaveAttribute("target", "_blank");
+  await expect(open).toHaveAttribute("rel", /\bnoopener\b/);
+  await expect(row.getByRole("button")).toHaveText([
+    "업로드",
+    "드라이브 링크",
+    "삭제",
+  ]);
+  const [tab] = await Promise.all([context.waitForEvent("page"), open.click()]);
+  await expect(tab).toHaveURL(driveView(DRIVE_A));
+  await tab.close();
+  expect(sent.google).toEqual([driveView(DRIVE_A)]);
+  // every row offers the link; a file row and an empty one keep their buttons
+  await expect(
+    page.locator("#teacherResAdmin .res-admin-row .res-admin-drive"),
+  ).toHaveCount(14);
+  const plan = resRow(page, "beginner", "plan");
+  await expect(plan.getByRole("link")).toHaveCount(0);
+  await expect(plan.getByRole("button")).toHaveText([
+    "교체",
+    "드라이브 링크",
+    "삭제",
+  ]);
+  await expect(
+    resRow(page, "beginner", "monthly").getByRole("button"),
+  ).toHaveText(["업로드", "드라이브 링크"]);
+  // deleting a Drive slot only unlinks it (nothing in Storage to remove) —
+  // and says the file and its sharing stay in Google Drive
+  await row.getByRole("button", { name: "삭제" }).click();
+  await row.getByRole("button", { name: "한 번 더 누르면 삭제" }).click();
+  await expect(page.locator("#teacherResStatus")).toHaveText(
+    "링크를 지웠어요. (구글 드라이브의 파일과 공유는 그대로예요.)",
+  );
+  expect(
+    sent.rpc.find((r) => r.name === "teacher_resource_clear").args,
+  ).toEqual({ p_level: "beginner", p_slot: "award" });
+  expect(sent.storage).toEqual([]);
+});
+
+test("resources admin: the three Drive link forms all save the file ID (D64)", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "flow only, run once");
+  const sent = await stubSupabase(page, { role: "admin" });
+  await openBannerTab(page);
+  const row = resRow(page, "level-1", "award"); // an empty slot
+  const box = () =>
+    row.getByRole("textbox", { name: "구글 드라이브 파일 링크" });
+  const saved = () =>
+    sent.rpc.filter((r) => r.name === "teacher_resource_set_drive");
+  const forms = [
+    [`https://drive.google.com/file/d/${DRIVE_A}/view?usp=sharing`, DRIVE_A],
+    [`https://drive.google.com/file/u/1/d/${DRIVE_B}/view`, DRIVE_B],
+    [`https://drive.google.com/open?id=${DRIVE_A}`, DRIVE_A],
+    [`https://drive.google.com/uc?export=download&id=${DRIVE_B}`, DRIVE_B],
+    [`  drive.google.com/file/d/${DRIVE_A}/edit  `, DRIVE_A],
+  ];
+  for (const [text, id] of forms) {
+    await row.getByRole("button", { name: "드라이브 링크" }).click();
+    const editor = row.locator(".res-drive-editor");
+    await expect(editor).toBeVisible();
+    await expect(editor.locator(".res-drive-help")).toHaveText(DRIVE_HELP);
+    await expect(box()).toBeFocused();
+    await box().fill(text);
+    await editor.getByRole("button", { name: "저장" }).click();
+    await expect(page.locator("#teacherResStatus")).toHaveText(
+      "링크를 저장했어요.",
+    );
+    expect(saved().at(-1).args, text).toEqual({
+      p_level: "level-1",
+      p_slot: "award",
+      p_drive_id: id,
+    });
+    await expect(row.locator(".res-drive-editor")).toHaveCount(0);
+  }
+  // Enter in the box saves too
+  await row.getByRole("button", { name: "드라이브 링크" }).click();
+  await box().fill(driveView(DRIVE_B));
+  await box().press("Enter");
+  await expect(row.locator(".res-drive-editor")).toHaveCount(0);
+  expect(saved()).toHaveLength(forms.length + 1);
+  expect(sent.storage).toEqual([]);
+  expect(sent.google).toEqual([]);
+});
+
+test("resources admin: Docs links and anything else are refused before saving (D64)", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "flow only, run once");
+  const sent = await stubSupabase(page, { role: "admin" });
+  await openBannerTab(page);
+  const row = resRow(page, "level-3", "test");
+  await row.getByRole("button", { name: "드라이브 링크" }).click();
+  const editor = row.locator(".res-drive-editor");
+  const input = editor.getByRole("textbox", {
+    name: "구글 드라이브 파일 링크",
+  });
+  const save = editor.getByRole("button", { name: "저장" });
+  const message = editor.locator(".res-drive-msg");
+  for (const text of [
+    `https://docs.google.com/document/d/${DRIVE_A}/edit`,
+    `https://docs.google.com/spreadsheets/d/${DRIVE_A}/edit#gid=0`,
+  ]) {
+    await input.fill(text);
+    await save.click();
+    await expect(message).toHaveText(DRIVE_DOCS);
+  }
+  for (const text of [
+    "",
+    "구글 드라이브",
+    `https://drive.google.com/drive/folders/${DRIVE_A}`,
+    `https://example.com/file/d/${DRIVE_A}/view`,
+    `https://drive.google.com.evil.example/file/d/${DRIVE_A}/view`,
+    "https://drive.google.com/file/d/short/view",
+    `https://drive.google.com/file/d/${DRIVE_A}"onmouseover="x/view`,
+    `javascript:alert(1)//drive.google.com/file/d/${DRIVE_A}`,
+  ]) {
+    await input.fill(text);
+    await save.click();
+    await expect(message, text).toHaveText(DRIVE_BAD);
+  }
+  expect(
+    sent.rpc.filter((r) => r.name === "teacher_resource_set_drive"),
+  ).toEqual([]);
+  // 취소 closes the box without saving
+  await editor.getByRole("button", { name: "취소" }).click();
+  await expect(row.locator(".res-drive-editor")).toHaveCount(0);
+  await expect(
+    row.getByRole("button", { name: "드라이브 링크" }),
+  ).toBeFocused();
+  expect(sent.google).toEqual([]);
+});
+
+test("resources admin: file ⇄ Drive asks twice before switching (D64)", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "flow only, run once");
+  const sent = await stubSupabase(page, {
+    role: "admin",
+    files: {
+      "beginner/plan": { name: PLAN_NAME, size: 4404019 },
+      "beginner/award": { drive: DRIVE_B },
+    },
+    setDriveAnswer: (args) => (args.p_slot === "plan" ? PLAN_PATH : null),
+  });
+  await openBannerTab(page);
+  const saved = () =>
+    sent.rpc.filter((r) => r.name === "teacher_resource_set_drive");
+  // file → Drive: the first 저장 only warns; the second saves, then the old
+  // file leaves Storage
+  const plan = resRow(page, "beginner", "plan");
+  await plan.getByRole("button", { name: "드라이브 링크" }).click();
+  await plan
+    .getByRole("textbox", { name: "구글 드라이브 파일 링크" })
+    .fill(driveView(DRIVE_A));
+  await plan.getByRole("button", { name: "저장" }).click();
+  const confirmSave = plan.getByRole("button", {
+    name: "한 번 더 누르면 링크로 바꾸기",
+  });
+  await expect(confirmSave).toBeVisible();
+  expect(saved()).toEqual([]);
+  await markRows(page);
+  await confirmSave.click();
+  await expect(page.locator("#teacherResStatus")).toHaveText(
+    "링크를 저장했어요.",
+  );
+  await redrawn(page);
+  expect(saved()[0].args).toEqual({
+    p_level: "beginner",
+    p_slot: "plan",
+    p_drive_id: DRIVE_A,
+  });
+  expect(sent.storage).toEqual([
+    {
+      op: "remove",
+      path: "/storage/v1/object/teacher-resources",
+      body: { prefixes: [PLAN_PATH] },
+      contentType: null,
+    },
+  ]);
+  // Drive → file: the first 업로드 only warns (no file picker); the second
+  // opens it
+  const award = resRow(page, "beginner", "award");
+  let chooser = false;
+  page.on("filechooser", () => (chooser = true));
+  await award.getByRole("button", { name: "업로드" }).click();
+  const confirmUpload = award.getByRole("button", {
+    name: "한 번 더 누르면 파일로 바꾸기",
+  });
+  await expect(confirmUpload).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(chooser).toBe(false);
+  await markRows(page);
+  const [picker] = await Promise.all([
+    page.waitForEvent("filechooser"),
+    confirmUpload.click(),
+  ]);
+  await picker.setFiles({
+    name: "상장.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4 award"),
+  });
+  await expect(page.locator("#teacherResStatus")).toHaveText("올렸어요.");
+  await redrawn(page);
+  expect(
+    sent.rpc.find((r) => r.name === "teacher_resource_set").args.p_slot,
+  ).toBe("award");
+  // an empty slot switches nothing, so it never asks
+  const monthly = resRow(page, "beginner", "monthly");
+  await monthly.getByRole("button", { name: "드라이브 링크" }).click();
+  await monthly
+    .getByRole("textbox", { name: "구글 드라이브 파일 링크" })
+    .fill(driveView(DRIVE_B));
+  await monthly.getByRole("button", { name: "저장" }).click();
+  await expect(monthly.locator(".res-drive-editor")).toHaveCount(0);
+  expect(saved()).toHaveLength(2);
+  expect(sent.google).toEqual([]);
 });

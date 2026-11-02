@@ -1167,6 +1167,11 @@ not exists` 안의 CHECK는 이미 있는 표를 안 바꾼다 → 그 아래 `d
   경로가 NULL이면 원래 "empty" → **Edge Function 무변경**. 목록 함수 결과에 열을 더하면 `create or replace`가 실패 →
   옛 모양일 때만 drop(`lms_member_list`와 같은 가드), drop하면 권한도 사라지므로 grant를 같은 파일·같은 DO 블록에.
   옛 화면(D63)은 `file_name`이 NULL인 드라이브 칸을 "준비 중"으로 본다(안전) → "SQL 먼저, 화면 나중".
+- (D64 화면) 드라이브 카드의 [내려받기]는 `<a target=_blank>`(같은 `.res-download` 모양) → `#resourceGrid` 클릭 처리는
+  `button.res-download`만 잡아야 한다(아니면 링크를 눌러도 Edge Function을 부름). 링크 해석은 `new window.URL`(lint 전역에
+  `URL` 없음). 관리자 테스트: 저장·업로드마다 목록을 다시 그리므로 다음 클릭 전에 "옛 행 표시 → 사라질 때까지 대기"
+  (`markRows`/`redrawn`) — 안 그러면 곧 바뀔 옛 행을 눌러 두 번 누르기 상태가 사라진다. 구글 요청은 `context.route`로 막는다
+  (새 탭은 `page.route`에 안 걸림).
 - 옛 화면은 목록에 모르는 칸이 와도 **무시**한다(`resourceSlots`를 돌며 `rows.find`) → 칸 추가는 "SQL 먼저, 화면 나중"이 안전.
   `tests/fixtures/teacher-resources-4a9b23d.js`(D63 전 운영 화면, 수정 금지)로 확인. 운영 SQL Editor용 반영본은 DO 블록 하나로
   migration.sql에서 잘라 만든다(로컬 `docs/worker-briefs/2026-11-02-d63-sql-check.mjs` — 전체 카탈로그 비교).

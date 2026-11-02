@@ -24,7 +24,12 @@
    after 15 seconds (fixed on the server) with the original name already in
    it as `download=`. This page follows it in THIS tab: the Storage API
    answers with Content-Disposition: attachment, so the browser saves the file
-   and the page stays (no new tab, no navigation, no CORS needed). */
+   and the page stays (no new tab, no navigation, no CORS needed).
+
+   D64 (2026-11-02): a slot may hold a Google Drive file instead (the admin's
+   file shared "anyone with the link"; only its ID is stored, drive_id). Its
+   card's 내려받기 is a plain link to Google's download address in a new tab —
+   no Storage traffic, no Edge Function, no daily limit. */
 
 const RES_BUCKET = "teacher-resources";
 const RES_MAX_BYTES = 10 * 1024 * 1024; // = the bucket's file_size_limit
@@ -54,6 +59,14 @@ const RES_MSG = {
 // The function's refusals → what the teacher reads (anything else: failed).
 const RES_STATUS_MSG = { 401: "needLogin", 404: "notReady", 429: "limit" };
 
+// D64: a Google Drive file ID (= the SQL check teacher_resources_drive_ok).
+const DRIVE_ID_RE = /^[A-Za-z0-9_-]{25,64}$/;
+const DRIVE_MSG = {
+  help: "구글 드라이브 → 공유 → '링크가 있는 모든 사용자' → 링크 복사 후 붙여 넣기",
+  docs: "PDF나 엑셀 파일로 드라이브에 올린 뒤 그 파일 링크를 넣어 주세요",
+  bad: "구글 드라이브 파일 링크만 넣을 수 있어요.",
+};
+
 const teacherResBtn = document.querySelector("#teacherResBtn");
 const resourceBackBtn = document.querySelector("#resourceBackBtn");
 const resourceGrid = document.querySelector("#resourceGrid");
@@ -73,6 +86,47 @@ function resourceExt(name) {
   return match ? match[1].toLowerCase() : "";
 }
 
+// A row's Drive file ID — only when the slot holds no uploaded file.
+function resourceDriveId(row) {
+  const id = row && !row.file_name ? row.drive_id : "";
+  return typeof id === "string" && DRIVE_ID_RE.test(id) ? id : "";
+}
+
+// Google's direct download (teachers) and the file's page (admin check).
+function driveDownloadUrl(id) {
+  return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(id)}`;
+}
+
+function driveViewUrl(id) {
+  return `https://drive.google.com/file/d/${encodeURIComponent(id)}/view`;
+}
+
+// A pasted share link → { id } or { error: "docs" | "bad" }. Accepted, on
+// drive.google.com only: /file/d/<ID>/… (also /file/u/<n>/d/<ID>/…),
+// /open?id=<ID>, /uc?…id=<ID>. A Google Docs / Sheets / Slides page is not a
+// file to download — those get their own message.
+function driveIdFromLink(text) {
+  let raw = String(text || "").trim();
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) raw = `https://${raw}`;
+  let url;
+  try {
+    url = new window.URL(raw);
+  } catch {
+    return { error: "bad" };
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return { error: "bad" };
+  }
+  if (url.hostname === "docs.google.com") return { error: "docs" };
+  if (url.hostname !== "drive.google.com") return { error: "bad" };
+  const file = url.pathname.match(/^\/file\/(?:u\/\d+\/)?d\/([^/]+)/);
+  let id = file ? file[1] : "";
+  if (!file && (url.pathname === "/open" || url.pathname === "/uc")) {
+    id = url.searchParams.get("id") || "";
+  }
+  return DRIVE_ID_RE.test(id) ? { id } : { error: "bad" };
+}
+
 // "pdf" | "excel" | "file" — what the card's icon and meta line say.
 function resourceKind(name) {
   const ext = resourceExt(name);
@@ -87,11 +141,12 @@ function resourceKind(name) {
    fixed label (RES_SLOTS — the admin section shows the same one). */
 
 const RES_KIND_TEXT = { pdf: "PDF", excel: "엑셀" }; // the meta line
-const RES_ICON_TEXT = { pdf: "PDF", excel: "XLS" }; // inside the icon
+const RES_ICON_TEXT = { pdf: "PDF", excel: "XLS", drive: "LINK" }; // in the icon
 const RES_EMPTY_TEXT = "아직 올라온 자료가 없어요";
 const RES_SVG_NS = "http://www.w3.org/2000/svg";
-// A page with a folded corner, then what is on it: text lines (PDF) or a
-// table grid (Excel); nothing on an empty slot's page.
+// A page with a folded corner, then what is on it: text lines (PDF), a
+// table grid (Excel) or an arrow out (a Google Drive link, D64); nothing on
+// an empty slot's page.
 const RES_ICON_PATHS = {
   page: [
     "M7 3h8l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z",
@@ -99,6 +154,7 @@ const RES_ICON_PATHS = {
   ],
   pdf: ["M8.5 12.5h7", "M8.5 15.5h7", "M8.5 18.5h4"],
   excel: ["M8.5 11.5h7v7h-7Z", "M8.5 15h7", "M12 11.5v7"],
+  drive: ["M9 18.5 15.5 12", "M11 12h4.5v4.5"],
 };
 
 let resLoad = 0; // bumped per open: a late list for another level is dropped
@@ -164,6 +220,23 @@ function resourceTitle(label) {
   return title;
 }
 
+// The 내려받기 icon + text (a button for a file, a link for a Drive file).
+function downloadLabel() {
+  const icon = document.createElementNS(RES_SVG_NS, "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("aria-hidden", "true");
+  icon.setAttribute("focusable", "false");
+  icon.classList.add("res-download-icon");
+  ["M12 4v11", "m7 10 5 5 5-5", "M5 20h14"].forEach((d) => {
+    const path = document.createElementNS(RES_SVG_NS, "path");
+    path.setAttribute("d", d);
+    icon.append(path);
+  });
+  const label = document.createElement("span");
+  label.textContent = "내려받기";
+  return [icon, label];
+}
+
 // rows = the teacher_resources_list answer, or null while it loads.
 function renderResourceButtons(level, rows) {
   if (!resourceGrid) return;
@@ -171,11 +244,12 @@ function renderResourceButtons(level, rows) {
     ...resourceSlots(level).map((item) => {
       const row = rows && rows.find((r) => r.slot === item.slot);
       const file = row && row.file_name;
-      const kind = file ? resourceKind(file) : "none";
+      const drive = resourceDriveId(row);
+      const kind = file ? resourceKind(file) : drive ? "drive" : "none";
       const card = document.createElement("div");
       card.className = "res-card";
       card.dataset.slot = item.slot;
-      card.dataset.state = file ? "ready" : rows ? "empty" : "loading";
+      card.dataset.state = file || drive ? "ready" : rows ? "empty" : "loading";
 
       const text = document.createElement("div");
       text.className = "res-text";
@@ -190,6 +264,11 @@ function renderResourceButtons(level, rows) {
         ]
           .filter(Boolean)
           .join(" · ");
+      } else if (drive) {
+        const day = formatResDay(row.updated_at);
+        meta.textContent = ["구글 드라이브", day && `${day} 업데이트`]
+          .filter(Boolean)
+          .join(" · ");
       } else if (rows) {
         meta.textContent = "준비 중";
       }
@@ -202,20 +281,18 @@ function renderResourceButtons(level, rows) {
         button.className = "res-download";
         button.dataset.slot = item.slot;
         button.setAttribute("aria-label", `${item.label} 내려받기`);
-        const icon = document.createElementNS(RES_SVG_NS, "svg");
-        icon.setAttribute("viewBox", "0 0 24 24");
-        icon.setAttribute("aria-hidden", "true");
-        icon.setAttribute("focusable", "false");
-        icon.classList.add("res-download-icon");
-        ["M12 4v11", "m7 10 5 5 5-5", "M5 20h14"].forEach((d) => {
-          const path = document.createElementNS(RES_SVG_NS, "path");
-          path.setAttribute("d", d);
-          icon.append(path);
-        });
-        const label = document.createElement("span");
-        label.textContent = "내려받기";
-        button.append(icon, label);
+        button.append(...downloadLabel());
         card.append(button);
+      } else if (drive) {
+        // Straight from Google, in a new tab (D64) — this page stays.
+        const link = document.createElement("a");
+        link.className = "res-download";
+        link.href = driveDownloadUrl(drive);
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.setAttribute("aria-label", `${item.label} 내려받기 (새 탭)`);
+        link.append(...downloadLabel());
+        card.append(link);
       } else if (rows) {
         const empty = document.createElement("p");
         empty.className = "res-empty";
@@ -309,7 +386,8 @@ if (resourceBackBtn) {
 }
 if (resourceGrid) {
   resourceGrid.addEventListener("click", (event) => {
-    const button = event.target.closest(".res-download");
+    // a Drive slot's link (an <a>) just opens Google — only buttons ask
+    const button = event.target.closest("button.res-download");
     if (!button || button.disabled) return;
     downloadResource(state.level, button.dataset.slot, button);
   });
@@ -337,8 +415,39 @@ function formatResDate(iso) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+// Two presses, no dialog: the first arms the button for a few seconds (its
+// text says what the second press does), the second one runs `action`.
+function armTwice(button, armedText, action) {
+  const idle = button.textContent;
+  let disarm = 0;
+  button.addEventListener("click", () => {
+    if (button.dataset.armed) {
+      window.clearTimeout(disarm);
+      delete button.dataset.armed;
+      button.textContent = idle;
+      action();
+      return;
+    }
+    button.dataset.armed = "1";
+    button.textContent = armedText;
+    disarm = window.setTimeout(() => {
+      delete button.dataset.armed;
+      button.textContent = idle;
+    }, 4000);
+  });
+}
+
+function adminButton(className, text) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.textContent = text;
+  return button;
+}
+
 function buildResAdminRow(level, item, row) {
   const file = row && row.file_name;
+  const drive = resourceDriveId(row);
   const el = document.createElement("div");
   el.className = "res-admin-row";
   el.dataset.level = level;
@@ -350,12 +459,28 @@ function buildResAdminRow(level, item, row) {
 
   const info = document.createElement("span");
   info.className = "res-admin-file";
-  info.textContent = file
-    ? `${file} · ${formatResSize(row.file_size)} · ${formatResDate(row.updated_at)}`
-    : "파일 없음";
+  if (file) {
+    info.textContent = `${file} · ${formatResSize(row.file_size)} · ${formatResDate(row.updated_at)}`;
+  } else if (drive) {
+    info.textContent = ["구글 드라이브", formatResDate(row.updated_at)]
+      .filter(Boolean)
+      .join(" · ");
+  } else {
+    info.textContent = "파일 없음";
+  }
 
   const actions = document.createElement("span");
   actions.className = "res-admin-actions";
+  if (drive) {
+    // Check the linked file the way a teacher reaches it: Google, new tab.
+    const open = document.createElement("a");
+    open.className = "res-admin-open";
+    open.href = driveViewUrl(drive);
+    open.target = "_blank";
+    open.rel = "noopener noreferrer";
+    open.textContent = "링크 열기";
+    actions.append(open);
+  }
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ".pdf,.xlsx,.xls";
@@ -365,37 +490,150 @@ function buildResAdminRow(level, item, row) {
     input.value = "";
     if (picked) uploadResource(level, item.slot, picked);
   });
-  const upload = document.createElement("button");
-  upload.type = "button";
-  upload.className = "res-admin-upload";
-  upload.textContent = file ? "교체" : "업로드";
-  upload.addEventListener("click", () => input.click());
-  actions.append(upload);
-  if (file) {
-    // Two clicks, no dialog: the first arms the button for a few seconds.
-    const remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "res-admin-delete";
-    remove.textContent = "삭제";
-    let disarm = 0;
-    remove.addEventListener("click", () => {
-      if (remove.dataset.armed) {
-        window.clearTimeout(disarm);
-        clearResource(level, item.slot);
-        return;
-      }
-      remove.dataset.armed = "1";
-      remove.textContent = "한 번 더 누르면 삭제";
-      disarm = window.setTimeout(() => {
-        delete remove.dataset.armed;
-        remove.textContent = "삭제";
-      }, 4000);
-    });
+  const upload = adminButton("res-admin-upload", file ? "교체" : "업로드");
+  // A file over a Drive link switches the slot's kind (the link goes): ask
+  // twice. The second press is still a click, so the file picker opens.
+  if (drive)
+    armTwice(upload, "한 번 더 누르면 파일로 바꾸기", () => input.click());
+  else upload.addEventListener("click", () => input.click());
+  const link = adminButton("res-admin-drive", "드라이브 링크");
+  link.setAttribute("aria-expanded", "false");
+  link.addEventListener("click", () =>
+    toggleDriveEditor(el, level, item.slot, Boolean(file), link),
+  );
+  actions.append(upload, link);
+  if (file || drive) {
+    const remove = adminButton("res-admin-delete", "삭제");
+    armTwice(remove, "한 번 더 누르면 삭제", () =>
+      clearResource(level, item.slot, Boolean(drive)),
+    );
     actions.append(remove);
   }
   actions.append(input);
   el.append(label, info, actions);
   return el;
+}
+
+/* D64: the Drive link box, inside its row — one open at a time. Saving
+   reloads the list, which also closes it. */
+let resDriveEditor = null; // { form, opener }
+
+function closeDriveEditor() {
+  if (!resDriveEditor) return;
+  resDriveEditor.form.remove();
+  resDriveEditor.opener.setAttribute("aria-expanded", "false");
+  resDriveEditor = null;
+}
+
+function toggleDriveEditor(rowEl, level, slot, hasFile, opener) {
+  const same = resDriveEditor && resDriveEditor.opener === opener;
+  closeDriveEditor();
+  if (same) return;
+
+  const form = document.createElement("form");
+  form.className = "res-drive-editor";
+  form.noValidate = true;
+  const line = document.createElement("div");
+  line.className = "res-drive-line";
+  const input = document.createElement("input");
+  input.type = "url";
+  input.className = "res-drive-input";
+  input.placeholder = "https://drive.google.com/file/d/…";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.setAttribute("aria-label", "구글 드라이브 파일 링크");
+  const save = document.createElement("button");
+  save.type = "submit";
+  save.className = "res-drive-save";
+  save.textContent = "저장";
+  const cancel = adminButton("res-drive-cancel", "취소");
+  line.append(input, save, cancel);
+  const help = document.createElement("p");
+  help.className = "res-drive-help";
+  help.textContent = DRIVE_MSG.help;
+  const message = document.createElement("p");
+  message.className = "res-drive-msg";
+  message.setAttribute("aria-live", "polite");
+  form.append(line, help, message);
+
+  let disarm = 0;
+  const disarmSave = () => {
+    window.clearTimeout(disarm);
+    delete save.dataset.armed;
+    save.textContent = "저장";
+  };
+  const close = () => {
+    closeDriveEditor();
+    opener.focus();
+  };
+  input.addEventListener("input", () => {
+    message.textContent = "";
+    disarmSave();
+  });
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const parsed = driveIdFromLink(input.value);
+    if (!parsed.id) {
+      disarmSave();
+      message.textContent = DRIVE_MSG[parsed.error];
+      input.focus();
+      return;
+    }
+    message.textContent = "";
+    // A link over an uploaded file switches the slot's kind (the file is
+    // deleted): the first 저장 only says so.
+    if (hasFile && !save.dataset.armed) {
+      save.dataset.armed = "1";
+      save.textContent = "한 번 더 누르면 링크로 바꾸기";
+      disarm = window.setTimeout(disarmSave, 4000);
+      return;
+    }
+    disarmSave();
+    saveDriveLink(level, slot, parsed.id);
+  });
+  cancel.addEventListener("click", close);
+  form.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") close();
+  });
+  rowEl.append(form);
+  opener.setAttribute("aria-expanded", "true");
+  resDriveEditor = { form, opener };
+  input.focus();
+}
+
+async function saveDriveLink(level, slot, id) {
+  if (!sb || !isAdmin || resAdminBusy) return;
+  resAdminBusy = true;
+  setTeacherResStatus("저장 중…");
+  try {
+    const { data: old, error } = await sb.rpc("teacher_resource_set_drive", {
+      p_level: level,
+      p_slot: slot,
+      p_drive_id: id,
+    });
+    if (error) {
+      setTeacherResStatus("저장하지 못했어요.");
+      return;
+    }
+    // The row is on the link now; only then the file it replaced goes.
+    if (old) {
+      const { error: rmError } = await sb.storage
+        .from(RES_BUCKET)
+        .remove([old]);
+      if (rmError) {
+        setTeacherResStatus(
+          "링크를 저장했어요. (이전 파일은 저장소에서 지우지 못했지만, 선생님은 링크로만 받아요.)",
+        );
+        return;
+      }
+    }
+    setTeacherResStatus("링크를 저장했어요.");
+  } catch {
+    setTeacherResStatus("저장하지 못했어요.");
+  } finally {
+    resAdminBusy = false;
+    loadResourceAdmin();
+  }
 }
 
 async function loadResourceAdmin() {
@@ -408,6 +646,7 @@ async function loadResourceAdmin() {
   if (answers.some((answer) => answer.error)) {
     setTeacherResStatus(RES_MSG.listFailed);
   }
+  resDriveEditor = null; // its row is redrawn below
   teacherResAdminList.replaceChildren(
     ...LEVELS.map(({ key, label }, i) => {
       const rows = Array.isArray(answers[i].data) ? answers[i].data : [];
@@ -500,7 +739,9 @@ async function uploadResource(level, slot, file) {
   }
 }
 
-async function clearResource(level, slot) {
+// wasDrive: the slot held a Google Drive link — only the link goes; the file
+// and its sharing stay in Google Drive, so the message says so.
+async function clearResource(level, slot, wasDrive = false) {
   if (!sb || !isAdmin || resAdminBusy) return;
   resAdminBusy = true;
   setTeacherResStatus("삭제 중…");
@@ -524,7 +765,11 @@ async function clearResource(level, slot) {
         return;
       }
     }
-    setTeacherResStatus("삭제했어요.");
+    setTeacherResStatus(
+      wasDrive
+        ? "링크를 지웠어요. (구글 드라이브의 파일과 공유는 그대로예요.)"
+        : "삭제했어요.",
+    );
   } catch {
     setTeacherResStatus("삭제하지 못했어요.");
   } finally {
