@@ -187,6 +187,38 @@ export default [
       "no-undef": "error",
     },
   },
+  // lms-bulk.js: classic script after lms-admin.js (same shared scope) — the
+  // 일괄 등록 view (3.4); uses lms-admin.js helpers and the lazily loaded
+  // SheetJS (window.XLSX, vendor/).
+  {
+    files: ["lms-bulk.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "script",
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        sb: "readonly",
+        adminRole: "readonly",
+        adminViewOpeners: "readonly",
+        lmsAdmin: "readonly",
+        loadLmsData: "readonly",
+        lmsRpc: "readonly",
+        makeTable: "readonly",
+        makeCell: "readonly",
+        primaryCell: "readonly",
+        setText: "readonly",
+        fillSelect: "readonly",
+        className: "readonly",
+        ROLE_LABELS: "readonly",
+        LMS_MSG: "readonly",
+      },
+    },
+    rules: {
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "no-undef": "error",
+    },
+  },
   {
     files: ["app.js", "scripts/**/*.mjs", "tests/**/*.js"],
     languageOptions: {

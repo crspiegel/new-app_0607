@@ -98,16 +98,35 @@ const deny = (route) =>
     status: 403,
     json: { code: "42501", message: "not allowed" },
   });
+// lms_norm_id and the D44 ID rule, as in the SQL
+const normId = (v) =>
+  String(v ?? "")
+    .normalize("NFC")
+    .trim()
+    .toLowerCase();
+const ID_RE = /^[0-9a-z가-힣._-]{2,20}$/;
+// jsonb_strip_nulls
+const strip = (o) =>
+  Object.fromEntries(
+    Object.entries(o).filter(([, v]) => v !== null && v !== undefined),
+  );
 
 // The page's Supabase calls, answered from `data`. `role` = who is signed in
 // on load: "admin" (JWT session), "branch" | "teacher" | "student" (LMS
-// token), or null. `classMembers` = extra memberships on top of the seed.
-// Returns the recorded calls.
+// token), or null. `classMembers` / `classes` = extra memberships / classes
+// on top of the seed. Returns the recorded calls and the live data.
 export async function stubLms(
   page,
-  { role = null, login = [], adminLogin = false, classMembers = [] },
+  {
+    role = null,
+    login = [],
+    adminLogin = false,
+    classMembers = [],
+    classes = [],
+  },
 ) {
   const data = seedData();
+  data.classes.push(...classes);
   data.classMembers.push(...classMembers);
   const sent = { rpc: [], login: [], logout: [], auth: 0 };
   let adminSignedIn = role === "admin";
@@ -344,6 +363,175 @@ export async function stubLms(
       if (a.p_name != null) b.name = a.p_name;
       if (a.p_active != null) b.active = a.p_active;
       return { status: "ok" };
+    },
+    // 3.4 bulk (§4.5): the same answers as the SQL, all or nothing.
+    lms_check_login_ids: (c, a) => {
+      if (!c.admin && ![1, 2].includes(c.role)) return "deny";
+      if (c.role === 2 && a.p_role !== 3) return "deny";
+      const branchId = c.admin ? a.p_branch_id : c.branch_id;
+      return (a.p_ids || []).map((input) => {
+        const id = normId(input);
+        if (!ID_RE.test(id)) {
+          return { input, login_id: id, status: "invalid", suggestion: null };
+        }
+        if (taken(id, branchId)) {
+          return {
+            input,
+            login_id: id,
+            status: "duplicate",
+            suggestion: suggest(id, branchId),
+          };
+        }
+        return { input, login_id: id, status: "ok", suggestion: null };
+      });
+    },
+    lms_bulk_create_members: (c, a) => {
+      if (!c.admin && ![1, 2].includes(c.role)) return "deny";
+      const rows = Array.isArray(a.p_rows) ? a.p_rows : null;
+      if (!rows || !rows.length) return { status: "invalid", field: "rows" };
+      if (rows.length > 500) return { status: "too_many", limit: 500 };
+      const made = [];
+      const takenNow = (id, b) =>
+        taken(id, b) ||
+        made.some((x) => x.login_id === id && x.branch_id === b);
+      const out = rows.map((r, i) => {
+        const role = Number(r.role);
+        const branchId = c.admin ? r.branch_id : c.branch_id;
+        let loginId = normId(r.login_id);
+        let reason = null;
+        let suggestion;
+        let classId = null;
+        if (![2, 3].includes(role) || (c.role === 2 && role !== 3)) {
+          reason = "role";
+        } else if (!data.branches.some((b) => b.id === branchId)) {
+          reason = "branch";
+        } else if (r.class) {
+          const k = data.classes.find(
+            (x) => x.branch_id === branchId && x.name === r.class,
+          );
+          if (role !== 3) reason = "not_student";
+          else if (!k) reason = "class";
+          else if (!managedClassIds(c).includes(k.id)) {
+            reason = "class_not_allowed";
+          } else classId = k.id;
+        }
+        if (!reason && !ID_RE.test(loginId)) reason = "login_id";
+        if (!reason && !/^[!-~]{4,10}$/.test(r.password || "")) {
+          reason = "password";
+        }
+        if (!reason && takenNow(loginId, branchId)) {
+          let n = 2;
+          while (takenNow(`${loginId}${n}`, branchId)) n += 1;
+          if (a.p_auto_suffix) loginId = `${loginId}${n}`;
+          else {
+            reason = "duplicate";
+            suggestion = `${loginId}${n}`;
+          }
+        }
+        if (!reason) {
+          made.push({ login_id: loginId, branch_id: branchId, role, classId });
+        }
+        return strip({
+          row: i + 1,
+          login_id: loginId,
+          role,
+          class: r.class || null,
+          result: reason ? "error" : "ok",
+          reason,
+          suggestion,
+        });
+      });
+      const errors = out.filter((o) => o.result === "error").length;
+      if (errors) return { status: "error", created: 0, errors, rows: out };
+      made.forEach((x, i) => {
+        seq += 1;
+        const memberId = `m-new${seq}`;
+        data.members.push({
+          member_id: memberId,
+          login_id: x.login_id,
+          role: x.role,
+          branch_id: x.branch_id,
+          display_name: rows[i].display_name || null,
+          active: true,
+          locked_until: null,
+        });
+        if (x.classId) {
+          data.classMembers.push({ class_id: x.classId, member_id: memberId });
+        }
+      });
+      return { status: "ok", created: made.length, rows: out };
+    },
+    // D56: a teacher's row is a move (out of its other classes); a student
+    // in anyone else's class → in_other_class; twice for two classes →
+    // duplicate_row. Branch accounts and the admin only add.
+    lms_bulk_assign: (c, a) => {
+      if (!c.admin && ![1, 2].includes(c.role)) return "deny";
+      const branchId = c.admin ? a.p_branch_id : c.branch_id;
+      if (!data.branches.some((b) => b.id === branchId)) {
+        return { status: "invalid", field: "branch" };
+      }
+      const rows = Array.isArray(a.p_rows) ? a.p_rows : null;
+      if (!rows || !rows.length) return { status: "invalid", field: "rows" };
+      if (rows.length > 500) return { status: "too_many", limit: 500 };
+      const own = managedClassIds(c);
+      let work = data.classMembers.map((x) => ({ ...x }));
+      const placed = {};
+      const out = rows.map((r, i) => {
+        const id = normId(r.login_id);
+        const k = data.classes.find(
+          (x) => x.branch_id === branchId && x.name === r.class,
+        );
+        const m = data.members.find(
+          (x) => x.branch_id === branchId && x.login_id === id,
+        );
+        let reason = null;
+        if (!k) reason = "class";
+        else if (!own.includes(k.id)) reason = "class_not_allowed";
+        else if (!m) reason = "member";
+        else if (m.role !== 3) reason = "not_student";
+        else if (
+          c.role === 2 &&
+          placed[m.member_id] &&
+          placed[m.member_id] !== k.id
+        ) {
+          reason = "duplicate_row";
+        } else if (
+          c.role === 2 &&
+          work.some(
+            (x) =>
+              x.member_id === m.member_id &&
+              x.class_id !== k.id &&
+              !own.includes(x.class_id),
+          )
+        ) {
+          reason = "in_other_class";
+        } else {
+          if (
+            !work.some(
+              (x) => x.member_id === m.member_id && x.class_id === k.id,
+            )
+          ) {
+            work.push({ class_id: k.id, member_id: m.member_id });
+          }
+          if (c.role === 2) {
+            work = work.filter(
+              (x) => x.member_id !== m.member_id || x.class_id === k.id,
+            );
+            placed[m.member_id] = k.id;
+          }
+        }
+        return strip({
+          row: i + 1,
+          class: r.class,
+          login_id: id,
+          result: reason ? "error" : "ok",
+          reason,
+        });
+      });
+      const errors = out.filter((o) => o.result === "error").length;
+      if (errors) return { status: "error", assigned: 0, errors, rows: out };
+      data.classMembers = work;
+      return { status: "ok", assigned: rows.length, rows: out };
     },
   };
 

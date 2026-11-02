@@ -348,6 +348,29 @@ use_column` + 별칭으로 전부 한정.
   `npx playwright test <파일> -g …`. 학생이 `#admin`으로 오면 홈은 처음부터 켜져 있고 `#admin`은 조금 뒤 지워진다 → 주소 확인은
   `expect.poll`로 기다린다.
 
+### 엑셀 일괄 등록 (Phase 3.4 / 3B-3, 2026-11-02)
+
+- **라이브러리(D48):** SheetJS Community Edition **0.20.3**, `vendor/xlsx-0.20.3.full.min.js`(951,904 bytes) — SHA-256
+  `cc015130aa8521e7f088f88898eba949ccdcbfb38df0bd129b44b7273c3a6f41`, 라이선스 Apache-2.0(`vendor/xlsx-0.20.3.LICENSE`, SHA-256
+  `4d2a38ac35cda06a555c84074a819d413339cd3691b822cae50f8f322fe01f64`). 받은 곳 `https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/`
+  (2026-11-02 기준 최신). npm `xlsx`(0.18.5)는 **금지**(CVE-2023-30533 프로토타입 오염, 0.20.1 이하 ReDoS). 실행 중 CDN 요청 0 —
+  `lms-bulk.js`가 일괄 등록 화면을 열 때만 `<script>`를 붙인다(다른 화면 요청 0, `tests/lms-bulk.spec.js`). 바꿀 때는 파일 이름의
+  버전·`BULK_SHEETJS_SRC`·`tests/xlsx-fixtures.mjs`·이 줄을 함께.
+- 이 파일은 Node `require`로는 아무것도 내보내지 않는다(브라우저 전역 `var XLSX`) → 테스트는 `vm.runInContext`로 읽어
+  `sandbox.XLSX`를 쓴다(`tests/xlsx-fixtures.mjs`). npm `xlsx`를 테스트용으로 따로 넣지 않는다.
+- 템플릿의 아이디·비밀번호 칸 = 텍스트 서식(셀 `z: "@"`, 빈 문자열 셀을 행 한도만큼 미리 만듦) → Excel에서 0123이 그대로. 읽을 때
+  텍스트 셀이 아닌 아이디·비밀번호(`t !== "s"`)는 그 행 오류("셀 서식을 '텍스트'로…") — 0123 → 123은 되돌릴 수 없어서.
+  템플릿 3행 예시(`kim01`/`0123`/`김민준(예시)`)는 그대로 두면 건너뛴다.
+- 행 한도는 `lms-bulk.js` 맨 위 상수: 회원 `BULK_MAX_ROWS` 100(행마다 bcrypt, M3) · 반 배정 `BULK_ASSIGN_MAX_ROWS` 500(서버 한도).
+  넘으면 나눠 보내지 않고 막는다(부분 성공 금지). 스크립트 최상위 `const`는 `window` 속성이 아니다 → 테스트는
+  `page.evaluate(() => BULK_MAX_ROWS)`.
+- ⚠ `.admin-signup-toggle`(`display:flex`)도 `hidden`을 덮는다(`.admin-select`와 같은 함정) → "중복이면 자동" 줄이 중복 0건에도
+  보였다. `.bulk-box .admin-signup-toggle[hidden]{display:none}`.
+- ⚠ `tests/lms-admin.spec.js` "no page code calls the old member RPCs"는 `index.html`의 **주석까지** `create_member`를 찾는다 →
+  `lms_bulk_create_members`라는 글자도 걸린다. HTML 주석에는 `lms_bulk_*`처럼 쓴다.
+- 스크린샷 도구에서 펼치기 버튼을 누르면 페이지가 스크롤돼 전체 페이지 사진 중간에 고정 상단 바가 찍힌다 → 찍기 전
+  `window.scrollTo(0, 0)`(로컬 `docs/worker-briefs/2026-11-02-3b3-excel-screenshots.mjs`).
+
 ### LMS 로그인 클라이언트 (Phase 3A / 3.2, 2026-10-24)
 
 - **Supabase 클라이언트는 하나.** `createClient(…, {global:{fetch: lmsFetch}})` — `lmsFetch`가 현재 `lmsToken`을

@@ -50,7 +50,13 @@ try {
   await waitForServer(url);
 
   exitCode = await new Promise((resolve) => {
-    const tests = spawnNode(["./node_modules/@playwright/test/cli.js", "test"]);
+    // Extra arguments go straight to Playwright (one file, -g, --workers=1 …);
+    // none = the whole suite, as before.
+    const tests = spawnNode([
+      "./node_modules/@playwright/test/cli.js",
+      "test",
+      ...process.argv.slice(2),
+    ]);
     tests.on("exit", (code) => resolve(code ?? 1));
   });
 } finally {

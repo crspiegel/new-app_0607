@@ -848,6 +848,19 @@
               <button
                 type="button"
                 class="admin-menu-btn"
+                data-admin-view="bulk"
+              >
+                <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"
+                  ></path>
+                  <path d="M14 3v6h6M12 18v-6M9 15l3-3 3 3"></path>
+                </svg>
+                <span>일괄 등록</span>
+              </button>
+              <button
+                type="button"
+                class="admin-menu-btn"
                 data-admin-view="banner"
               >
                 <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -1119,6 +1132,134 @@
                   </form>
                 </div>
                 <div class="admin-member-list" id="lmsBranchList"></div>
+              </div>
+
+              <!-- Bulk upload view (3.4, lms-bulk.js): two boxes — ① 회원 일괄
+                   등록, ② 반 배정 (the two lms_bulk_* RPCs).
+                   Each: template · file (pick or drop) · preview · one run ·
+                   result. The spreadsheet library (vendor/) loads only when
+                   this view opens. Passwords are never shown (●●●●). -->
+              <div class="admin-view lms-admin" id="adminViewBulk" hidden>
+                <p
+                  class="admin-status adm-notice"
+                  id="bulkStatus"
+                  aria-live="polite"
+                ></p>
+
+                <section class="adm-box bulk-box" id="bulkMembersBox">
+                  <h2 class="admin-subtitle">① 회원 일괄 등록</h2>
+                  <p class="admin-hint" id="bulkMembersHint"></p>
+                  <div class="bulk-tools">
+                    <button
+                      type="button"
+                      class="adm-btn adm-btn-secondary"
+                      id="bulkMembersTemplate"
+                    >
+                      템플릿 내려받기
+                    </button>
+                  </div>
+                  <label class="bulk-drop" id="bulkMembersDrop">
+                    <input
+                      type="file"
+                      id="bulkMembersFile"
+                      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    />
+                    <span class="bulk-drop-text"
+                      >엑셀 파일(.xlsx)을 여기에 끌어 놓거나, 눌러서
+                      고르세요</span
+                    >
+                    <span
+                      class="bulk-drop-file"
+                      id="bulkMembersFileName"
+                    ></span>
+                  </label>
+                  <p
+                    class="admin-status"
+                    id="bulkMembersMsg"
+                    aria-live="polite"
+                  ></p>
+                  <p class="bulk-summary" id="bulkMembersSummary" hidden></p>
+                  <label class="admin-signup-toggle" id="bulkAutoRow" hidden>
+                    <input type="checkbox" id="bulkAutoSuffix" />
+                    <span>중복이면 제안 아이디로 자동으로 바꿔 만들기</span>
+                  </label>
+                  <div
+                    class="admin-member-list bulk-table"
+                    id="bulkMembersPreview"
+                    hidden
+                  ></div>
+                  <div class="adm-form-actions">
+                    <button
+                      type="button"
+                      class="adm-btn adm-btn-primary"
+                      id="bulkMembersRun"
+                      disabled
+                    >
+                      등록 실행
+                    </button>
+                  </div>
+                  <div
+                    class="admin-member-list bulk-table"
+                    id="bulkMembersResult"
+                    hidden
+                  ></div>
+                </section>
+
+                <section class="adm-box bulk-box" id="bulkAssignBox">
+                  <h2 class="admin-subtitle">② 반 배정</h2>
+                  <p class="admin-hint" id="bulkAssignHint"></p>
+                  <div class="bulk-tools">
+                    <label class="admin-select" id="bulkAssignBranchRow" hidden>
+                      <span>지사</span>
+                      <select id="bulkAssignBranch"></select>
+                    </label>
+                    <button
+                      type="button"
+                      class="adm-btn adm-btn-secondary"
+                      id="bulkAssignTemplate"
+                    >
+                      템플릿 내려받기
+                    </button>
+                  </div>
+                  <label class="bulk-drop" id="bulkAssignDrop">
+                    <input
+                      type="file"
+                      id="bulkAssignFile"
+                      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    />
+                    <span class="bulk-drop-text"
+                      >엑셀 파일(.xlsx)을 여기에 끌어 놓거나, 눌러서
+                      고르세요</span
+                    >
+                    <span class="bulk-drop-file" id="bulkAssignFileName"></span>
+                  </label>
+                  <p
+                    class="admin-status"
+                    id="bulkAssignMsg"
+                    aria-live="polite"
+                  ></p>
+                  <p class="bulk-summary" id="bulkAssignSummary" hidden></p>
+                  <div
+                    class="admin-member-list bulk-table"
+                    id="bulkAssignPreview"
+                    hidden
+                  ></div>
+                  <div class="adm-form-actions">
+                    <button
+                      type="button"
+                      class="adm-btn adm-btn-primary"
+                      id="bulkAssignRun"
+                      disabled
+                    >
+                      배정 실행
+                    </button>
+                  </div>
+                  <div
+                    class="admin-member-list bulk-table"
+                    id="bulkAssignResult"
+                    hidden
+                  ></div>
+                </section>
               </div>
 
               <!-- Banner view, a settings screen of two boxes: ① the teacher
@@ -1988,5 +2129,6 @@
     <script src="hero-banner.js"></script>
     <script src="teacher-resources.js"></script>
     <script src="lms-admin.js"></script>
+    <script src="lms-bulk.js"></script>
   </body>
 </html>

@@ -21,10 +21,10 @@ Live = **`8176966`** (`2026-10-31`); local master ahead, unpushed. Older: archiv
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A **live**.
-  **Phase 3B SQL = local commits (`ccb7dce`, `5f27837`, `30eb137` D53, `ebac4d7`):** "LMS (Phase 3B)" block — pk `member_id`, old
-  admin RPCs dropped, scoped RPCs (D41–D53); `00-precheck-3b.sql`, `verify-3b.sql`. **3.3 screens** (3B-2b admin frame:
-  top bar, left menu, list tables; `lms-admin.js`) = design approved `2026-11-02`, **local commit**. Not live (D49: one
-  push after 3B-3 Excel). Excel = 3.4. 3.5: levels
+  **Phase 3B SQL = 5 local commits (`ccb7dce` … `bd75abc`):** "LMS (Phase 3B)"
+  block — pk `member_id`, old admin RPCs dropped, scoped RPCs (D41–D56); `00-precheck-3b.sql`, `verify-3b.sql` (347).
+  **3.3 screens** (3B-2b admin frame; `lms-admin.js`) and **3.4 Excel** (`lms-bulk.js`, SheetJS in `vendor/`) = design
+  approved, **local commits**. Not live — next = D49 (live SQL → push at once). 3.5: levels
   CHECKs into `migration.sql` (D37), `members.profile`, sequence grants. Phase 4 (R4) **cancelled** → B.
 - **A levels + B teacher resources** — design `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`.
   - A **done**: levels rename live `2026-10-31` (55 rows, all new keys); CHECKs `content_pages_level_key`,

@@ -4781,6 +4781,136 @@ body.admin-mode .app-shell {
   height: 32px;
 }
 
+/* 일괄 등록 (3.4, lms-bulk.js): two boxes of template · drop area · preview ·
+   run · result. Tables are the list tables above (they fold on phones). */
+.bulk-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.bulk-drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 88px;
+  padding: 16px;
+  border: 2px dashed var(--adm-field-line);
+  border-radius: 4px;
+  background: #f6f7f7;
+  color: var(--adm-text);
+  font-size: 14px;
+  text-align: center;
+  cursor: pointer;
+}
+.bulk-drop:hover,
+.bulk-drop.is-over {
+  border-color: var(--adm-accent);
+  background: var(--adm-accent-soft);
+}
+.bulk-drop:focus-within {
+  outline: 2px solid var(--adm-accent);
+  outline-offset: 2px;
+}
+.bulk-drop input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+.bulk-drop-file {
+  color: var(--adm-accent);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.bulk-drop-file:empty {
+  display: none;
+}
+.bulk-box .admin-status.is-error {
+  color: var(--adm-danger);
+}
+.bulk-summary {
+  margin: 0;
+  color: var(--adm-text);
+  font-weight: 700;
+  font-size: 14px;
+}
+.bulk-summary[hidden],
+.bulk-table[hidden],
+.bulk-box .admin-signup-toggle[hidden] {
+  display: none; /* their display:flex / block would beat [hidden] */
+}
+.bulk-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-top: 4px;
+  font-size: 13px;
+}
+.bulk-badge.is-new {
+  background: #e7f5ea;
+  color: #1a5e33;
+}
+.bulk-badge.is-dup {
+  background: #fcf0d9;
+  color: #6b4a00;
+}
+.bulk-badge.is-error {
+  background: #fbe8e8;
+  color: var(--adm-danger);
+}
+.bulk-badge.is-skip {
+  background: #f0f0f1;
+  color: var(--adm-muted);
+}
+.bulk-note {
+  color: var(--adm-muted);
+}
+.bulk-row[data-state="error"] .bulk-note {
+  color: var(--adm-danger);
+}
+.bulk-changed {
+  color: #6b4a00;
+  font-weight: 700;
+}
+.bulk-box .adm-form-actions {
+  justify-content: flex-start;
+}
+/* Bulk tables on a PC: 행 first and narrow, the ID column (with the row's
+   state under it) about 40 %, short fixed columns, the rest share. */
+@media (min-width: 782px) {
+  .bulk-grid {
+    table-layout: fixed;
+  }
+  .bulk-grid th[data-col="행"] {
+    width: 64px;
+  }
+  .bulk-grid th[data-col="아이디"] {
+    width: 40%;
+  }
+  .bulk-grid th[data-col="비밀번호"] {
+    width: 88px;
+  }
+  .bulk-grid th[data-col="역할"] {
+    width: 84px;
+  }
+  .bulk-grid td {
+    overflow-wrap: anywhere;
+  }
+}
+/* 등록 실행 / 배정 실행 stay off until the preview has no error. */
+.bulk-box .adm-btn:disabled {
+  border-color: var(--adm-line);
+  background: #f0f0f1;
+  color: var(--adm-muted);
+  cursor: not-allowed;
+}
+
 /* Phones and narrow tablets (< 782px): ☰ opens the left menu over the body;
    the tables fold into one block per row — the first column plus a
    fold-out button that shows the other columns as "label  value". */
@@ -4916,6 +5046,15 @@ body.admin-mode .app-shell {
   }
   .lms-class-teacher {
     max-width: 100%;
+  }
+  /* Bulk tables: 행 is first in the row for the PC table — the phone card
+     still starts with the ID block (and 행 opens first under it). */
+  .bulk-grid tr {
+    display: flex;
+    flex-direction: column;
+  }
+  .bulk-grid td.adm-col-primary {
+    order: -1;
   }
   /* The content board keeps its arrangement; on a phone it keeps a readable
      width and scrolls sideways inside its box instead of crushing the slots. */

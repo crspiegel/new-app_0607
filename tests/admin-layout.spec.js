@@ -525,7 +525,7 @@ test("admin editors: every user-visible content keeps its editor", async ({
   await stubLms(page, { role: "admin" });
   await openAdmin(page);
   const menus = page.locator("#adminSidebar .admin-menu-btn:visible");
-  await expect(menus).toHaveCount(5);
+  await expect(menus).toHaveCount(6); // + 일괄 등록 (3.4)
 
   // 콘텐츠: per level — toolbar slots, 4 weeks × 5 days, one cover per book
   for (const level of ["beginner", "level-1", "level-2", "level-3"]) {

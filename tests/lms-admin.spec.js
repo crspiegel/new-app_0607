@@ -35,11 +35,11 @@ test("lms admin: header button and menus per role", async ({ browser }) => {
     [
       "admin",
       "Admin",
-      ["content", "members", "classes", "branches", "banner"],
+      ["content", "members", "classes", "branches", "bulk", "banner"],
       "content",
     ],
-    ["branch", "My Branch", ["members", "classes"], "members"],
-    ["teacher", "My Class", ["members", "classes"], "members"],
+    ["branch", "My Branch", ["members", "classes", "bulk"], "members"],
+    ["teacher", "My Class", ["members", "classes", "bulk"], "members"],
   ];
   for (const [role, label, menus, first] of cases) {
     const context = await browser.newContext();
@@ -84,7 +84,7 @@ test("lms admin: views outside the role are refused, also after a reload", async
   // reload on #admin: same guard
   await page.reload();
   await expect(page.locator("#adminScreen")).toHaveClass(/screen-active/);
-  expect(await visibleMenus(page)).toEqual(["members", "classes"]);
+  expect(await visibleMenus(page)).toEqual(["members", "classes", "bulk"]);
   await expect(page.locator("#adminViewMembers")).toBeVisible();
   await expect(page.locator("#adminViewContent")).toBeHidden();
   // nobody signed in: #admin → the login page

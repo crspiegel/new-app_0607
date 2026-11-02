@@ -1730,11 +1730,12 @@ const levels = LEVELS.map((item) => item.key);
 // Who may open the admin screen, and which of its views (D45, Phase 3.3): the
 // top admin (Auth JWT) → everything; an LMS branch account (role 1) or
 // teacher (2) → members and classes of its own scope (every lms_* RPC checks
-// the caller again on the server). Students (3) and visitors → none.
+// the caller again on the server) and the bulk upload (3.4, lms-bulk.js).
+// Students (3) and visitors → none.
 const ADMIN_VIEWS = {
-  admin: ["content", "members", "classes", "branches", "banner"],
-  branch: ["members", "classes"],
-  teacher: ["members", "classes"],
+  admin: ["content", "members", "classes", "branches", "bulk", "banner"],
+  branch: ["members", "classes", "bulk"],
+  teacher: ["members", "classes", "bulk"],
 };
 const ADMIN_BUTTON_LABELS = {
   admin: "Admin",
@@ -2351,6 +2352,7 @@ const adminViews = {
   members: document.querySelector("#adminViewMembers"),
   classes: document.querySelector("#adminViewClasses"),
   branches: document.querySelector("#adminViewBranches"),
+  bulk: document.querySelector("#adminViewBulk"),
   banner: document.querySelector("#adminViewBanner"),
 };
 const adminViewTitles = {
@@ -2358,6 +2360,7 @@ const adminViewTitles = {
   members: "회원 관리",
   classes: "반 관리",
   branches: "지사 관리",
+  bulk: "일괄 등록",
   banner: "배너 관리",
 };
 const adminViewOpeners = {};
