@@ -761,9 +761,11 @@ display:flex; flex-direction:column; justify-content:center}` so content fills +
   command with `export MSYS_NO_PATHCONV=1;` when printing or passing URL paths, and read redirects
   from `curl -sI … | grep -i location` rather than `%{redirect_url}`. With it on, `/tmp/...` is no
   longer translated either — `curl -o /tmp/x` then fails silently; use a Windows path (`C:/...`).
-- `scripts/run-playwright.mjs` takes no arguments. For one spec, start Vite yourself
-  (`node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173`), run
+- `scripts/run-playwright.mjs` passes extra arguments to Playwright (one file, `-g`, `--workers=N`).
+  Or start Vite yourself (`node ./node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5173`), run
   `npx.cmd playwright test <file> -g <name>`, then stop Vite before `qa`.
+- **전체 qa가 메모리 부족으로 멈추면** `npm.cmd run check` 뒤 `node scripts/run-playwright.mjs --workers=4`
+  (설정 파일은 바꾸지 않는다, `2026-11-02`).
 - A local static server matching the deploy (serve repo root, hash routing handled client-side)
   is the faithful way to preview; the Vite dev server also works for local checks.
 - **Line endings (Windows):** `.gitattributes` (`* text=auto eol=lf`) forces LF so Windows

@@ -17,7 +17,10 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`6c32cd8`** (`2026-11-02`: 3B `4a9b23d` + D63 — live SQL first, then the push). Older: archive.
+Live = **`a4da52b`** (`2026-11-02`: 3B `4a9b23d`, D63, D64+D65 — live SQL first, then the push). Older: archive.
+
+- **Resource board (header Teacher button) + teacher-resources on/off** — brief `2026-11-03`: SQL + Edge = one
+  local commit; screens uncommitted until the user's feedback.
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"
@@ -28,11 +31,9 @@ Live = **`6c32cd8`** (`2026-11-02`: 3B `4a9b23d` + D63 — live SQL first, then 
   - A **done**: levels rename live `2026-10-31` (55 rows, all new keys); CHECKs `content_pages_level_key`,
     `page_backgrounds_level_key`; admin saves allowed again.
   - B live: '교사 자료실' (admin + LMS role 1/2) → private bucket; download via Edge Function
-    `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). D58 cards, **D63 live** (14 slots).
-    Local, not live: **D64** (`4cbb87b` + `28b15cb`: a slot = a file OR a Google Drive file ID, downloaded from Google)
-    and **D65** (`fa7d784` SQL + Edge, then the approved screen: 월간 3~12월 + script · pictures · flashcards =
-    62 slots, 2-column cards + [3~12월 보기] month panel, admin level tabs). Live together: delete 'monthly' files → Edge redeploy →
-    precheck → apply DO → verify → push.
+    `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). D58 cards, D63, **D64·D65 live
+    `2026-11-02`** (a slot = a file OR a Google Drive file ID; 월간 3~12월 + 3 new kinds = 62 slots, 2-column cards,
+    month panel, admin level tabs).
 - **Student page header fix** live (`8176966`), PC check done 10/31.
 - **User:** iPhone real-device check (2B); Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own
   Vimeo (`vimeo.com/<id>` in admin).
