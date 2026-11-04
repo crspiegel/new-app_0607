@@ -1198,6 +1198,13 @@ test("teacher resources sql: read-only verify script", async ({}, testInfo) => {
         "grant execute on function public.teacher_resource_issue(text, text, uuid) to anon",
         ["teacher_resource_issue: Edge Function (service role) only"],
       ],
+      // 2026-11-03: the 자료실 download call shares the daily log
+      [
+        "grant execute on function public.board_attachment_issue(uuid, uuid) to authenticated",
+        [
+          "board_attachment_issue (자료실 download, same log): Edge Function (service role) only",
+        ],
+      ],
       // D64: the Drive link RPC and the one-kind-per-row rule
       [
         "grant execute on function public.teacher_resource_set_drive(text, text, text) to anon",

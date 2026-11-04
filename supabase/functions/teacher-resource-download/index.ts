@@ -20,9 +20,18 @@
 // service role key stays in this function: it is never logged, echoed or
 // sent anywhere but Supabase itself.
 // Tested in Node with a fake fetch: tests/teacher-resource-download.spec.js.
+//
+// 자료실 (resource board, 2026-11-03): the same function also takes
+// {attachment: <attachment id>} for a board file — the database decides who
+// may, which file (a FILE of a public post; the admin: any post) and counts
+// the same daily limit (board_attachment_issue, one 30-a-day log with the
+// teacher resources); the URL is signed from the private "resource-board"
+// bucket for the same fixed 15 seconds. The {level, slot} request is
+// unchanged.
 // ============================================================================
 
 const BUCKET = "teacher-resources";
+const BOARD_BUCKET = "resource-board"; // 자료실 attachments (2026-11-03)
 const EXPIRES_IN = 15; // seconds — fixed on the server
 const ALLOWED_ORIGINS = [
   "https://www.cambridgereading.com",
@@ -40,7 +49,12 @@ const LEVEL_RE = /^(beginner|level-[123])$/;
 // pictures · flashcards.
 const SLOT_RE = /^[a-z][a-z0-9-]{0,23}$/;
 const LMS_TOKEN_RE = /^[A-Za-z0-9_-]{8,256}$/;
+// A board attachment id (a lower-case UUID, as the database returns it).
+const ATTACHMENT_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ISSUE_STATUS = { denied: 401, empty: 404, limit: 429 };
+// The board's answers: the same, plus "off" (the admin switched it off).
+const BOARD_STATUS = { ...ISSUE_STATUS, off: 403 };
 
 function corsHeaders(origin) {
   return {
@@ -103,9 +117,23 @@ export function createHandler(env, fetchImpl = fetch) {
     } catch {
       body = null;
     }
-    const level = body && body.level;
-    const slot = body && body.slot;
-    if (
+    // Exactly one of the two requests: {attachment} (a board file) or
+    // {level, slot} (a teacher-resources slot, as before).
+    const isObject = body !== null && typeof body === "object";
+    const board = isObject && "attachment" in body;
+    const attachment = board ? body.attachment : null;
+    const level = isObject ? body.level : undefined;
+    const slot = isObject ? body.slot : undefined;
+    if (board) {
+      if (
+        typeof attachment !== "string" ||
+        !ATTACHMENT_RE.test(attachment) ||
+        level !== undefined ||
+        slot !== undefined
+      ) {
+        return reply(allowed, 400, { error: "bad request" });
+      }
+    } else if (
       typeof level !== "string" ||
       typeof slot !== "string" ||
       !LEVEL_RE.test(level) ||
@@ -121,15 +149,24 @@ export function createHandler(env, fetchImpl = fetch) {
       if (!adminUid && !lmsToken) return reply(allowed, 401, { error: "denied" });
 
       // Who may, which file, the daily limit: all decided in the database.
-      const rpc = await fetchImpl(`${base}/rest/v1/rpc/teacher_resource_issue`, {
-        method: "POST",
-        headers: lmsToken ? { ...asService, "x-lms-token": lmsToken } : asService,
-        body: JSON.stringify({ p_level: level, p_slot: slot, p_admin_uid: adminUid }),
-      });
+      const rpc = await fetchImpl(
+        `${base}/rest/v1/rpc/${board ? "board_attachment_issue" : "teacher_resource_issue"}`,
+        {
+          method: "POST",
+          headers: lmsToken ? { ...asService, "x-lms-token": lmsToken } : asService,
+          body: JSON.stringify(
+            board
+              ? { p_attachment_id: attachment, p_admin_uid: adminUid }
+              : { p_level: level, p_slot: slot, p_admin_uid: adminUid },
+          ),
+        },
+      );
       if (!rpc.ok) return reply(allowed, 502, { error: "failed" });
       const issue = await rpc.json();
       if (!issue || issue.status !== "ok") {
-        const status = ISSUE_STATUS[issue && issue.status] || 502;
+        const statuses = board ? BOARD_STATUS : ISSUE_STATUS;
+        const status =
+          (issue && Object.hasOwn(statuses, issue.status) && statuses[issue.status]) || 502;
         return reply(allowed, status, {
           error: status === 502 ? "failed" : issue.status,
         });
@@ -137,7 +174,7 @@ export function createHandler(env, fetchImpl = fetch) {
 
       const objectPath = String(issue.path).split("/").map(encodeURIComponent).join("/");
       const sign = await fetchImpl(
-        `${base}/storage/v1/object/sign/${BUCKET}/${objectPath}`,
+        `${base}/storage/v1/object/sign/${board ? BOARD_BUCKET : BUCKET}/${objectPath}`,
         {
           method: "POST",
           headers: asService,

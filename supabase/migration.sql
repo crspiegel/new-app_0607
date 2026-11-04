@@ -2267,6 +2267,27 @@ begin
 end;
 $$;
 
+-- An on/off switch in site_settings (2026-11-03): 'true' / 'false' (jsonb)
+-- → that; missing or anything else → p_default. Internal (no grants): the
+-- page reads site_settings itself (public read); RPCs ask this.
+create or replace function public.site_flag(p_key text, p_default boolean)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select coalesce(
+    (select case s.value when 'true'::jsonb then true when 'false'::jsonb then false end
+       from public.site_settings s
+      where s.key = p_key),
+    p_default);
+$$;
+
+-- T3 (2026-11-03): the admin's switch 'teacher_resources_enabled' (배너 →
+-- 교사 자료실 파일, default on). Off → no rows for branch / teacher
+-- accounts (the page hides the button anyway); the admin keeps every row to
+-- manage files. Files, links and the download function stay as they are.
 create or replace function public.teacher_resources_list(p_level text)
 returns table (slot text, file_name text, file_size bigint, updated_at timestamptz, drive_id text)
 language sql
@@ -2283,6 +2304,7 @@ as $$
     left join public.teacher_resources r
       on r.level = p_level and r.slot = s.slot
    where public.teacher_resources_allowed()
+     and (public.is_admin() or public.site_flag('teacher_resources_enabled', true))
      and p_level in ('beginner', 'level-1', 'level-2', 'level-3')
      and (s.slot <> 'test' or p_level in ('level-2', 'level-3'))
    order by s.ord;
@@ -2490,6 +2512,7 @@ drop function if exists public.teacher_resource_is_current(text);
 -- to the wrong caller); set/clear are for signed-in admins; issue is for the
 -- Edge Function (service role) only.
 revoke execute on function public.teacher_resources_allowed() from public, anon, authenticated;
+revoke execute on function public.site_flag(text, boolean) from public, anon, authenticated;
 grant execute on function public.teacher_resources_list(text) to anon, authenticated;
 revoke execute on function public.teacher_resource_issue(text, text, uuid) from public, anon, authenticated;
 grant execute on function public.teacher_resource_issue(text, text, uuid) to service_role;
@@ -2502,6 +2525,897 @@ grant execute on function public.teacher_resource_set_drive(text, text, text) to
 
 notify pgrst, 'reload schema';
 -- ==== end Teacher resources ====
+
+-- ============================================================================
+-- Resource board (자료실, 2026-11-03) — a board of posts with attachments
+-- ----------------------------------------------------------------------------
+-- ADD-ONLY and safe to re-run. Needs the "LMS (Phase 3A)" block (lms_member)
+-- and the "Teacher resources" block above (site_flag, and its download log
+-- teacher_resource_downloads — one 30-a-day counter for both, PM B6).
+-- The header's "Teacher / 교사자료실" button opens it (the page). Who reads:
+-- the top admin and LMS branch (1) / teacher (2) accounts — students (3),
+-- visitors and other signed-in users get nothing (B2). Who writes: the top
+-- admin only, through the RPCs below (B3). The admin's switch
+-- site_settings.resource_board_enabled (default off, B12): off → branch /
+-- teacher accounts get {"status":"off"}; the admin keeps managing.
+-- A post: title (1-100), body (plain text up to 5,000, line breaks kept, never
+-- HTML on the page), ONE level (common = every level, beginner, level-1..3),
+-- ONE category, public / hidden, pinned ("📌 공지" on the page) (B4); up to 20
+-- attachments in a set order, each an uploaded file OR a Google Drive file ID
+-- (D64 rule: the ID only, 25-64 characters; teachers open it from Google — no
+-- Storage traffic, no daily limit) (B6). Files live in the PRIVATE bucket
+-- "resource-board" (10 MB; PDF, Excel, 한글, PowerPoint, JPG, PNG) at the ASCII
+-- path <post id>/<epoch ms>-<6 random>.<ext>; the original (Korean) name is in
+-- the table and becomes the download name. Downloads go through the Edge
+-- Function teacher-resource-download ({attachment: <id>}): it calls
+-- board_attachment_issue() with the service role and signs a 15-second URL.
+-- The tables have RLS on and no policies or grants — RPCs only; no answer
+-- carries a Storage path except to the admin (save / delete return the paths
+-- the page then deletes from Storage).
+-- ============================================================================
+
+insert into public.site_settings (key, value)
+values ('resource_board_enabled', 'false'::jsonb),
+       ('teacher_resources_enabled', 'true'::jsonb)
+on conflict (key) do nothing;
+
+-- Private bucket: 10 MB; the page sets the type from the extension (한글
+-- files often come with an empty or octet-stream type).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('resource-board', 'resource-board', false, 10485760,
+        array['application/pdf',
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              'application/vnd.ms-excel',
+              'application/x-hwp',
+              'application/vnd.hancom.hwpx',
+              'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+              'application/vnd.ms-powerpoint',
+              'image/jpeg',
+              'image/png'])
+on conflict (id) do update
+  set public             = false,
+      file_size_limit    = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+-- Categories (B5): the admin renames, reorders, adds; one with posts cannot
+-- be deleted. Each has a badge color (the site's light tints, the page maps
+-- the key). Seeded once — only when the table is made, so a re-run never
+-- brings back a category the admin renamed or deleted.
+do $$
+begin
+  if to_regclass('public.board_categories') is null then
+    create table public.board_categories (
+      id       bigint generated always as identity primary key,
+      name     text not null,
+      position integer not null,
+      color    text not null,
+      constraint board_categories_name_ok check (name = btrim(name) and length(name) between 1 and 20),
+      constraint board_categories_color_ok check (
+        color in ('sky', 'indigo', 'yellow', 'red', 'green', 'purple', 'orange', 'teal', 'pink', 'gray'))
+    );
+    insert into public.board_categories (name, position, color) values
+      ('월간교육안', 1, 'sky'), ('연간교육안', 2, 'indigo'), ('상장', 3, 'yellow'),
+      ('테스트', 4, 'red'), ('핵심문장 스크립트', 5, 'green'), ('그림자료실', 6, 'purple'),
+      ('플래쉬카드', 7, 'orange');
+  end if;
+end;
+$$;
+create unique index if not exists board_categories_name_key
+  on public.board_categories (lower(name));
+
+-- Posts. The id is made by the admin page (crypto.randomUUID) before the
+-- first upload, so files go straight to their post's folder.
+create table if not exists public.board_posts (
+  id          uuid primary key default gen_random_uuid(),
+  title       text not null,
+  body        text not null default '',
+  level       text not null,
+  category_id bigint not null references public.board_categories (id),
+  published   boolean not null default true,
+  pinned      boolean not null default false,
+  view_count  integer not null default 0,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  constraint board_posts_title_ok check (title = btrim(title) and length(title) between 1 and 100),
+  constraint board_posts_body_ok check (length(body) <= 5000),
+  constraint board_posts_level_ok check (level in ('common', 'beginner', 'level-1', 'level-2', 'level-3')),
+  constraint board_posts_views_ok check (view_count >= 0)
+);
+create index if not exists board_posts_order_idx
+  on public.board_posts (pinned desc, created_at desc);
+create index if not exists board_posts_category_idx
+  on public.board_posts (category_id);
+
+-- Attachments, in `position` order. A file row: storage_path (ASCII, in its
+-- post's folder), file_name (the original name), file_type, file_size. A
+-- Drive row: drive_id + label (the name the admin typed). Never both.
+create table if not exists public.board_attachments (
+  id           uuid primary key default gen_random_uuid(),
+  post_id      uuid not null references public.board_posts (id) on delete cascade,
+  position     integer not null,
+  kind         text not null,
+  storage_path text unique,
+  file_name    text,
+  file_type    text,
+  file_size    bigint,
+  drive_id     text,
+  label        text,
+  created_at   timestamptz not null default now(),
+  constraint board_attachments_kind_ok check (kind in ('file', 'drive')),
+  constraint board_attachments_source_ok check (
+    (kind = 'file' and storage_path is not null and file_name is not null and file_type is not null
+       and file_size is not null and drive_id is null and label is null)
+    or (kind = 'drive' and drive_id is not null and label is not null and storage_path is null
+       and file_name is null and file_type is null and file_size is null)),
+  constraint board_attachments_path_ok check (
+    storage_path ~ ('^' || post_id::text
+                    || '/[0-9]{13}-[a-z0-9]{6}\.(pdf|xlsx|xls|hwp|hwpx|pptx|ppt|jpg|jpeg|png)$')),
+  constraint board_attachments_type_ok check (
+    file_type in ('application/pdf',
+                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                  'application/vnd.ms-excel',
+                  'application/x-hwp',
+                  'application/vnd.hancom.hwpx',
+                  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                  'application/vnd.ms-powerpoint',
+                  'image/jpeg',
+                  'image/png')),
+  constraint board_attachments_size_ok check (file_size between 1 and 10485760),
+  constraint board_attachments_name_ok check (length(file_name) between 1 and 200),
+  constraint board_attachments_label_ok check (label = btrim(label) and length(label) between 1 and 100),
+  constraint board_attachments_drive_ok check (drive_id ~ '^[A-Za-z0-9_-]{25,64}$')
+);
+create index if not exists board_attachments_post_idx
+  on public.board_attachments (post_id, position);
+
+-- Views (B11): one row per member, post and KST day — a post's view_count
+-- goes up once a day per branch / teacher account; the admin never counts.
+-- Rows older than 30 days go when a new one is written.
+create table if not exists public.board_post_views (
+  post_id   uuid not null references public.board_posts (id) on delete cascade,
+  member_id uuid not null references public.members (member_id) on delete cascade,
+  view_day  date not null,
+  primary key (post_id, member_id, view_day)
+);
+create index if not exists board_post_views_day_idx
+  on public.board_post_views (view_day);
+
+-- RLS on with NO policies, no grants: RPCs only.
+alter table public.board_categories  enable row level security;
+alter table public.board_posts       enable row level security;
+alter table public.board_attachments enable row level security;
+alter table public.board_post_views  enable row level security;
+revoke all on public.board_categories, public.board_posts, public.board_attachments,
+              public.board_post_views from anon, authenticated;
+revoke all on sequence public.board_categories_id_seq from anon, authenticated;
+
+-- Internal: who is asking — 'admin' | 'member' (role 1 / 2, board on) |
+-- 'off' (role 1 / 2, board off) | 'denied' (anyone else).
+create or replace function public.board_access()
+returns text
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select case
+           when public.is_admin() then 'admin'
+           when not exists (select 1 from public.lms_member() m where m.role in (1, 2)) then 'denied'
+           when not public.site_flag('resource_board_enabled', false) then 'off'
+           else 'member'
+         end;
+$$;
+
+-- Internal: NEW = posted within the last 7 KST calendar days (today = 0).
+create or replace function public.board_is_new(p_at timestamptz)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select (now() at time zone 'Asia/Seoul')::date - (p_at at time zone 'Asia/Seoul')::date < 7;
+$$;
+
+-- Internal: the teachers' list order (B9) — public posts; a level chip =
+-- that level + common (an unknown level = no filter); a category; words in
+-- the title or body (any case; % and _ are plain letters); pinned first,
+-- then newest (or most viewed, p_sort 'views'). rn = the row's place, so a
+-- post's neighbours are rn - 1 / rn + 1 (B10).
+create or replace function public.board_ranked(
+  p_level text, p_category bigint, p_q text, p_sort text
+)
+returns table (id uuid, rn bigint)
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  with f as (
+    select case when p_level in ('beginner', 'level-1', 'level-2', 'level-3') then p_level end as lv,
+           replace(replace(replace(nullif(btrim(left(coalesce(p_q, ''), 100)), ''),
+                                   '\', '\\'), '%', '\%'), '_', '\_') as q
+  )
+  select p.id,
+         row_number() over (
+           order by p.pinned desc,
+                    case when p_sort = 'views' then p.view_count end desc nulls last,
+                    p.created_at desc, p.id desc)
+    from public.board_posts p, f
+   where p.published
+     and (f.lv is null or p.level in (f.lv, 'common'))
+     and (p_category is null or p.category_id = p_category)
+     and (f.q is null or p.title ilike '%' || f.q || '%' or p.body ilike '%' || f.q || '%');
+$$;
+
+-- Internal: the categories in order, for the chips / the settings box.
+create or replace function public.board_category_json(p_counts boolean)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select coalesce(jsonb_agg(
+           jsonb_build_object('id', c.id, 'name', c.name, 'color', c.color)
+           || case when p_counts
+                   then jsonb_build_object('posts', (select count(*) from public.board_posts p
+                                                      where p.category_id = c.id))
+                   else '{}'::jsonb end
+           order by c.position, c.id), '[]'::jsonb)
+    from public.board_categories c;
+$$;
+
+-- The teachers' list (B9): 10 a page. {"status":"ok", total, page, pages,
+-- page_size, items: [{id, title, level, category, pinned, files, views,
+-- created_at, is_new}], categories} — or {"status":"off"} / {"status":"denied"}
+-- with no posts at all. A page past the end = the last page.
+create or replace function public.board_list(
+  p_level text default null, p_category bigint default null, p_q text default null,
+  p_sort text default 'new', p_page integer default 1
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_access text := public.board_access();
+  v_size   constant integer := 10;
+  v_total  integer;
+  v_pages  integer;
+  v_page   integer;
+  v_items  jsonb;
+begin
+  if v_access in ('denied', 'off') then
+    return jsonb_build_object('status', v_access);
+  end if;
+  select count(*) into v_total from public.board_ranked(p_level, p_category, p_q, p_sort);
+  v_pages := greatest(1, ceil(v_total / v_size::numeric)::integer);
+  v_page := least(greatest(coalesce(p_page, 1), 1), v_pages);
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', p.id, 'title', p.title, 'level', p.level, 'category', p.category_id,
+           'pinned', p.pinned,
+           'files', (select count(*) from public.board_attachments a where a.post_id = p.id),
+           'views', p.view_count, 'created_at', p.created_at,
+           'is_new', public.board_is_new(p.created_at))
+           order by r.rn), '[]'::jsonb)
+    into v_items
+    from public.board_ranked(p_level, p_category, p_q, p_sort) r
+    join public.board_posts p on p.id = r.id
+   where r.rn > (v_page - 1) * v_size and r.rn <= v_page * v_size;
+  return jsonb_build_object('status', 'ok', 'total', v_total, 'page', v_page,
+                            'pages', v_pages, 'page_size', v_size, 'items', v_items,
+                            'categories', public.board_category_json(false));
+end;
+$$;
+
+-- A post for a teacher (B10): the post, its category, its attachments in
+-- order ({id, kind, name, ext, size, drive_id} — never a path) and its
+-- neighbours in the list it was opened from (the same filters and sort).
+-- Counts the view (B11). Hidden / unknown → {"status":"missing"}; the admin
+-- may open a hidden post (보기) and is never counted.
+create or replace function public.board_post_get(
+  p_id uuid, p_level text default null, p_category bigint default null,
+  p_q text default null, p_sort text default 'new'
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_access text := public.board_access();
+  v_post   public.board_posts;
+  v_member uuid;
+  v_today  date := (now() at time zone 'Asia/Seoul')::date;
+  v_prev   jsonb;
+  v_next   jsonb;
+begin
+  if v_access in ('denied', 'off') then
+    return jsonb_build_object('status', v_access);
+  end if;
+  select * into v_post from public.board_posts p
+   where p.id = p_id and (p.published or v_access = 'admin');
+  if not found then
+    return jsonb_build_object('status', 'missing');
+  end if;
+  if v_access = 'member' then
+    select m.member_id into v_member from public.lms_member() m limit 1;
+    insert into public.board_post_views (post_id, member_id, view_day)
+    values (p_id, v_member, v_today)
+    on conflict do nothing;
+    if found then
+      update public.board_posts p set view_count = p.view_count + 1
+       where p.id = p_id
+      returning * into v_post;
+      delete from public.board_post_views v where v.view_day < v_today - 30;
+    end if;
+  end if;
+  -- One pass over the list it was opened from (security review L4).
+  select (select jsonb_build_object('id', p.id, 'title', p.title, 'created_at', p.created_at)
+            from public.board_posts p where p.id = x.prev_id),
+         (select jsonb_build_object('id', p.id, 'title', p.title, 'created_at', p.created_at)
+            from public.board_posts p where p.id = x.next_id)
+    into v_prev, v_next
+    from (select r.id,
+                 lag(r.id) over (order by r.rn) as prev_id,
+                 lead(r.id) over (order by r.rn) as next_id
+            from public.board_ranked(p_level, p_category, p_q, p_sort) r) x
+   where x.id = p_id;
+  return jsonb_build_object(
+    'status', 'ok',
+    'post', jsonb_build_object(
+      'id', v_post.id, 'title', v_post.title, 'body', v_post.body, 'level', v_post.level,
+      'category', v_post.category_id, 'pinned', v_post.pinned, 'published', v_post.published,
+      'files', (select count(*) from public.board_attachments a where a.post_id = p_id),
+      'views', v_post.view_count, 'created_at', v_post.created_at,
+      'is_new', public.board_is_new(v_post.created_at)),
+    'category', (select jsonb_build_object('id', c.id, 'name', c.name, 'color', c.color)
+                   from public.board_categories c where c.id = v_post.category_id),
+    'attachments', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', a.id, 'kind', a.kind, 'name', coalesce(a.label, a.file_name),
+               'ext', substring(a.storage_path from '\.([a-z0-9]+)$'),
+               'size', a.file_size, 'drive_id', a.drive_id)
+               order by a.position, a.id)
+        from public.board_attachments a where a.post_id = p_id), '[]'::jsonb),
+    'prev', v_prev,
+    'next', v_next);
+end;
+$$;
+
+-- Admin list (그림 05): every post (hidden too), 20 a page, pinned first then
+-- newest. Exact level (common is its own choice), category, status
+-- ('public' | 'hidden'), words in the title. Categories with post counts.
+create or replace function public.board_admin_list(
+  p_level text default null, p_category bigint default null, p_status text default null,
+  p_q text default null, p_page integer default 1
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_size  constant integer := 20;
+  v_q     text := replace(replace(replace(nullif(btrim(left(coalesce(p_q, ''), 100)), ''),
+                                          '\', '\\'), '%', '\%'), '_', '\_');
+  v_total integer;
+  v_pages integer;
+  v_page  integer;
+  v_items jsonb;
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  select count(*) into v_total
+    from public.board_posts p
+   where (nullif(p_level, '') is null or p.level = p_level)
+     and (p_category is null or p.category_id = p_category)
+     and (coalesce(p_status, '') not in ('public', 'hidden') or p.published = (p_status = 'public'))
+     and (v_q is null or p.title ilike '%' || v_q || '%');
+  v_pages := greatest(1, ceil(v_total / v_size::numeric)::integer);
+  v_page := least(greatest(coalesce(p_page, 1), 1), v_pages);
+  with r as (
+    select p.*, row_number() over (order by p.pinned desc, p.created_at desc, p.id desc) as rn
+      from public.board_posts p
+     where (nullif(p_level, '') is null or p.level = p_level)
+       and (p_category is null or p.category_id = p_category)
+       and (coalesce(p_status, '') not in ('public', 'hidden') or p.published = (p_status = 'public'))
+       and (v_q is null or p.title ilike '%' || v_q || '%')
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', r.id, 'title', r.title, 'level', r.level, 'category', r.category_id,
+           'pinned', r.pinned, 'published', r.published,
+           'files', (select count(*) from public.board_attachments a where a.post_id = r.id),
+           'views', r.view_count, 'created_at', r.created_at)
+           order by r.rn), '[]'::jsonb)
+    into v_items
+    from r
+   where r.rn > (v_page - 1) * v_size and r.rn <= v_page * v_size;
+  return jsonb_build_object('status', 'ok', 'total', v_total, 'page', v_page,
+                            'pages', v_pages, 'page_size', v_size, 'items', v_items,
+                            'categories', public.board_category_json(true));
+end;
+$$;
+
+-- Admin: one post to edit — attachments with their ids (no path; the page
+-- deletes only what it uploaded itself or what a save / delete returns).
+create or replace function public.board_admin_get(p_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_post public.board_posts;
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  select * into v_post from public.board_posts p where p.id = p_id;
+  if not found then
+    return jsonb_build_object('status', 'missing');
+  end if;
+  return jsonb_build_object(
+    'status', 'ok',
+    'post', jsonb_build_object(
+      'id', v_post.id, 'title', v_post.title, 'body', v_post.body, 'level', v_post.level,
+      'category', v_post.category_id, 'pinned', v_post.pinned, 'published', v_post.published,
+      'views', v_post.view_count, 'created_at', v_post.created_at,
+      'updated_at', v_post.updated_at),
+    'attachments', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', a.id, 'kind', a.kind, 'name', coalesce(a.label, a.file_name),
+               'ext', substring(a.storage_path from '\.([a-z0-9]+)$'),
+               'size', a.file_size, 'type', a.file_type, 'drive_id', a.drive_id)
+               order by a.position, a.id)
+        from public.board_attachments a where a.post_id = p_id), '[]'::jsonb));
+end;
+$$;
+
+-- Admin: create or update a post with its whole attachment list, in order
+-- (B4, B6, B7). p_attachments = up to 20 of
+--   {"id": <an attachment of this post>}               keep (Drive: may add "label")
+--   {"kind":"file","path","name","size","type"}        a file just uploaded
+--   {"kind":"drive","drive_id","label"}                a Google Drive file
+-- An attachment of the post that is not in the list is deleted (B8). Answers
+-- {"status":"ok","id","removed":[Storage paths the page deletes next]}.
+-- Bad input raises 22023 ("board: …") and changes nothing. A file already
+-- attached comes back as {"id"} only — sent again as a new file it is
+-- refused (its object would be deleted under the new row; review L1).
+-- public / pinned left out (NULL) = hidden / not pinned (review L3).
+create or replace function public.board_post_save(
+  p_id uuid, p_title text, p_body text, p_level text, p_category bigint,
+  p_published boolean, p_pinned boolean, p_attachments jsonb
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_title   text := btrim(coalesce(p_title, ''));
+  v_body    text := coalesce(p_body, '');
+  v_list    jsonb := coalesce(p_attachments, '[]'::jsonb);
+  v_item    jsonb;
+  v_pos     integer := 0;
+  v_keep    uuid[] := '{}';
+  v_new     text[] := '{}';
+  v_id      uuid;
+  v_removed jsonb;
+  v_path    text;
+  v_name    text;
+  v_type    text;
+  v_size    bigint;
+  v_label   text;
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  if p_id is null then
+    raise exception 'board: post id' using errcode = '22023';
+  end if;
+  if length(v_title) not between 1 and 100 then
+    raise exception 'board: title (1-100 characters)' using errcode = '22023';
+  end if;
+  if length(v_body) > 5000 then
+    raise exception 'board: body (5000 characters at most)' using errcode = '22023';
+  end if;
+  if p_level is null or p_level not in ('common', 'beginner', 'level-1', 'level-2', 'level-3') then
+    raise exception 'board: level' using errcode = '22023';
+  end if;
+  -- A category delete waits for this save (and the other way round), taken
+  -- BEFORE the category is checked: no foreign-key error between two admin
+  -- tabs (security review L8 / N1).
+  perform pg_advisory_xact_lock_shared(7305);
+  if p_category is null or not exists (select 1 from public.board_categories c where c.id = p_category) then
+    raise exception 'board: category' using errcode = '22023';
+  end if;
+  if jsonb_typeof(v_list) <> 'array' then
+    raise exception 'board: attachments must be a list' using errcode = '22023';
+  end if;
+  if jsonb_array_length(v_list) > 20 then
+    raise exception 'board: too many attachments (20 at most)' using errcode = '22023';
+  end if;
+
+  perform 1 from public.board_posts p where p.id = p_id for update;
+  if found then
+    update public.board_posts p
+       set title = v_title, body = v_body, level = p_level, category_id = p_category,
+           published = coalesce(p_published, false), pinned = coalesce(p_pinned, false),
+           updated_at = now()
+     where p.id = p_id;
+  else
+    insert into public.board_posts (id, title, body, level, category_id, published, pinned)
+    values (p_id, v_title, v_body, p_level, p_category,
+            coalesce(p_published, false), coalesce(p_pinned, false));
+  end if;
+
+  -- The attachments kept: each one of this post, once.
+  for v_item in select e.value from jsonb_array_elements(v_list) e loop
+    if jsonb_typeof(v_item) <> 'object' then
+      raise exception 'board: attachment (not an object)' using errcode = '22023';
+    end if;
+    if v_item ? 'id' then
+      begin
+        v_id := (v_item ->> 'id')::uuid;
+      exception when invalid_text_representation then
+        raise exception 'board: attachment id' using errcode = '22023';
+      end;
+      if v_id is null or v_id = any (v_keep)
+         or not exists (select 1 from public.board_attachments a
+                         where a.id = v_id and a.post_id = p_id) then
+        raise exception 'board: attachment % (not this post''s, or twice)', v_id using errcode = '22023';
+      end if;
+      v_keep := v_keep || v_id;
+    elsif v_item ->> 'kind' = 'file' then
+      if v_item ->> 'path' = any (v_new)
+         or exists (select 1 from public.board_attachments a
+                     where a.post_id = p_id and a.storage_path = v_item ->> 'path') then
+        raise exception 'board: attachment % is already attached (send its id)', v_item ->> 'path'
+          using errcode = '22023';
+      end if;
+      v_new := v_new || (v_item ->> 'path');
+    end if;
+  end loop;
+
+  with gone as (
+    delete from public.board_attachments a
+     where a.post_id = p_id and a.id <> all (v_keep)
+    returning a.storage_path
+  )
+  select coalesce(jsonb_agg(g.storage_path order by g.storage_path)
+                    filter (where g.storage_path is not null), '[]'::jsonb)
+    into v_removed
+    from gone g;
+
+  for v_item in select e.value from jsonb_array_elements(v_list) e loop
+    v_pos := v_pos + 1;
+    if v_item ? 'id' then
+      v_label := null;
+      if v_item ? 'label' then
+        v_label := btrim(coalesce(v_item ->> 'label', ''));
+        if length(v_label) not between 1 and 100 then
+          raise exception 'board: attachment name (1-100 characters)' using errcode = '22023';
+        end if;
+      end if;
+      update public.board_attachments a
+         set position = v_pos,
+             label = case when a.kind = 'drive' and v_label is not null then v_label else a.label end
+       where a.id = (v_item ->> 'id')::uuid;
+    elsif v_item ->> 'kind' = 'file' then
+      if v_item ?| array['drive_id', 'label'] then
+        raise exception 'board: attachment (a file has no Drive link)' using errcode = '22023';
+      end if;
+      v_path := v_item ->> 'path';
+      v_name := btrim(coalesce(v_item ->> 'name', ''));
+      v_type := v_item ->> 'type';
+      begin
+        v_size := (v_item ->> 'size')::bigint;
+      exception when invalid_text_representation or numeric_value_out_of_range then
+        raise exception 'board: attachment size' using errcode = '22023';
+      end;
+      if v_path is null or v_path !~ ('^' || p_id::text
+           || '/[0-9]{13}-[a-z0-9]{6}\.(pdf|xlsx|xls|hwp|hwpx|pptx|ppt|jpg|jpeg|png)$') then
+        raise exception 'board: attachment path' using errcode = '22023';
+      end if;
+      if v_type is distinct from (
+           case substring(v_path from '\.([a-z0-9]+)$')
+             when 'pdf' then 'application/pdf'
+             when 'xlsx' then 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+             when 'xls' then 'application/vnd.ms-excel'
+             when 'hwp' then 'application/x-hwp'
+             when 'hwpx' then 'application/vnd.hancom.hwpx'
+             when 'pptx' then 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+             when 'ppt' then 'application/vnd.ms-powerpoint'
+             when 'jpg' then 'image/jpeg'
+             when 'jpeg' then 'image/jpeg'
+             when 'png' then 'image/png'
+           end) then
+        raise exception 'board: attachment type' using errcode = '22023';
+      end if;
+      if v_size is null or v_size not between 1 and 10485760 then
+        raise exception 'board: attachment size (10 MB at most)' using errcode = '22023';
+      end if;
+      if length(v_name) not between 1 and 200 then
+        raise exception 'board: attachment name (1-200 characters)' using errcode = '22023';
+      end if;
+      if not exists (select 1 from storage.objects o
+                      where o.bucket_id = 'resource-board' and o.name = v_path) then
+        raise exception 'board: % is not in storage', v_path using errcode = '22023';
+      end if;
+      insert into public.board_attachments
+        (post_id, position, kind, storage_path, file_name, file_type, file_size)
+      values (p_id, v_pos, 'file', v_path, v_name, v_type, v_size);
+    elsif v_item ->> 'kind' = 'drive' then
+      if v_item ?| array['path', 'name', 'size', 'type'] then
+        raise exception 'board: attachment (a Drive link has no file)' using errcode = '22023';
+      end if;
+      if coalesce(v_item ->> 'drive_id', '') !~ '^[A-Za-z0-9_-]{25,64}$' then
+        raise exception 'board: not a Google Drive file id' using errcode = '22023';
+      end if;
+      v_label := btrim(coalesce(v_item ->> 'label', ''));
+      if length(v_label) not between 1 and 100 then
+        raise exception 'board: attachment name (1-100 characters)' using errcode = '22023';
+      end if;
+      insert into public.board_attachments (post_id, position, kind, drive_id, label)
+      values (p_id, v_pos, 'drive', v_item ->> 'drive_id', v_label);
+    else
+      raise exception 'board: attachment kind' using errcode = '22023';
+    end if;
+  end loop;
+
+  return jsonb_build_object('status', 'ok', 'id', p_id, 'removed', v_removed);
+end;
+$$;
+
+-- Admin: delete a post (B8) — its attachments and view rows go with it; the
+-- answer lists its files' Storage paths for the page to delete.
+create or replace function public.board_post_delete(p_id uuid)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_removed jsonb;
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  perform 1 from public.board_posts p where p.id = p_id for update;
+  if not found then
+    return jsonb_build_object('status', 'missing', 'removed', '[]'::jsonb);
+  end if;
+  select coalesce(jsonb_agg(a.storage_path order by a.position)
+                    filter (where a.storage_path is not null), '[]'::jsonb)
+    into v_removed
+    from public.board_attachments a where a.post_id = p_id;
+  delete from public.board_posts p where p.id = p_id;
+  return jsonb_build_object('status', 'ok', 'removed', v_removed);
+end;
+$$;
+
+-- Admin categories (B5). Category writes take advisory lock 7305 (positions,
+-- colors and names stay consistent between two admin tabs).
+-- Add (p_id null: at the end, the first color not in use) or rename.
+-- {"status":"ok","id"} | {"status":"duplicate"} (same name, any case) |
+-- {"status":"missing"}; a bad name raises 22023.
+create or replace function public.board_category_save(p_id bigint, p_name text)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_name    text := btrim(coalesce(p_name, ''));
+  v_palette constant text[] := array['sky', 'indigo', 'yellow', 'red', 'green', 'purple',
+                                     'orange', 'teal', 'pink', 'gray'];
+  v_id      bigint;
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  if length(v_name) not between 1 and 20 then
+    raise exception 'board: category name (1-20 characters)' using errcode = '22023';
+  end if;
+  perform pg_advisory_xact_lock(7305);
+  if exists (select 1 from public.board_categories c
+              where lower(c.name) = lower(v_name) and c.id is distinct from p_id) then
+    return jsonb_build_object('status', 'duplicate');
+  end if;
+  if p_id is null then
+    insert into public.board_categories (name, position, color)
+    values (v_name,
+            coalesce((select max(c.position) from public.board_categories c), 0) + 1,
+            coalesce((select x.color from unnest(v_palette) with ordinality x (color, o)
+                       where x.color not in (select c.color from public.board_categories c)
+                       order by x.o limit 1),
+                     v_palette[(select count(*) from public.board_categories c) % 10 + 1]))
+    returning board_categories.id into v_id;
+    return jsonb_build_object('status', 'ok', 'id', v_id);
+  end if;
+  update public.board_categories c set name = v_name where c.id = p_id;
+  if not found then
+    return jsonb_build_object('status', 'missing');
+  end if;
+  return jsonb_build_object('status', 'ok', 'id', p_id);
+end;
+$$;
+
+-- Admin: the new order — every category id exactly once.
+create or replace function public.board_category_order(p_ids bigint[])
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  perform pg_advisory_xact_lock(7305);
+  if p_ids is null
+     or cardinality(p_ids) <> (select count(*) from public.board_categories)
+     or (select count(distinct x) from unnest(p_ids) x) <> cardinality(p_ids)
+     or exists (select 1 from unnest(p_ids) x
+                 where not exists (select 1 from public.board_categories c where c.id = x)) then
+    raise exception 'board: category order (every category once)' using errcode = '22023';
+  end if;
+  update public.board_categories c set position = o.ord
+    from unnest(p_ids) with ordinality o (id, ord)
+   where c.id = o.id;
+  return jsonb_build_object('status', 'ok');
+end;
+$$;
+
+-- Admin: delete an empty category. {"status":"ok"|"in_use"|"missing","posts"}.
+create or replace function public.board_category_delete(p_id bigint)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_posts integer;
+begin
+  if not public.is_admin() then
+    raise exception 'not authorized' using errcode = '42501';
+  end if;
+  perform pg_advisory_xact_lock(7305);
+  if not exists (select 1 from public.board_categories c where c.id = p_id) then
+    return jsonb_build_object('status', 'missing', 'posts', 0);
+  end if;
+  select count(*) into v_posts from public.board_posts p where p.category_id = p_id;
+  if v_posts > 0 then
+    return jsonb_build_object('status', 'in_use', 'posts', v_posts);
+  end if;
+  delete from public.board_categories c where c.id = p_id;
+  return jsonb_build_object('status', 'ok', 'posts', 0);
+end;
+$$;
+
+-- The Edge Function's board call (service role only), next to
+-- teacher_resource_issue. Who: the forwarded x-lms-token (role 1 / 2, board
+-- on) or p_admin_uid (an admin the function checked with Auth). What: a FILE
+-- attachment of a public post (the admin: any post). The daily limit is the
+-- teacher-resources one — the same log, the same lock, 30 in all per KST day
+-- (rows: level 'board', slot = the attachment id). Answers like
+-- teacher_resource_issue: ok {path, name} | denied | off | empty | limit.
+create or replace function public.board_attachment_issue(
+  p_attachment_id uuid, p_admin_uid uuid default null
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_admin     boolean := p_admin_uid is not null
+                         and exists (select 1 from public.admins a where a.user_id = p_admin_uid);
+  v_member    uuid;
+  v_role      smallint;
+  v_path      text;
+  v_name      text;
+  v_published boolean;
+  v_today     timestamptz := date_trunc('day', now() at time zone 'Asia/Seoul')
+                             at time zone 'Asia/Seoul';
+begin
+  if not v_admin then
+    select m.member_id, m.role into v_member, v_role
+      from public.lms_member() m
+     limit 1;
+    if v_member is null or not coalesce(v_role in (1, 2), false) then
+      return jsonb_build_object('status', 'denied');
+    end if;
+    if not public.site_flag('resource_board_enabled', false) then
+      return jsonb_build_object('status', 'off');
+    end if;
+  end if;
+
+  select a.storage_path, a.file_name, p.published into v_path, v_name, v_published
+    from public.board_attachments a
+    join public.board_posts p on p.id = a.post_id
+   where a.id = p_attachment_id;
+  if v_path is null or not (v_admin or v_published) then
+    return jsonb_build_object('status', 'empty');
+  end if;
+  -- An object that is gone from Storage cannot be signed: "empty", and it
+  -- costs no download (review L2).
+  if not exists (select 1 from storage.objects o
+                  where o.bucket_id = 'resource-board' and o.name = v_path) then
+    return jsonb_build_object('status', 'empty');
+  end if;
+
+  if not v_admin then
+    delete from public.teacher_resource_downloads
+     where issued_at < now() - interval '30 days';
+    perform pg_advisory_xact_lock(7302, hashtext(v_member::text));
+    if (select count(*) from public.teacher_resource_downloads d
+         where d.member_id = v_member and d.issued_at >= v_today) >= 30 then
+      return jsonb_build_object('status', 'limit');
+    end if;
+    insert into public.teacher_resource_downloads (member_id, level, slot)
+    values (v_member, 'board', p_attachment_id::text);
+  end if;
+
+  return jsonb_build_object('status', 'ok', 'path', v_path, 'name', v_name);
+end;
+$$;
+
+-- Storage: the admin writes (only well-formed ASCII paths) and reads; no
+-- read policy for anyone else (the Edge Function signs with the service role).
+drop policy if exists resource_board_admin_all on storage.objects;
+create policy resource_board_admin_all on storage.objects
+  for all to authenticated
+  using (bucket_id = 'resource-board' and public.is_admin())
+  with check (
+    bucket_id = 'resource-board'
+    and public.is_admin()
+    and name ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/[0-9]{13}-[a-z0-9]{6}\.(pdf|xlsx|xls|hwp|hwpx|pptx|ppt|jpg|jpeg|png)$');
+
+-- Grants: helpers internal; the two reading RPCs public (they answer nothing
+-- to the wrong caller); admin RPCs for signed-in users (is_admin inside);
+-- the download call for the Edge Function (service role) only.
+revoke execute on function public.board_access() from public, anon, authenticated;
+revoke execute on function public.board_is_new(timestamptz) from public, anon, authenticated;
+revoke execute on function public.board_ranked(text, bigint, text, text) from public, anon, authenticated;
+revoke execute on function public.board_category_json(boolean) from public, anon, authenticated;
+revoke execute on function public.board_list(text, bigint, text, text, integer) from public;
+revoke execute on function public.board_post_get(uuid, text, bigint, text, text) from public;
+grant execute on function public.board_list(text, bigint, text, text, integer) to anon, authenticated;
+grant execute on function public.board_post_get(uuid, text, bigint, text, text) to anon, authenticated;
+revoke execute on function public.board_admin_list(text, bigint, text, text, integer) from public, anon;
+revoke execute on function public.board_admin_get(uuid) from public, anon;
+revoke execute on function public.board_post_save(uuid, text, text, text, bigint, boolean, boolean, jsonb) from public, anon;
+revoke execute on function public.board_post_delete(uuid) from public, anon;
+revoke execute on function public.board_category_save(bigint, text) from public, anon;
+revoke execute on function public.board_category_order(bigint[]) from public, anon;
+revoke execute on function public.board_category_delete(bigint) from public, anon;
+grant execute on function public.board_admin_list(text, bigint, text, text, integer) to authenticated;
+grant execute on function public.board_admin_get(uuid) to authenticated;
+grant execute on function public.board_post_save(uuid, text, text, text, bigint, boolean, boolean, jsonb) to authenticated;
+grant execute on function public.board_post_delete(uuid) to authenticated;
+grant execute on function public.board_category_save(bigint, text) to authenticated;
+grant execute on function public.board_category_order(bigint[]) to authenticated;
+grant execute on function public.board_category_delete(bigint) to authenticated;
+revoke execute on function public.board_attachment_issue(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.board_attachment_issue(uuid, uuid) to service_role;
+
+notify pgrst, 'reload schema';
+-- ==== end Resource board ====
 
 -- ============================================================================
 -- AFTER running the above: register your first admin.

@@ -17,12 +17,18 @@ const SITE = "https://www.cambridgereading.com";
 const TOKEN = "tok-teacher-00000000000000000000000000000000";
 const NAME = "2026 Beginner 연간 교육안.pdf";
 const PATH = "beginner/plan/1730000000001.pdf";
+// 자료실 (resource board, 2026-11-03): an attachment id → its file
+const ATTACHMENT = "0f8e5a2c-1b3d-4e5f-8a9b-0c1d2e3f4a5b";
+const BOARD_NAME = "2026_수료상장_양식(수정용).hwp";
+const BOARD_PATH =
+  "00000000-0000-4000-8000-000000000008/1730000000001-abc123.hwp";
 
 // A fake Supabase: answers Auth /user, the issue RPC and Storage signing, and
 // records every call.
 function fakeSupabase({
   user = null,
   issue = { status: "ok", path: PATH, name: NAME },
+  boardIssue = { status: "ok", path: BOARD_PATH, name: BOARD_NAME },
   rpcStatus = 200,
   signStatus = 200,
 } = {}) {
@@ -45,7 +51,13 @@ function fakeSupabase({
     if (path === "/rest/v1/rpc/teacher_resource_issue") {
       return Response.json(issue, { status: rpcStatus });
     }
-    if (path.startsWith("/storage/v1/object/sign/teacher-resources/")) {
+    if (path === "/rest/v1/rpc/board_attachment_issue") {
+      return Response.json(boardIssue, { status: rpcStatus });
+    }
+    if (
+      path.startsWith("/storage/v1/object/sign/teacher-resources/") ||
+      path.startsWith("/storage/v1/object/sign/resource-board/")
+    ) {
       const object = path.slice("/storage/v1/object/sign/".length);
       return Response.json(
         signStatus === 200
@@ -304,4 +316,114 @@ test("download fn: denied / empty / limit / failures map to their statuses", asy
       expect(calls.some((c) => c.url.includes("/storage/"))).toBe(false);
     }
   }
+});
+
+// ---- 자료실 (resource board, 2026-11-03) -------------------------------------
+// The same function takes {attachment: <id>} for a board file: the database
+// decides who / which file / the shared 30-a-day count
+// (board_attachment_issue), the function signs from the private
+// "resource-board" bucket for the same fixed 15 seconds. The old
+// {level, slot} request is untouched (the tests above).
+
+test("download fn: a board attachment → board_attachment_issue → a 15-second URL from resource-board", async () => {
+  const { handler, calls } = fakeSupabase();
+  const res = await handler(
+    post({ attachment: ATTACHMENT, expiresIn: 9999 }, { "x-lms-token": TOKEN }),
+  );
+  expect(res.status).toBe(200);
+  expect(res.headers.get("access-control-allow-origin")).toBe(SITE);
+  expect(res.headers.get("cache-control")).toBe("no-store");
+  const text = await res.text();
+  expect(text).not.toContain(ENV.SUPABASE_SERVICE_ROLE_KEY);
+  const signed = new URL(JSON.parse(text).url);
+  expect(`${signed.origin}${signed.pathname}`).toBe(
+    `${URL_BASE}/storage/v1/object/sign/resource-board/${BOARD_PATH}`,
+  );
+  expect(signed.searchParams.get("download")).toBe(BOARD_NAME);
+  expect(calls.map((c) => new URL(c.url).pathname)).toEqual([
+    "/rest/v1/rpc/board_attachment_issue",
+    `/storage/v1/object/sign/resource-board/${BOARD_PATH}`,
+  ]);
+  const [rpc, sign] = calls;
+  expect(rpc.headers.get("authorization")).toBe(
+    `Bearer ${ENV.SUPABASE_SERVICE_ROLE_KEY}`,
+  );
+  expect(rpc.headers.get("x-lms-token")).toBe(TOKEN);
+  expect(rpc.body).toEqual({
+    p_attachment_id: ATTACHMENT,
+    p_admin_uid: null,
+  });
+  expect(sign.body).toEqual({ expiresIn: 15 });
+
+  // an admin: checked with Auth, passed as p_admin_uid
+  const admin = fakeSupabase({ user: "admin-uid-1" });
+  const ok = await admin.handler(
+    post(
+      { attachment: ATTACHMENT },
+      { authorization: "Bearer user.jwt.value" },
+    ),
+  );
+  expect(ok.status).toBe(200);
+  expect(
+    admin.calls.find((c) => c.url.endsWith("/rpc/board_attachment_issue")).body,
+  ).toEqual({ p_attachment_id: ATTACHMENT, p_admin_uid: "admin-uid-1" });
+
+  // the old request still asks teacher_resource_issue only, from its bucket
+  const old = fakeSupabase();
+  await old.handler(
+    post({ level: "beginner", slot: "plan" }, { "x-lms-token": TOKEN }),
+  );
+  expect(old.calls.map((c) => new URL(c.url).pathname)).toEqual([
+    "/rest/v1/rpc/teacher_resource_issue",
+    `/storage/v1/object/sign/teacher-resources/${PATH}`,
+  ]);
+});
+
+test("download fn: a board request that is not exactly {attachment: <id>} is refused first", async () => {
+  const { handler, calls } = fakeSupabase();
+  for (const body of [
+    { attachment: "" },
+    { attachment: ATTACHMENT.toUpperCase() },
+    { attachment: `${ATTACHMENT}x` },
+    { attachment: "../resource-board/x" },
+    { attachment: [ATTACHMENT] },
+    { attachment: 12 },
+    { attachment: ATTACHMENT, level: "beginner", slot: "plan" },
+    { attachment: ATTACHMENT, slot: "plan" },
+  ]) {
+    const res = await handler(post(body, { "x-lms-token": TOKEN }));
+    expect(res.status, JSON.stringify(body)).toBe(400);
+  }
+  // nobody signed in → 401 before the DB
+  expect((await handler(post({ attachment: ATTACHMENT }))).status).toBe(401);
+  expect(calls).toEqual([]);
+});
+
+test("download fn: board denied / off / empty / limit / failures map to their statuses", async () => {
+  const cases = [
+    [{ boardIssue: { status: "denied" } }, 401, "denied"],
+    [{ boardIssue: { status: "off" } }, 403, "off"],
+    [{ boardIssue: { status: "empty" } }, 404, "empty"],
+    [{ boardIssue: { status: "limit" } }, 429, "limit"],
+    [{ boardIssue: { status: "?" } }, 502, "failed"],
+    [{ rpcStatus: 500 }, 502, "failed"],
+    [{ signStatus: 400 }, 502, "failed"],
+  ];
+  for (const [options, status, error] of cases) {
+    const { handler, calls } = fakeSupabase(options);
+    const res = await handler(
+      post({ attachment: ATTACHMENT }, { "x-lms-token": TOKEN }),
+    );
+    expect(res.status, JSON.stringify(options)).toBe(status);
+    expect(await res.json()).toEqual({ error });
+    if (!options.signStatus) {
+      expect(calls.some((c) => c.url.includes("/storage/"))).toBe(false);
+    }
+  }
+  // "off" is a board answer only: the old request maps it as before (502)
+  const old = fakeSupabase({ issue: { status: "off" } });
+  const res = await old.handler(
+    post({ level: "beginner", slot: "plan" }, { "x-lms-token": TOKEN }),
+  );
+  expect(res.status).toBe(502);
 });

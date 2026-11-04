@@ -279,7 +279,7 @@ similar work** so the same problems don't recur. Append to this as you learn mor
 - ⚠ 대량 생성은 행마다 bcrypt → Supabase `statement_timeout`(anon 3초, authenticated 8초)에 걸릴 수 있다. 로컬 실측(3B-3, PostgreSQL 18.6
   이 PC) 약 3.5ms/행(PGlite WASM 약 5ms/행) → 클라이언트 한도 `BULK_MAX_ROWS` = 100. 운영 실측 전(멈춤 3 뒤 실계정 확인 때).
 - advisory lock 번호(겹치면 서로 기다린다): 7301 로그인 아이디 키 · 7302 교사 자료실 다운로드 한도 · 7303 계정 아이디 쓰기(생성·변경) ·
-  7304 학생별 반 넣기(D51 검사 경쟁 방지). 새 잠금은 새 번호로. **한 호출이 잠금을 여러 개 잡으면 쓰기 전에 잠금 번호 순으로 한꺼번에**
+  7304 학생별 반 넣기(D51 검사 경쟁 방지) · 7305 자료실 분류 쓰기(글 저장은 같은 번호의 공유 잠금, 2026-11-03). 새 잠금은 새 번호로. **한 호출이 잠금을 여러 개 잡으면 쓰기 전에 잠금 번호 순으로 한꺼번에**
   (3B-3 N4: `lms_bulk_assign`) — 행마다 잡으면 반대 순서의 두 호출이 서로 기다리다 한쪽이 40P01로 끝난다.
 - PGlite는 연결이 하나라 **동시 실행(교착·고유 제약 경쟁)은 재현 불가** → `tests/lms-3b-concurrency.spec.js`가 `embedded-postgres`
   (실제 PostgreSQL 18.6, 임시 폴더·빈 포트, 처음 기동 약 15~20초)로 두 연결을 동시에 돌린다. 겹치게 하려면 테스트 전용 트리거로

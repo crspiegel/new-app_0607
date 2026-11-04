@@ -12,6 +12,8 @@
 -- search_path, the Storage policies (the admin policy's conditions, every
 -- policy tied to exactly one bucket, RLS on storage.objects / buckets, no
 -- browser policy that can change a bucket), and that the (가) objects are gone.
+-- 2026-11-03: board_attachment_issue (자료실 downloads) is the one more function
+-- that touches the download log (the shared 30-a-day counter) — row 25.
 -- Expected result: one table, every row pass = true (SUMMARY row first); the
 -- "info" row only lists the Storage policies (pass is empty).
 -- Locally: tests/teacher-resources-sql.spec.js runs it on a fresh migration
@@ -53,7 +55,9 @@ fn (no, sig, roles) as (
   (10, 'public.teacher_resource_issue(text, text, uuid)',            array['anon', 'authenticated', 'service_role']),
   (11, 'public.teacher_resource_set(text, text, text, text, bigint)', array['anon', 'authenticated']),
   (12, 'public.teacher_resource_clear(text, text)',                  array['anon', 'authenticated']),
-  (23, 'public.teacher_resource_set_drive(text, text, text)',        array['anon', 'authenticated'])
+  (23, 'public.teacher_resource_set_drive(text, text, text)',        array['anon', 'authenticated']),
+  -- 2026-11-03: the 자료실 (resource board) download call shares the daily log
+  (25, 'public.board_attachment_issue(uuid, uuid)',                 array['anon', 'authenticated', 'service_role'])
 ),
 fn_state as (
   select f.no, f.sig,
@@ -104,7 +108,7 @@ rows_ (no, area, check_name, expected, actual) as (
        'anon=no authenticated=yes', (select exec from fn_state where no = 11)),
   (12, 'rpc', 'teacher_resource_clear: signed-in only (checks is_admin inside)',
        'anon=no authenticated=yes', (select exec from fn_state where no = 12)),
-  (13, 'rpc', 'all 6 SECURITY DEFINER with search_path = public, extensions', '6 / 6',
+  (13, 'rpc', 'all 7 SECURITY DEFINER with search_path = public, extensions', '7 / 7',
        (select count(*) filter (where definer_ok) || ' / ' || count(*) from fn_state)),
   (14, 'storage', 'teacher_resources_admin_all: for all, to authenticated, admins only',
        'cmd=ALL roles={authenticated} using=ok check=ok',
@@ -181,7 +185,9 @@ rows_ (no, area, check_name, expected, actual) as (
   (23, 'rpc', 'teacher_resource_set_drive: signed-in only (checks is_admin inside)',
        'anon=no authenticated=yes', (select exec from fn_state where no = 23)),
   (24, 'info', 'all storage.objects policies (for the eye, no pass/fail)', null,
-       coalesce((select string_agg(policyname, ', ' order by policyname) from pol), 'none'))
+       coalesce((select string_agg(policyname, ', ' order by policyname) from pol), 'none')),
+  (25, 'rpc', 'board_attachment_issue (자료실 download, same log): Edge Function (service role) only',
+       'anon=no authenticated=no service_role=yes', (select exec from fn_state where no = 25))
 ),
 checked as (
   select no, area, check_name, expected, actual,
