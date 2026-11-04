@@ -41,7 +41,7 @@ const CATEGORIES = [
   "상장",
   "테스트",
   "핵심문장 스크립트",
-  "그림자료실",
+  "그림 자료실",
   "플래쉬카드",
 ];
 const PALETTE = ["sky", "indigo", "yellow", "red", "green", "purple", "orange"];
@@ -408,7 +408,13 @@ async function seedPosts(db, who) {
       "테스트",
       { days: 4, views: 88, body: "정답은 마지막 쪽에 있어요. 100% 확인" },
     ],
-    [7, "10월 그림 자료 모음", "level-1", "그림자료실", { days: 7, views: 73 }],
+    [
+      7,
+      "10월 그림 자료 모음",
+      "level-1",
+      "그림 자료실",
+      { days: 7, views: 73 },
+    ],
     [
       8,
       "2026 수료 상장 양식",
@@ -452,7 +458,7 @@ async function seedPosts(db, who) {
       13,
       "Good_Morning 노래 가사판",
       "common",
-      "그림자료실",
+      "그림 자료실",
       { days: 61, views: 210 },
     ],
     [14, "8월 연간 계획 메모", "level-2", "연간교육안", { days: 90, views: 3 }],
@@ -1024,7 +1030,7 @@ test("resource board sql: admin list and categories (B5, 그림 05)", async ({},
       ["상장", 2],
       ["테스트", 26],
       ["핵심문장 스크립트", 2],
-      ["그림자료실", 2],
+      ["그림 자료실", 2],
       ["플래쉬카드", 2],
     ]);
 

@@ -2595,7 +2595,7 @@ begin
     );
     insert into public.board_categories (name, position, color) values
       ('월간교육안', 1, 'sky'), ('연간교육안', 2, 'indigo'), ('상장', 3, 'yellow'),
-      ('테스트', 4, 'red'), ('핵심문장 스크립트', 5, 'green'), ('그림자료실', 6, 'purple'),
+      ('테스트', 4, 'red'), ('핵심문장 스크립트', 5, 'green'), ('그림 자료실', 6, 'purple'),
       ('플래쉬카드', 7, 'orange');
   end if;
 end;
