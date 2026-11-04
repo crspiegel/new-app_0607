@@ -19,8 +19,8 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 Live = **`a4da52b`** (`2026-11-02`: 3B `4a9b23d`, D63, D64+D65 — live SQL first, then the push). Older: archive.
 
-- **Resource board (header Teacher button) + teacher-resources on/off** — brief `2026-11-03`: SQL + Edge = one
-  local commit; screens uncommitted until the user's feedback.
+- **Resource board** (briefs `11-03`, `11-04` 수정 1차): SQL `5c7d1dd` + `19a66cc`, 화면 커밋 완료 `2026-11-04`
+  (all local, unpushed). Next = 운영 반영 대기 (live guide ①~⑥, PM). NOTES "자료실 게시판".
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"
@@ -34,7 +34,6 @@ Live = **`a4da52b`** (`2026-11-02`: 3B `4a9b23d`, D63, D64+D65 — live SQL firs
     `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). D58 cards, D63, **D64·D65 live
     `2026-11-02`** (a slot = a file OR a Google Drive file ID; 월간 3~12월 + 3 new kinds = 62 slots, 2-column cards,
     month panel, admin level tabs).
-- **Student page header fix** live (`8176966`), PC check done 10/31.
 - **User:** iPhone real-device check (2B); Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own
   Vimeo (`vimeo.com/<id>` in admin).
 - **Home hero cast** stage 2 (AI video) awaits a PM brief; stage 1 lives only on the local branch

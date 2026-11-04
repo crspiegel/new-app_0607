@@ -1191,6 +1191,81 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
 - 월 페이지 '교사 자료실' 버튼은 레벨 색 채움(`#teacherResBtn`), 자료실 페이지 '월 선택'은 테두리 그대로(같은 `.teacher-res-button`).
   카드 회색 글자는 `#666`(사이트 `--muted-ink` #777은 흰 바탕 14px에서 4.5:1 미달).
 
+## 자료실 게시판 (`2026-11-03`, PM 지시서 B1~B12 · T1~T3 · H1~H6)
+
+- **파일:** SQL = `migration.sql` "Resource board" 블록(+ 교사 자료실 블록의 `site_flag`·T3), 읽기 전용 점검 `supabase/lms/verify-resource-board.sql`.
+  화면 = `resource-board.js`(선생님) · `resource-board-admin.js`(관리자·스위치 2개) · `styles.css` 끝(헤더 버튼 + `bd-*` + `rb-*`).
+  테스트 = `tests/resource-board-sql.spec.js`(PGlite) · `tests/resource-board.spec.js` + 가짜 Supabase `tests/resource-board-stub.mjs`.
+- **주소:** `#board[?level=&cat=&q=&sort=&page=]` · `#board/<글 uuid>[?…]`. 앱 전체에 hashchange 처리기가 없어서 **게시판 파일만**
+  hashchange를 듣는다 — 게시판 밖으로 뒤로 가기는 `rbLeave`(홈·월 화면·교사 자료실, 그 밖은 새로고침). 테스트에서 같은 페이지의
+  `page.goto("/#months/…")`는 다시 라우팅되지 않는다 → `page.reload()`.
+- **스위치 2개**(`site_settings` `resource_board_enabled` 기본 false · `teacher_resources_enabled` 기본 true): 화면은 회원가입 표시와 같은
+  한 번의 요청으로 읽고(`getSignupVisible`) **`craAuthReady` 전에** 기다린다(딥 링크 판단에 필요). 서버 `site_flag`는 jsonb `true`/`false`만
+  인정하고 나머지는 기본값. T3: 교사 자료실 끄면 목록 함수가 지사·선생님에게 0행(관리자는 그대로), **내려받기 함수는 그대로**(지시서).
+- **헤더 글꼴:** '교사자료실' 5글자 = 나눔스퀘어라운드 Bold 부분 글꼴 `assets/fonts/cra-teacher-label-kr.woff2`(3,992 B). OFL의 예약 글꼴
+  이름 때문에 **이름을 바꿈**(`CRA Teacher Label KR`) + 라이선스 파일 같은 폴더. 원본 = `hangeul.pstatic.net/…/NanumSquareRoundB.ttf`
+  1회 내려받기(2026-11-03), fonttools(파이썬, package.json 아님)로 `text="교사자료실"`·hinting 없음·레이아웃 표 없음·woff2. 글자를 바꾸면
+  다시 만들고 `unicode-range`도 고친다. 아이콘 = Lucide v1.66.0 `folder`·`user-cog`(ISC, 인라인 SVG — `index.html` 주석).
+- 헤더 버튼 폭(H6): 1024~1366 다섯 폭 모두 겹침 없음, 가장 좁은 틈 21px(지사 "My Branch", 1280). 버튼이 더 생기면 다시 잴 것.
+- **업로드:** supabase-js 대신 **XHR로 Storage REST에 직접**(진행 막대, 형식은 확장자로 — 한글은 브라우저가 빈 값을 준다), 동시 3개.
+  경로 `<글 uuid>/<ms>-<6자>.<확장자>`(글 id는 화면이 `crypto.randomUUID`로 먼저 만든다). 테스트의 가짜 응답(route)은 업로드 진행
+  이벤트를 보내지 않는다 → 테스트·사진에서는 막대가 비어 있다(실제 업로드는 찬다).
+- **고아 파일(B8):** 저장 전 업로드는 × · 취소 · 다른 메뉴 · 사이트 보기 · 로그아웃 · 탭 닫기(pagehide)에서 지운다. 떠날 때는
+  `fetch(keepalive)` + **떠나기 전에 받아 둔 토큰**(로그아웃이 세션을 먼저 지워도 지워지게). 강제 종료·정전은 남을 수 있음(사람이 버킷 확인).
+- 저장 = 첨부 목록 전체를 순서대로 보냄(기존은 `{id}`만). 빠진 기존 첨부의 경로를 서버가 돌려주면 **그때** Storage에서 지운다.
+  이미 붙은 파일을 "새 파일"로 다시 보내면 거절(보안 검토 L1 — 지워질 객체를 새 행이 가리키는 사고).
+- 내려받기 30회는 교사 자료실과 같은 기록표·같은 잠금(7302): 게시판 행은 `level='board'`, `slot=<첨부 id>`. 객체가 없으면 세지 않음.
+  `verify-teacher-resources.sql` 21번은 "교사 자료실 기록을 만지는 함수는 목록에 있어야" → `board_attachment_issue`를 25번으로 넣음.
+- `board_post_get`은 조회수를 쓰는 volatile 함수 → PostgREST **GET으로 부르면 읽기 전용 트랜잭션 오류**. supabase-js `rpc`(POST)만.
+- 분류 7개는 **표를 만들 때 한 번만** 채운다(DO 블록) → 운영 apply DO는 그 블록 안쪽만 잘라 넣는다(DO 안에 DO 불가).
+- 관리자 '+ 새 글 쓰기'는 공용 제목 줄에 있다 → `body[data-admin-view="board"]`(app.js `setAdminView`)와 `data-board-mode`로만 보인다.
+- 파일 이름 정렬 = `localeCompare("en", {numeric:true})`(3월 < 10월, 라틴 먼저 — 윈도 탐색기와 같은 순서; `"ko"`는 한글이 먼저).
+- 작업 함정: JS `replace(문자열, 문자열)`은 대체 문자열의 `$'`·`$&`를 특수 패턴으로 읽는다(SQL 정규식 `…)$'`가 깨짐) → 함수로 넘긴다.
+  `getComputedStyle().fontFamily`는 `Inter`(따옴표 없음)와 `"CRA Teacher Label KR"`(공백 있어 따옴표)로 다르게 돌려준다.
+
+### 수정 1차 (`2026-11-04`, PM 지시서 F1~F4 · R1~R3)
+
+- **F1 프리텐다드:** 선생님 게시판 화면(`#boardScreen`)만. CSS = jsDelivr **버전 고정**
+  `orioncactus/pretendard@v1.3.9/…/pretendardvariable-dynamic-subset.min.css`(글꼴 이름 `Pretendard Variable`, 92조각 ·
+  `font-display: swap`, 약 13KB gzip). 머리에 넣지 않고 **게시판을 처음 열 때** `<link id="boardFontLink">`를 붙인다
+  (`rbEnsureFont`, 관리자 글꼴 `ensureAdminFont`와 같은 방식) → 다른 화면은 요청 0. 적용은 styles.css 선생님 게시판 절
+  **맨 끝**의 `.board-screen, .board-screen * { font-family: var(--bd-font) }` — 같은 우선순위의 `bd-*` 규칙(Inter·
+  Fredoka)을 이기려고 마지막에 둔다. 이 규칙 아래에 게시판 글꼴 규칙을 새로 쓰면 그쪽이 이긴다. 라이선스 = **SIL OFL 1.1**
+  (글꼴을 우리 저장소에 두지 않고 CDN에서 그대로 씀 — 이름 변경 의무 없음). CSP는 없음(`vercel.json`·`index.html` 확인).
+  jsDelivr가 막히면 대체 글꼴(Noto Sans KR → Inter)로 보인다. 테스트도 jsDelivr에서 받는다(supabase-js와 같은 의존).
+- **F2:** 게시판 드라이브 첨부 = 교사 자료실 D64와 같은 `driveDownloadUrl`(`uc?export=download`) + 새 탭, 모양은 파일과 같은
+  `.bd-att-dl`(그러나 `<a>`) — 클릭 처리는 계속 `button.bd-att-dl`만 잡는다(링크가 Edge Function을 부르지 않게).
+- **F3 떠나기 확인:** 보류 업로드 = `!id && kind === "file"`(올리는 중·대기·완료·실패; 거절된 파일·드라이브·등록된 것 제외).
+  사이트 안 이동 3곳(메뉴·사이트 보기·로그아웃)은 document **캡처 단계 클릭**에서 막고(`stopImmediatePropagation`), [중단하기]면
+  새 토큰 → keepalive 삭제 → 같은 버튼을 `rbaPassing`으로 다시 누른다. `#` 바뀜·뒤로 가기는 resource-board.js의 hashchange가
+  **먼저** `craBoardAdmin.hashChanged()`를 묻는다(관리자 파일이 뒤에 로드 — 같은 window 처리기 순서에 기대지 않음). 머묾 =
+  `history.replaceState`로 편집기를 연 주소로 되돌림(hashchange 안 생김), 나감 = 편집기 닫고 `rbFollowHash()`(게시판이면 그 화면,
+  아니면 `rbLeave`: 홈·월·교사 자료실·그 밖은 새로고침). 우리 창 = `role="alertdialog"`, 처음 초점 [계속 올리기], Tab은 두 버튼만,
+  `focusin`으로 밖으로 새는 초점 되돌림, Esc·배경 = 머묾. `window.confirm` 쓰지 않음.
+- **beforeunload 문구는 브라우저가 정한다(바꿀 수 없음).** 보류 업로드가 있을 때만 처리기를 **붙이고**, 없으면 뗀다
+  (`rbaSyncUnload` — 늘 붙여 두면 bfcache를 막는 브라우저가 있음). 크롬은 사용자가 페이지를 한 번이라도 누른 뒤에만 묻는다.
+  관리자 안내 = 게시 상자 아래 `#rbEdLeaveNote`.
+- **고아 파일:** 강제 종료·정전 등은 여전히 남을 수 있다 → 읽기 전용 확인 `docs/worker-briefs/2026-11-04-board-orphans-do.sql`
+  (로컬; 1일 넘은, 어떤 첨부도 가리키지 않는 `resource-board` 파일 목록·개수·크기, "글 있음/없음"). 삭제 SQL은 만들지 않는다(PM).
+- **F4:** 제출 버튼 2개(`.rb-ed-submit` — 게시 상자 `#rbEdSave` · 등록 막대 `#rbEdBarSave`)는 같은 form의 submit. 잠김 =
+  `disabled`(올리는 중·실패·등록 중). 등록 막대 = `.rb-ed-main` 안의 `position: sticky; bottom: 0` — 창(window)이 스크롤하므로
+  동작(조상에 `overflow` 넣지 말 것). 휴대폰은 한 줄 배치라 게시·레벨·분류 상자로 내려가면 막대가 제자리(첨부 목록 아래)에 선다.
+  "바뀐 내용" = 열 때 찍은 `rbaSnapshot()`(제목·내용·레벨·분류·공개·고정·첨부 id 순서)과 비교.
+- **R1:** 파일 이름 = `_`·`-`·`.` 뒤에 `<wbr>` + `word-break: keep-all`(한글 낱말 안에서 안 끊김), 정말 긴 조각만 `anywhere`.
+  ⚠ **look-behind 정규식(`(?<=…)`) 금지** — 아이폰 Safari 16.3 이하는 파일 전체를 못 읽어 사이트가 멈춘다(반복문으로 처리).
+- **R2:** 처음 설치 분류 '그림 자료실'(띄어쓰기, 교사 자료실 칸 이름과 같게) — 로컬 커밋 `19a66cc`. 운영 apply·verify DO는
+  `board-sql-check.mjs`가 다시 만들었다(검사 17/17).
+- **테스트 함정:** ① 같은 문서 안에서 `page.goto("/#admin")`은 `#` 이동일 뿐 관리자 화면을 열지 않는다(`#admin`은 **처음 로드할 때만**
+  열림) → `reload` 또는 다른 주소(`/?x=1#admin`). ② 새로고침을 사이에 둔 history 항목으로 **뒤로 가기는 다른 문서 이동** →
+  우리 창이 아니라 beforeunload(Playwright가 자동으로 취소). 뒤로 가기 시험은 같은 문서 안에서 쌓은 항목으로. ③ beforeunload는
+  `new Event("beforeunload", {cancelable:true})` → `defaultPrevented`로 켜짐 확인, 실제 창은 `page.close({ runBeforeUnload: true })`
+  → `dialog` 이벤트. ④ 데스크톱에선 ↑↓ 버튼이 숨겨져 있다(휴대폰 전용) → 손잡이에 `press("ArrowDown")`.
+- **크기 표시(PM 발견):** 게시판 `rbFormatSize`(상세·관리자 첨부 줄)는 KB로 반올림해 **1,000KB 이상이면 MB**(소수 한 자리,
+  "1006KB" → "1.0MB"). 교사 자료실(`teacher-resources.js` 두 곳)은 아직 옛 계산(1MB 미만은 KB)이라 "1006 KB"가 나올 수 있다 —
+  범위 밖이라 그대로 둠.
+- **사진 도구 함정:** `fullPage` 사진은 sticky 막대를 **원래 창 높이의 바닥**(페이지 중간)에 그린다 → 11/03 사진 도구는 전체 사진을
+  찍을 때 창 높이를 페이지 높이로 늘렸다가 되돌린다.
+
 ## 요일 슬롯 게임 URL (`2026-10-22`, R1)
 
 - **비-Vimeo http(s) 호스트는 기본이 `kind:"page"`(출판사 페이지 iframe)이고, 게임은 `GAME_HOSTS`에 있는

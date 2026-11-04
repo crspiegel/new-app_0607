@@ -284,6 +284,66 @@ Menu button requirements:
 - The Korean labels are a PM-set exception to the English UI (teacher-only screens).
 - This replaces the cancelled header "선생님자료실" link button (former Phase 4 / R4).
 
+## Resource Board (자료실 게시판, 2026-11-03 · 수정 1차 2026-11-04)
+
+A board of posts with attachments for teachers, next to the per-level 교사 자료실 above. PM briefs
+`2026-11-03` (B1-B12, T1-T3, H1-H6) and `2026-11-04` (F1-F4, R1-R3).
+
+- **Who reads:** the top admin and LMS branch (role 1) / teacher (role 2) accounts. They get a
+  "Teacher / 교사자료실" button in the header (before My Class / Admin; a folder icon on phones) that
+  opens `#board`. Students (role 3) and visitors never see the button; an address sends them to the
+  home page, and the server answers them nothing (RPCs + private Storage).
+- **Who writes:** the top admin only — admin screen → 자료실 (list, 자료실 설정, editor). Every write is
+  an RPC that checks `is_admin()` again.
+- **List** (`#board[?level=&cat=&q=&sort=&page=]`): title/body search, level chips (a level = that
+  level and 공통), category chips (7 to start: 월간교육안, 연간교육안, 상장, 테스트, 핵심문장 스크립트, 그림
+  자료실, 플래쉬카드 — the admin renames, reorders, adds, and deletes an empty one), 전체 N개, 최신순 /
+  조회순, pinned (공지) first, 10 a page; a table on a PC, cards on a phone. Filters live in the address (Back
+  and reload keep them). NEW = posted in the last 7 days (KST); views count once per member per day.
+- **Post** (`#board/<id>`): tags, title, date · views · files, body, the attachments in the admin's
+  order, 이전 글 / 다음 글 in the list's order, 목록으로.
+- **Font (F1):** the teachers' board screens (list, post, empty states, notes; PC and phone) are
+  Pretendard for every letter (Korean, Latin, numbers — level tags, NEW, dates, views, file names,
+  button labels). The header, footer, 교사 자료실 and all admin screens keep their fonts.
+- **Attachments:** up to 20 per post, each a file OR a Google Drive file link.
+  - File: PDF · Excel (xlsx/xls) · 한글 (hwp/hwpx) · PowerPoint (pptx/ppt) · JPG · PNG, 10 MB max, in the
+    private bucket `resource-board`. [내려받기] = a 15-second signed URL from the Edge Function
+    `teacher-resource-download` (`{attachment}`), saved in the same tab with the original name.
+  - Drive (F2): [내려받기] opens Google's direct download
+    `https://drive.google.com/uc?export=download&id=<ID>` in a new tab (the D64 rule — not the preview
+    page; no Storage traffic, not counted in the daily limit). The row says "구글 드라이브 · 바로 받기". A
+    very big file (about 100 MB+) may show Google's one-time "can't scan for viruses" page first.
+  - Phones: an icon-only [내려받기]; a long file name wraps after `_` `-` `.` or a space, 2 lines max (R1).
+- **Download limit:** the same 30 a day per LMS member (KST) as 교사 자료실 — one shared count (board
+  rows logged as `level='board'`). Admins unlimited. A missing file is not counted.
+- **Editor (admin):** title (required, 100), body (optional, 5,000), level (공통 / one level), category,
+  공개, 📌 고정. Files are dropped (many at once, name order "3월 < 10월") or picked, uploaded 3 at a
+  time with a bar each; refused ones (type, size, empty) are listed in red; rows reorder by dragging
+  the handle, ↑ ↓ on it, or the phone buttons.
+  - **Register (F4):** [등록하기] (new post) / [수정 완료] (existing post) — big in the 게시 box and on the
+    등록 bar right under the file list, which stays at the bottom of the window while scrolling (PC and
+    phone). The bar says "올리는 중 6/10…" (button locked) → "파일 10개가 올라갔어요. [등록하기]를
+    눌러야 선생님 화면에 보여요." (button highlighted) → with a failure "올리지 못한 파일 1개 — 빼거나
+    다시 올린 뒤 등록하세요." (locked). File rows: "✓ 올림 · 등록 전" (grey) until registered, "등록됨"
+    after. An empty title moves to the title box with a note. Success: "등록했어요" / "수정했어요", back to
+    the list with that row lit up for a moment. Changing only the body or the attachment order also
+    needs [수정 완료].
+  - **Leaving (F3):** uploads made in this edit and not registered (uploading, waiting, done or failed)
+    are pending. Leaving inside the site (취소, another admin menu, 사이트 보기, 로그아웃, another post,
+    Back / a changed `#`) with pending uploads shows our window "업로드를 중단하시겠습니까?" / "중단하면
+    이번에 올린 파일 N개가 모두 취소돼요. 이미 등록된 파일은 그대로 남아요." / [중단하기] (red) · [계속
+    올리기] (focused; also Esc). 중단하기 = stop the uploads, delete all of them from Storage, then go;
+    계속 올리기 = stay (Back: the address is put back). Other unsaved changes ask "수정한 내용을 저장하지
+    않고 나갈까요?". Nothing unsaved = no window. Closing the tab, reloading or another address: the
+    browser's own question (its wording cannot be changed) only while uploads are pending; leaving
+    then deletes them (`pagehide`, keepalive). A forced browser kill can leave files — a read-only
+    check lists them (no delete SQL).
+- **Switches (자료실 설정, B12 · T1):** `resource_board_enabled` (default off) shows / hides the header
+  button and the board for branch / teacher accounts (an address does not open it; posts and files
+  stay; the top admin may still preview with a note). The 배너 tab's 교사 자료실 switch
+  (`teacher_resources_enabled`, default on) hides the month-page 교사 자료실 button and list for everyone
+  (files and links stay; the download function itself is unchanged).
+
 ## Data Model Direction
 
 Future implementation should separate content data from rendering logic.

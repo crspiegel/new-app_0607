@@ -44,6 +44,9 @@ For this project, use Duolingo ABC only as a style reference for color, spacing,
 - **Special-purpose:** `Sniglet` (level names / level-icon numbers), `Manrope 800`
   (month-select & content month numbers), `Concert One` (month-select fallback
   number rule), `Baloo 2` (content H2 — currently hidden).
+- **자료실 게시판 (teachers' board, 2026-11-04 F1):** `Pretendard Variable` for every letter of
+  `#boardScreen` (`--bd-font`, fallback Noto Sans KR → Inter) — loaded with the first board open
+  (jsDelivr, pinned v1.3.9 dynamic subset). Header, footer, 교사 자료실 and admin keep their fonts.
 - Global hard rule: **no italics anywhere** (`font-style: normal !important` +
   `font-synthesis: none` on `*`, `html`, `body`, `button`).
 
@@ -72,6 +75,10 @@ shades from each level's own palette.
 - `scrollbar-gutter: stable` on `html` so logo/nav/icons stay pixel-identical
   across pages whether or not a page scrolls.
 - At `≤1023px` the nav drops to its own centered row.
+- **Right buttons (2026-11-03):** [Teacher / 교사자료실] [My Class · My Branch · Admin] [Log out]. Teacher = white,
+  2px macaw-blue rim, radius 16, 3px `--macaw-blue-shadow` step, 37px, Lucide `folder` 18px + "Teacher" Inter 800
+  13px / "교사자료실" NanumSquareRound Bold subset 10px, text `#1477b8`. The others: Inter 800 14px at a fixed 37px;
+  Admin has Lucide `user-cog` 17px. Phones (≤767px): icons only (folder · key · door), grey.
 
 ### Month-selection page (`#monthScreen`, all levels)
 

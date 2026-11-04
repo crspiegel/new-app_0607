@@ -5,6 +5,12 @@
 > updated to the current `D:\_TPS` root). The live, short status now lives in `PROJECT_MEMORY.md`.
 > Read this only when you need past history, rationale, or old session logs.
 
+## Entries moved out of PROJECT_MEMORY.md (`2026-11-03`, verbatim)
+
+> Moved to keep PROJECT_MEMORY.md under 6,000. Live state then: `a4da52b`.
+
+- **Student page header fix** live (`8176966`), PC check done 10/31.
+
 ## Entries moved out of PROJECT_MEMORY.md (`2026-10-31`, verbatim)
 
 > Moved to keep PROJECT_MEMORY.md under 6,000. Live state then: `8176966` live (pushed `2026-10-31`).
