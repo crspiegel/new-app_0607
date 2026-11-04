@@ -166,6 +166,74 @@ export default [
       "no-undef": "error",
     },
   },
+  // resource-board.js: classic script after teacher-resources.js (same
+  // shared scope) — the teachers' 자료실 screen (2026-11-03).
+  {
+    files: ["resource-board.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "script",
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        sb: "readonly",
+        isAdmin: "readonly",
+        siteFlags: "readonly",
+        canSeeBoard: "readonly",
+        showScreen: "readonly",
+        updateAdminUI: "readonly",
+        followDownload: "readonly",
+        driveDownloadUrl: "readonly",
+        RES_FUNCTION: "readonly",
+        levelFromAny: "readonly",
+        showMonthsFor: "readonly",
+        openTeacherResources: "readonly",
+      },
+    },
+    rules: {
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "no-undef": "error",
+    },
+  },
+  // resource-board-admin.js: classic script after resource-board.js — the
+  // admin 자료실 view and the two on/off switches (2026-11-03). Uses
+  // lms-admin.js's table helpers at run time.
+  {
+    files: ["resource-board-admin.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "script",
+      globals: {
+        document: "readonly",
+        window: "readonly",
+        sb: "readonly",
+        isAdmin: "readonly",
+        siteFlags: "readonly",
+        updateAdminUI: "readonly",
+        refreshSignupUI: "readonly",
+        adminViewOpeners: "readonly",
+        adminTitle: "readonly",
+        SUPABASE_BASE: "readonly",
+        resourceExt: "readonly",
+        driveIdFromLink: "readonly",
+        DRIVE_MSG: "readonly",
+        setTeacherResStatus: "readonly",
+        rbSvg: "readonly",
+        rbFileKind: "readonly",
+        rbFormatSize: "readonly",
+        rbFollowHash: "readonly",
+        makeCell: "readonly",
+        makeButton: "readonly",
+        makeDeleteButton: "readonly",
+        primaryCell: "readonly",
+        fillSelect: "readonly",
+      },
+    },
+    rules: {
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "no-undef": "error",
+    },
+  },
   // lms-admin.js: classic script after app.js (same shared scope) — the
   // member / class / branch views of the admin screen (Phase 3.3).
   {

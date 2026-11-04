@@ -79,6 +79,34 @@
           </button>
         </nav>
         <div class="topbar-actions">
+          <!-- 자료실 (resource-board.js, 2026-11-03): the top admin and LMS
+               branch / teacher accounts while the board is on (app.js
+               updateAdminUI → hidden). Icons: Lucide v1.66.0 'folder' and
+               'user-cog' (ISC license, inline SVG). The Korean line uses a
+               5-glyph subset of NanumSquareRound Bold (SIL OFL 1.1 —
+               assets/fonts/cra-teacher-label-kr-OFL.txt). -->
+          <button
+            class="teacher-board-button"
+            type="button"
+            id="teacherBoardBtn"
+            aria-label="Teacher 교사자료실"
+            hidden
+          >
+            <svg
+              class="teacher-board-icon"
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              focusable="false"
+            >
+              <path
+                d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+              ></path>
+            </svg>
+            <span class="teacher-board-text" aria-hidden="true">
+              <span class="teacher-board-en">Teacher</span>
+              <span class="teacher-board-ko">교사자료실</span>
+            </span>
+          </button>
           <button
             class="admin-nav-button"
             type="button"
@@ -96,6 +124,24 @@
               <path d="M12 11v9"></path>
               <path d="M12 15h3"></path>
               <path d="M12 18h3"></path>
+            </svg>
+            <svg
+              class="admin-cog-icon"
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              focusable="false"
+            >
+              <path d="M10 15H6a4 4 0 0 0-4 4v2"></path>
+              <path d="m14.305 16.53.923-.382"></path>
+              <path d="m15.228 13.852-.923-.383"></path>
+              <path d="m16.852 12.228-.383-.923"></path>
+              <path d="m16.852 17.772-.383.924"></path>
+              <path d="m19.148 12.228.383-.923"></path>
+              <path d="m19.53 18.696-.382-.924"></path>
+              <path d="m20.772 13.852.924-.383"></path>
+              <path d="m20.772 16.148.924.383"></path>
+              <circle cx="18" cy="15" r="3"></circle>
+              <circle cx="9" cy="7" r="4"></circle>
             </svg>
             <span class="action-label">Admin</span>
           </button>
@@ -737,6 +783,123 @@
           </div>
         </section>
 
+        <!-- 자료실 (resource board, 2026-11-03 — resource-board.js): the
+             teachers' board. #board[?level=…&cat=…&q=…&sort=…&page=…] = the
+             list, #board/<post id>[?…] = a post (the list's filters ride
+             along for 이전·다음 글 and 목록으로). Admins and LMS branch /
+             teacher accounts only (the server answers nothing to anyone
+             else); Korean UI like the teacher resources (teacher-only). -->
+        <section
+          class="screen board-screen"
+          id="boardScreen"
+          aria-labelledby="boardTitle"
+        >
+          <div class="bd-wrap">
+            <p class="bd-admin-note" id="boardAdminNote" hidden>
+              자료실이 지금 꺼져 있어요 — 최고관리자만 미리 볼 수 있어요.
+            </p>
+            <div class="bd-list-view" id="boardListView">
+              <div class="bd-head">
+                <div class="bd-head-text">
+                  <h1 class="bd-title" id="boardTitle">
+                    <span class="bd-title-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path
+                          d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                        ></path>
+                      </svg>
+                    </span>
+                    <span>자료실</span>
+                  </h1>
+                  <p class="bd-sub">
+                    수업에 필요한 교사용 자료를 레벨·분류별로 찾아 내려받으세요.
+                  </p>
+                </div>
+                <form class="bd-search" id="boardSearchForm" role="search">
+                  <svg
+                    class="bd-search-icon"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <path d="m20 20-4-4"></path>
+                  </svg>
+                  <input
+                    class="bd-search-input"
+                    type="search"
+                    id="boardSearch"
+                    maxlength="100"
+                    autocomplete="off"
+                    placeholder="자료 제목·내용으로 검색"
+                    aria-label="자료 제목·내용으로 검색"
+                  />
+                  <button class="bd-search-btn" type="submit">검색</button>
+                </form>
+              </div>
+              <div class="bd-filters">
+                <div class="bd-filter-row">
+                  <span class="bd-filter-label" id="boardLevelLabel">레벨</span>
+                  <div
+                    class="bd-chips"
+                    id="boardLevelChips"
+                    role="group"
+                    aria-labelledby="boardLevelLabel"
+                  ></div>
+                </div>
+                <div class="bd-filter-row">
+                  <span class="bd-filter-label" id="boardCatLabel">분류</span>
+                  <div
+                    class="bd-chips"
+                    id="boardCatChips"
+                    role="group"
+                    aria-labelledby="boardCatLabel"
+                  ></div>
+                </div>
+              </div>
+              <div class="bd-meta">
+                <p class="bd-count" id="boardCount" aria-live="polite"></p>
+                <label class="bd-sort">
+                  <span class="bd-sr">정렬</span>
+                  <select id="boardSort">
+                    <option value="new">최신순</option>
+                    <option value="views">조회순</option>
+                  </select>
+                </label>
+              </div>
+              <div class="bd-table">
+                <div class="bd-thead" aria-hidden="true">
+                  <span>분류</span><span>제목</span><span>등록일</span
+                  ><span>조회</span>
+                </div>
+                <ul class="bd-rows" id="boardRows" aria-label="자료 목록"></ul>
+                <div class="bd-empty" id="boardEmpty" hidden></div>
+              </div>
+              <nav class="bd-pager" id="boardPager" aria-label="쪽"></nav>
+              <p class="bd-status" id="boardStatus" role="status"></p>
+            </div>
+            <div class="bd-detail-view" id="boardDetailView" hidden>
+              <nav class="bd-crumbs" id="boardCrumbs" aria-label="위치"></nav>
+              <article class="bd-card" id="boardPost"></article>
+              <nav
+                class="bd-neighbors"
+                id="boardNeighbors"
+                aria-label="이전 글·다음 글"
+              ></nav>
+              <p class="bd-status" id="boardDetailStatus" role="status"></p>
+              <div class="bd-back-row">
+                <a class="bd-back" id="boardBack" href="#board">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M9 6h11M9 12h11M9 18h11"></path>
+                    <path d="M4 6h.01M4 12h.01M4 18h.01"></path>
+                  </svg>
+                  <span>목록으로</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- Admin screen (Phase 3B-2b): its own frame, laid out like a common
              admin console — a dark top bar, a left menu that shows only the
              caller's views, and a light body of white boxes. body.admin-mode
@@ -870,12 +1033,31 @@
                 </svg>
                 <span>배너</span>
               </button>
+              <button
+                type="button"
+                class="admin-menu-btn"
+                data-admin-view="board"
+              >
+                <svg class="adm-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  ></path>
+                </svg>
+                <span>자료실</span>
+              </button>
             </nav>
             <div class="adm-backdrop" id="adminBackdrop" hidden></div>
 
             <div class="adm-body">
               <div class="adm-head">
                 <h1 class="admin-title" id="adminTitle">콘텐츠 관리</h1>
+                <button
+                  type="button"
+                  class="adm-btn adm-btn-primary rb-new-btn"
+                  id="boardNewBtn"
+                >
+                  + 새 글 쓰기
+                </button>
                 <button
                   type="button"
                   class="adm-btn adm-btn-secondary"
@@ -1262,6 +1444,305 @@
                 </section>
               </div>
 
+              <!-- 자료실 view (2026-11-03, resource-board-admin.js — the top
+                   admin only): the post list (그림 05: filters, title search,
+                   20 a page), 자료실 설정 (the board switch B12 + categories
+                   B5), and the post editor (B4, B6-B8: drag-and-drop uploads,
+                   order, Drive links). Every write is an RPC that checks
+                   is_admin() again. -->
+              <div class="admin-view rb-admin" id="adminViewBoard" hidden>
+                <p
+                  class="admin-status adm-notice"
+                  id="rbAdminStatus"
+                  aria-live="polite"
+                ></p>
+                <div class="rb-list-mode" id="rbListMode">
+                  <div class="adm-box">
+                    <div class="adm-filters">
+                      <div class="adm-filter-group">
+                        <label class="admin-select">
+                          <span>레벨</span>
+                          <select id="rbFilterLevel"></select>
+                        </label>
+                        <label class="admin-select">
+                          <span>분류</span>
+                          <select id="rbFilterCat"></select>
+                        </label>
+                        <label class="admin-select">
+                          <span>상태</span>
+                          <select id="rbFilterStatus">
+                            <option value="">전체</option>
+                            <option value="public">공개</option>
+                            <option value="hidden">숨김</option>
+                          </select>
+                        </label>
+                      </div>
+                      <form class="rb-search" id="rbSearchForm" role="search">
+                        <input
+                          class="admin-member-input lms-search"
+                          type="search"
+                          id="rbSearch"
+                          maxlength="100"
+                          autocomplete="off"
+                          placeholder="제목 검색"
+                          aria-label="제목 검색"
+                        />
+                        <button type="submit" class="adm-btn adm-btn-secondary">
+                          검색
+                        </button>
+                      </form>
+                    </div>
+                    <div class="rb-admin-list" id="rbAdminList"></div>
+                    <nav
+                      class="rb-admin-pager"
+                      id="rbAdminPager"
+                      aria-label="쪽"
+                    ></nav>
+                  </div>
+                  <div class="adm-box" id="rbSettings">
+                    <h2 class="admin-subtitle">자료실 설정</h2>
+                    <div class="rb-settings-grid">
+                      <div class="rb-settings-switch">
+                        <label class="adm-switch">
+                          <input
+                            type="checkbox"
+                            role="switch"
+                            id="rbBoardToggle"
+                          />
+                          <span
+                            class="adm-switch-track"
+                            aria-hidden="true"
+                          ></span>
+                          <span class="adm-switch-text" id="rbBoardToggleText"
+                            >사용자 화면에 표시: 끔</span
+                          >
+                        </label>
+                        <p class="admin-hint">
+                          켜면 지사·선생님 계정의 헤더에 'Teacher 교사자료실'
+                          버튼이 생겨요. 끄면 버튼이 사라지고, 주소로 들어와도
+                          열리지 않아요. 등록한 글과 파일은 그대로 남고, 꺼져
+                          있는 동안에도 여기서 글을 관리할 수 있어요.
+                        </p>
+                      </div>
+                      <div class="rb-settings-cats">
+                        <h3 class="rb-subtitle" id="rbCatTitle">분류 관리</h3>
+                        <ul
+                          class="rb-cat-list"
+                          id="rbCatList"
+                          aria-labelledby="rbCatTitle"
+                        ></ul>
+                        <form class="rb-cat-add" id="rbCatAddForm">
+                          <input
+                            class="admin-member-input"
+                            id="rbCatAddName"
+                            maxlength="20"
+                            autocomplete="off"
+                            placeholder="새 분류 이름"
+                            aria-label="새 분류 이름"
+                          />
+                          <button
+                            type="submit"
+                            class="adm-btn adm-btn-secondary"
+                          >
+                            + 분류 추가
+                          </button>
+                        </form>
+                        <p class="admin-hint">
+                          분류 이름·순서를 바꿀 수 있어요. 글이 있는 분류는 지울
+                          수 없어요.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="rb-edit-mode" id="rbEditMode" hidden>
+                  <form class="rb-editor" id="rbEditor" novalidate>
+                    <div class="adm-box rb-ed-main">
+                      <label class="rb-ed-label" for="rbEdTitle">제목</label>
+                      <input
+                        class="admin-member-input rb-ed-title"
+                        id="rbEdTitle"
+                        maxlength="100"
+                        autocomplete="off"
+                        aria-describedby="rbEdTitleError"
+                      />
+                      <p class="rb-ed-error" id="rbEdTitleError"></p>
+                      <label class="rb-ed-label" for="rbEdBody"
+                        >내용 <span class="rb-ed-optional">(선택)</span></label
+                      >
+                      <textarea
+                        class="admin-member-input rb-ed-body"
+                        id="rbEdBody"
+                        maxlength="5000"
+                        rows="5"
+                      ></textarea>
+                      <p class="rb-ed-count" id="rbEdBodyCount"></p>
+                      <p class="rb-ed-label" id="rbEdFilesLabel">
+                        첨부파일 <span class="rb-ed-optional">최대 20개</span>
+                      </p>
+                      <div class="rb-drop" id="rbDrop">
+                        <p class="rb-drop-text" id="rbDropText">
+                          파일을 여기에 끌어다 놓으면 아래 목록 끝에 추가돼요
+                        </p>
+                        <p class="rb-drop-sub" id="rbDropSub">
+                          PDF · 엑셀 · 한글 · 파워포인트 · JPG · PNG, 한 파일
+                          10MB까지
+                        </p>
+                        <div class="rb-drop-actions">
+                          <button
+                            type="button"
+                            class="adm-btn adm-btn-secondary"
+                            id="rbPickFiles"
+                          >
+                            파일 선택
+                          </button>
+                          <button
+                            type="button"
+                            class="adm-btn adm-btn-secondary"
+                            id="rbAddDrive"
+                            aria-expanded="false"
+                            aria-controls="rbDriveForm"
+                          >
+                            드라이브 링크 추가
+                          </button>
+                          <input
+                            type="file"
+                            id="rbFileInput"
+                            multiple
+                            hidden
+                            accept=".pdf,.xlsx,.xls,.hwp,.hwpx,.pptx,.ppt,.jpg,.jpeg,.png"
+                          />
+                        </div>
+                      </div>
+                      <div class="rb-drive-form" id="rbDriveForm" hidden>
+                        <label class="rb-ed-label" for="rbDriveLink"
+                          >구글 드라이브 파일 링크</label
+                        >
+                        <input
+                          class="admin-member-input"
+                          id="rbDriveLink"
+                          autocomplete="off"
+                          placeholder="https://drive.google.com/file/d/…"
+                        />
+                        <label class="rb-ed-label" for="rbDriveName"
+                          >선생님에게 보일 이름</label
+                        >
+                        <input
+                          class="admin-member-input"
+                          id="rbDriveName"
+                          maxlength="100"
+                          autocomplete="off"
+                          placeholder="예: 11월 수업 활동 사진 모음"
+                        />
+                        <p class="admin-hint" id="rbDriveHelp"></p>
+                        <p class="admin-hint" id="rbDriveBigNote">
+                          아주 큰 파일(약 100MB 이상)은 구글이 '바이러스 검사를
+                          할 수 없음' 확인 화면을 한 번 보여 줄 수 있어요.
+                        </p>
+                        <p
+                          class="rb-ed-error"
+                          id="rbDriveError"
+                          role="alert"
+                        ></p>
+                        <div class="rb-drive-actions">
+                          <button
+                            type="button"
+                            class="adm-btn adm-btn-primary"
+                            id="rbDriveAdd"
+                          >
+                            추가
+                          </button>
+                          <button
+                            type="button"
+                            class="adm-btn adm-btn-secondary"
+                            id="rbDriveCancel"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      </div>
+                      <div class="rb-files" id="rbFiles" hidden>
+                        <div class="rb-files-head">
+                          <strong id="rbFilesCount"></strong>
+                          <span class="rb-files-hint" id="rbFilesHint"></span>
+                        </div>
+                        <ol
+                          class="rb-file-list"
+                          id="rbFileList"
+                          aria-labelledby="rbEdFilesLabel"
+                        ></ol>
+                      </div>
+                      <p class="rb-sr" id="rbMoveLive" aria-live="polite"></p>
+                      <!-- F4 (2026-11-04): the 등록 bar — right under the
+                           files, and stuck to the bottom of the window while
+                           the rest of the box is below it (sticky). Its text
+                           says what is happening; its button is the same
+                           submit as the 게시 box's. -->
+                      <div class="rb-ed-bar" id="rbEdBar" data-mode="idle">
+                        <div class="rb-ed-bar-text">
+                          <p class="rb-ed-bar-status" id="rbEdBarStatus"></p>
+                          <p
+                            class="rb-ed-error"
+                            id="rbEdBarError"
+                            aria-hidden="true"
+                          ></p>
+                        </div>
+                        <button
+                          type="submit"
+                          class="adm-btn adm-btn-primary rb-ed-submit"
+                          id="rbEdBarSave"
+                        >
+                          등록하기
+                        </button>
+                      </div>
+                    </div>
+                    <div class="rb-ed-side">
+                      <div class="adm-box rb-ed-panel">
+                        <h2 class="rb-ed-panel-title">게시</h2>
+                        <label class="rb-check">
+                          <input type="checkbox" id="rbEdPublic" checked />
+                          <span>공개 (끄면 선생님 화면에서 숨김)</span>
+                        </label>
+                        <label class="rb-check">
+                          <input type="checkbox" id="rbEdPinned" />
+                          <span>📌 목록 맨 위에 고정 (공지)</span>
+                        </label>
+                        <button
+                          type="submit"
+                          class="adm-btn adm-btn-primary rb-ed-save rb-ed-submit"
+                          id="rbEdSave"
+                        >
+                          등록하기
+                        </button>
+                        <button
+                          type="button"
+                          class="adm-btn adm-btn-secondary rb-ed-cancel"
+                          id="rbEdCancel"
+                        >
+                          취소
+                        </button>
+                        <p class="rb-ed-error" id="rbEdError" role="alert"></p>
+                        <p class="admin-hint" id="rbEdLeaveNote">
+                          올린 파일은 [등록하기]·[수정 완료]를 눌러야 선생님
+                          화면에 보여요. 그 전에 탭을 닫거나 새로고침하면
+                          브라우저가 한 번 물어봐요(그 문구는 브라우저가 정해서
+                          바꿀 수 없어요). 그대로 나가면 이번에 올린 파일은
+                          지워져요.
+                        </p>
+                      </div>
+                      <fieldset class="adm-box rb-ed-panel">
+                        <legend class="rb-ed-panel-title">레벨</legend>
+                        <div class="rb-radios" id="rbEdLevels"></div>
+                      </fieldset>
+                      <fieldset class="adm-box rb-ed-panel">
+                        <legend class="rb-ed-panel-title">분류</legend>
+                        <div class="rb-radios" id="rbEdCats"></div>
+                      </fieldset>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
               <!-- Banner view, a settings screen of two boxes: ① the teacher
                    resource files (teacher-resources.js — a file or a Drive
                    link per slot, 62 slots in 4 levels behind level tabs
@@ -1271,7 +1752,32 @@
                    site_settings.hero_banner; saved with its 저장 button). -->
               <div class="admin-view" id="adminViewBanner" hidden>
                 <div class="adm-box admin-res" id="teacherResAdmin">
-                  <h2 class="admin-subtitle">교사 자료실 파일</h2>
+                  <!-- T1 (2026-11-03): show / hide the '교사 자료실' button
+                       and pages for everyone (site_settings
+                       teacher_resources_enabled; resource-board-admin.js).
+                       Files, links and this section stay. -->
+                  <div class="adm-box-head">
+                    <h2 class="admin-subtitle">교사 자료실 파일</h2>
+                    <label class="adm-switch">
+                      <input
+                        type="checkbox"
+                        role="switch"
+                        id="teacherResToggle"
+                        checked
+                      />
+                      <span class="adm-switch-track" aria-hidden="true"></span>
+                      <span class="adm-switch-text" id="teacherResToggleText"
+                        >사용자 화면에 표시: 켬</span
+                      >
+                    </label>
+                  </div>
+                  <p class="admin-hint">
+                    레벨별 월 선택 화면의 '교사 자료실' 버튼과 그 자료
+                    페이지입니다. <strong>끄면 버튼이 사라지고</strong>, 주소로
+                    들어와도 월 선택 화면으로 돌아갑니다. 올려 둔 파일·링크와
+                    아래 설정은 그대로 남아요(다시 켜면 그대로 보임). 꺼져 있는
+                    동안에도 파일 관리는 할 수 있어요.
+                  </p>
                   <p class="admin-hint">
                     PDF · 엑셀(xlsx, xls), 한 파일 <strong>10MB까지</strong>.
                     올리는 즉시 반영되고, 새 파일을 올리면 이전 파일은
@@ -2124,6 +2630,38 @@
       </div>
     </div>
 
+    <!-- Admin 자료실 editor: leaving it inside the site while this edit's
+         uploads (or changes) are not registered yet — F3 / F4 2026-11-04,
+         resource-board-admin.js. Our own window (never window.confirm):
+         the red button leaves, the blue one (focused first; also Esc and the
+         backdrop) stays. Title and text are set per case. -->
+    <div class="admin-modal rb-leave-modal" id="rbLeaveModal" hidden>
+      <div class="admin-modal-overlay" data-rb-leave-stay></div>
+      <div
+        class="admin-modal-card"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="rbLeaveTitle"
+        aria-describedby="rbLeaveText"
+      >
+        <h2 class="admin-modal-title rb-leave-title" id="rbLeaveTitle"></h2>
+        <p class="rb-leave-text" id="rbLeaveText"></p>
+        <div class="admin-modal-actions">
+          <button
+            type="button"
+            class="admin-btn admin-btn-danger"
+            id="rbLeaveGo"
+          ></button>
+          <button
+            type="button"
+            class="admin-btn admin-btn-primary"
+            id="rbLeaveStay"
+            data-rb-leave-stay
+          ></button>
+        </div>
+      </div>
+    </div>
+
     <script src="https://player.vimeo.com/api/player.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
@@ -2133,6 +2671,8 @@
     <script src="background-editor.js"></script>
     <script src="hero-banner.js"></script>
     <script src="teacher-resources.js"></script>
+    <script src="resource-board.js"></script>
+    <script src="resource-board-admin.js"></script>
     <script src="lms-admin.js"></script>
     <script src="lms-bulk.js"></script>
   </body>

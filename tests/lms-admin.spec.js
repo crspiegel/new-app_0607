@@ -35,7 +35,8 @@ test("lms admin: header button and menus per role", async ({ browser }) => {
     [
       "admin",
       "Admin",
-      ["content", "members", "classes", "branches", "bulk", "banner"],
+      // + 자료실 (resource board, 2026-11-03): the top admin only (B3)
+      ["content", "members", "classes", "branches", "bulk", "banner", "board"],
       "content",
     ],
     ["branch", "My Branch", ["members", "classes", "bulk"], "members"],

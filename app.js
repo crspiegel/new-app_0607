@@ -422,6 +422,8 @@ const screens = {
   contentV3: document.querySelector("#contentScreenV3"),
   login: document.querySelector("#loginScreen"),
   admin: document.querySelector("#adminScreen"),
+  // 자료실 (resource-board.js, 2026-11-03): the teachers' board.
+  board: document.querySelector("#boardScreen"),
 };
 
 const levelThemeClasses = LEVELS.map((item) => levelThemeClass(item.key));
@@ -487,6 +489,12 @@ function showScreen(name) {
   }
   screens[name].classList.add("screen-active");
   document.body.dataset.screen = name;
+  // The header's Teacher button says where you are (no fill change — H2).
+  const boardBtn = document.querySelector("#teacherBoardBtn");
+  if (boardBtn) {
+    if (name === "board") boardBtn.setAttribute("aria-current", "page");
+    else boardBtn.removeAttribute("aria-current");
+  }
   applyPageBackground(name);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -1733,7 +1741,15 @@ const levels = LEVELS.map((item) => item.key);
 // the caller again on the server) and the bulk upload (3.4, lms-bulk.js).
 // Students (3) and visitors → none.
 const ADMIN_VIEWS = {
-  admin: ["content", "members", "classes", "branches", "bulk", "banner"],
+  admin: [
+    "content",
+    "members",
+    "classes",
+    "branches",
+    "bulk",
+    "banner",
+    "board",
+  ],
   branch: ["members", "classes", "bulk"],
   teacher: ["members", "classes", "bulk"],
 };
@@ -1956,12 +1972,32 @@ async function savePage(level, month) {
   });
 }
 
+// The admin's two on/off switches (public site_settings, read with the
+// signup flag in one request — loadSiteFlags): 자료실 (resource_board_enabled,
+// default off — B12) and 교사 자료실 (teacher_resources_enabled, default on —
+// T1). Only what the page shows; the server checks the same switches.
+const siteFlags = { board: false, teacherRes: true };
+
 // Teacher resources (교사 자료실) are for admins and LMS branch (1) / teacher
-// (2) accounts — never students (3) or visitors. This only decides what the
-// page shows; the server checks again on every list / download
-// (teacher_resources_allowed, the storage.objects policy).
+// (2) accounts — never students (3) or visitors — while the admin's switch
+// is on (T2: off = no button for anyone, #resources/<level> → the month
+// page). This only decides what the page shows; the server checks again on
+// every list / download (teacher_resources_allowed, the storage.objects
+// policy).
 function canSeeTeacherResources() {
-  return isAdmin || (state.lms != null && [1, 2].includes(state.lms.role));
+  return (
+    siteFlags.teacherRes &&
+    (isAdmin || (state.lms != null && [1, 2].includes(state.lms.role)))
+  );
+}
+
+// 자료실 (resource-board.js): the header's Teacher button — the top admin and
+// LMS branch / teacher accounts, while the board is on (H1, B2, B12).
+function canSeeBoard() {
+  return (
+    siteFlags.board &&
+    (isAdmin || (state.lms != null && [1, 2].includes(Number(state.lms.role))))
+  );
 }
 
 // The admin menu shows only the views the caller may open (setAdminView
@@ -1987,6 +2023,8 @@ function updateAdminUI() {
   document.body.classList.toggle("is-admin", isAdmin);
   document.body.classList.toggle("signed-in", signedIn);
   document.body.classList.toggle("can-teacher-res", canSeeTeacherResources());
+  const boardBtn = document.querySelector("#teacherBoardBtn");
+  if (boardBtn) boardBtn.hidden = !canSeeBoard();
   if (adminNavBtn) {
     adminNavBtn.hidden = !role;
     const label = ADMIN_BUTTON_LABELS[role] || ADMIN_BUTTON_LABELS.admin;
@@ -2354,6 +2392,7 @@ const adminViews = {
   branches: document.querySelector("#adminViewBranches"),
   bulk: document.querySelector("#adminViewBulk"),
   banner: document.querySelector("#adminViewBanner"),
+  board: document.querySelector("#adminViewBoard"),
 };
 const adminViewTitles = {
   content: "콘텐츠 관리",
@@ -2362,6 +2401,7 @@ const adminViewTitles = {
   branches: "지사 관리",
   bulk: "일괄 등록",
   banner: "배너 관리",
+  board: "자료실",
 };
 const adminViewOpeners = {};
 // List screens: the title row's 새로 추가 opens / closes this box.
@@ -2399,6 +2439,9 @@ function setAdminView(view) {
     Object.keys(adminAddBoxes).forEach((name) => setAddBoxOpen(name, false));
   }
   adminCurrentView = view;
+  // The 자료실 view's "+ 새 글 쓰기" sits in the shared title row; CSS shows
+  // it only while this says "board" (resource-board-admin.js).
+  document.body.dataset.adminView = view;
   if (adminAddNew) adminAddNew.hidden = !adminAddBoxes[view];
   if (adminViewOpeners[view]) adminViewOpeners[view]();
   return true;
@@ -2457,15 +2500,25 @@ if (adminLogoutBtn) adminLogoutBtn.addEventListener("click", logOut);
 // into GAME_HOSTS (video-source.js) so a new game provider can be enabled
 // without a deploy. No admin UI for game_hosts yet — set it in the SQL Editor.
 const GAME_HOSTS_KEY = "game_hosts";
+// The same request also brings the 자료실 / 교사 자료실 switches (siteFlags):
+// only `false` turns teacher resources off and only `true` turns the board
+// on — a missing or odd value keeps the default (= the server's site_flag).
 async function getSignupVisible() {
   if (!sb) return false;
   const { data, error } = await sb
     .from("site_settings")
     .select("key,value")
-    .in("key", ["signup_visible", GAME_HOSTS_KEY]);
+    .in("key", [
+      "signup_visible",
+      GAME_HOSTS_KEY,
+      "resource_board_enabled",
+      "teacher_resources_enabled",
+    ]);
   if (error || !data) return false;
   const byKey = Object.fromEntries(data.map((row) => [row.key, row.value]));
   setExtraGameHosts(byKey[GAME_HOSTS_KEY]);
+  siteFlags.board = byKey.resource_board_enabled === true;
+  siteFlags.teacherRes = byKey.teacher_resources_enabled !== false;
   return byKey.signup_visible === true;
 }
 
@@ -2474,6 +2527,7 @@ async function refreshSignupUI() {
   const visible = await getSignupVisible();
   if (loginSignup) loginSignup.hidden = !visible;
   if (signupToggle) signupToggle.checked = visible;
+  updateAdminUI(); // the switches may have changed what the header shows
 }
 
 if (signupToggle) {
@@ -2988,11 +3042,15 @@ window.craAuthReady = new Promise((resolve) => {
   } catch {
     /* ignore */
   }
+  // The public switches (자료실 / 교사 자료실, with the signup flag) load in
+  // parallel with the sign-in check; deep links (#board, #resources/<level>)
+  // wait for both through craAuthReady.
+  const flagsLoad = refreshSignupUI();
   await refreshAdminStatus();
   if (!isAdmin) await restoreLmsSession(); // an admin session supersedes it
+  await flagsLoad;
   updateAdminUI();
   resolveAuthReady();
-  refreshSignupUI();
   await hydrateContent();
   await hydrateBackgrounds();
   if (view === "admin") {
