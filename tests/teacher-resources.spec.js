@@ -698,6 +698,53 @@ test("resources: PDF and Excel icons differ; a missing size or date is just left
   );
 });
 
+test("resources: sizes up to 999KB in KB, from 1,000KB on in MB — cards and admin rows, the board's rule", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "content only, run once");
+  await stubSupabase(page, {
+    role: "admin",
+    files: {
+      "level-2/plan": { name: "교육안.pdf", size: 1030000 }, // was "1006KB"
+      "level-2/award": { name: "상장.xls", size: 1022975 }, // 999.0KB
+    },
+  });
+  await page.goto("/#resources/level-2");
+  await expect(card(page, "plan").locator(".res-meta")).toHaveText(
+    "PDF · 1.0MB · 10/29 업데이트",
+  );
+  await expect(card(page, "award").locator(".res-meta")).toHaveText(
+    "엑셀 · 999KB · 10/29 업데이트",
+  );
+  // the boundary, and the same answers as the 자료실 board
+  const sizes = [0, null, 1, 1022975, 1023488, 1030000, 1048576, 4404019];
+  const answers = await page.evaluate(
+    (list) =>
+      list.map((n) => [window.formatFileSize(n), window.rbFormatSize(n)]),
+    sizes,
+  );
+  expect(answers.map(([res]) => res)).toEqual([
+    "",
+    "",
+    "1KB",
+    "999KB",
+    "1.0MB",
+    "1.0MB",
+    "1.0MB",
+    "4.2MB",
+  ]);
+  expect(answers.every(([res, board]) => res === board)).toBe(true);
+  // the admin 배너 tab rows: the same shape
+  await openBannerTab(page);
+  await page.getByRole("tab", { name: "Level 2" }).click();
+  await expect(
+    resRow(page, "level-2", "plan").locator(".res-admin-file"),
+  ).toHaveText("교육안.pdf · 1.0MB · 2026-10-29");
+  await expect(
+    resRow(page, "level-2", "award").locator(".res-admin-file"),
+  ).toHaveText("상장.xls · 999KB · 2026-10-29");
+});
+
 // D63 order safety, live step ② (SQL before the push): the page deployed
 // before D63 (commit 4a9b23d — tests/fixtures/teacher-resources-4a9b23d.js,
 // 수정 금지) receives the NEW list with monthly rows. It shows its own slots,
@@ -1297,7 +1344,7 @@ test("resources admin: D65 level tabs — one level at a time, 월간교육안 f
   ]);
   await expect(
     resRow(page, "beginner", "monthly-03").locator(".res-admin-file"),
-  ).toHaveText("3월.pdf · 1 KB · 2026-10-29");
+  ).toHaveText("3월.pdf · 1KB · 2026-10-29");
   await expect(
     resRow(page, "beginner", "monthly-12").locator(".res-admin-file"),
   ).toHaveText("구글 드라이브 · 2026-10-29");
@@ -1306,7 +1353,7 @@ test("resources admin: D65 level tabs — one level at a time, 월간교육안 f
   ).toHaveText("파일 없음");
   const plan = resRow(page, "beginner", "plan");
   await expect(plan.locator(".res-admin-file")).toHaveText(
-    `${PLAN_NAME} · 4.2 MB · 2026-10-29`,
+    `${PLAN_NAME} · 4.2MB · 2026-10-29`,
   );
   await expect(plan.getByRole("button")).toHaveText([
     "교체",

@@ -184,6 +184,7 @@ export default [
         updateAdminUI: "readonly",
         followDownload: "readonly",
         driveDownloadUrl: "readonly",
+        formatFileSize: "readonly",
         RES_FUNCTION: "readonly",
         levelFromAny: "readonly",
         showMonthsFor: "readonly",

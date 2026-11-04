@@ -1260,9 +1260,10 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
   우리 창이 아니라 beforeunload(Playwright가 자동으로 취소). 뒤로 가기 시험은 같은 문서 안에서 쌓은 항목으로. ③ beforeunload는
   `new Event("beforeunload", {cancelable:true})` → `defaultPrevented`로 켜짐 확인, 실제 창은 `page.close({ runBeforeUnload: true })`
   → `dialog` 이벤트. ④ 데스크톱에선 ↑↓ 버튼이 숨겨져 있다(휴대폰 전용) → 손잡이에 `press("ArrowDown")`.
-- **크기 표시(PM 발견):** 게시판 `rbFormatSize`(상세·관리자 첨부 줄)는 KB로 반올림해 **1,000KB 이상이면 MB**(소수 한 자리,
-  "1006KB" → "1.0MB"). 교사 자료실(`teacher-resources.js` 두 곳)은 아직 옛 계산(1MB 미만은 KB)이라 "1006 KB"가 나올 수 있다 —
-  범위 밖이라 그대로 둠.
+- **크기 표시(PM 발견, 해결):** 파일 크기는 **한 함수** `formatFileSize`(teacher-resources.js — 게시판보다 먼저 로드)로 통일 —
+  KB로 반올림해 **1,000KB 이상이면 MB**(소수 한 자리, "1006KB" → "1.0MB"), 붙여 씀("840KB"), 크기 없으면 빈칸. 교사 자료실 카드 ·
+  관리자 배너 탭 줄(예전 "4.2 MB" 띄어쓰기 → "4.2MB") · 게시판 상세 · 게시판 관리자 첨부 줄(`rbFormatSize`는 이 함수를 부르기만
+  함) 모두 같다. 테스트: teacher-resources "sizes up to 999KB…", resource-board "board file sizes…".
 - **사진 도구 함정:** `fullPage` 사진은 sticky 막대를 **원래 창 높이의 바닥**(페이지 중간)에 그린다 → 11/03 사진 도구는 전체 사진을
   찍을 때 창 높이를 페이지 높이로 늘렸다가 되돌린다.
 

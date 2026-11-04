@@ -213,14 +213,11 @@ function rbDay(iso) {
   return { full, short: `${full.slice(5, 7)}/${full.slice(8, 10)}` };
 }
 
-// The board's file sizes (the post page and the admin's file rows): up to
-// 999KB in KB, from 1,000KB on in MB with one decimal ("1006KB" → "1.0MB").
+// The board's file sizes (the post page and the admin's file rows) = the
+// 교사 자료실 rule (teacher-resources.js formatFileSize): up to 999KB in KB,
+// from 1,000KB on in MB with one decimal ("1006KB" → "1.0MB").
 function rbFormatSize(bytes) {
-  const n = Number(bytes) || 0;
-  if (!n) return "";
-  const kb = Math.round(n / 1024);
-  if (kb >= 1000) return `${(n / 1024 / 1024).toFixed(1)}MB`;
-  return `${Math.max(1, kb)}KB`;
+  return formatFileSize(bytes);
 }
 
 function rbFileKind(ext) {

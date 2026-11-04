@@ -203,12 +203,16 @@ function setResourceStatus(text) {
   if (resourceStatus) resourceStatus.textContent = text || "";
 }
 
-// 1.2MB / 840KB; nothing for a size the server did not give.
-function formatResSizeShort(bytes) {
+// One size rule for 교사 자료실 (cards and the admin 배너 tab) and the 자료실
+// board (resource-board.js rbFormatSize, loaded after this file): KB rounded;
+// from 1,000KB on MB with one decimal ("1006KB" → "1.0MB"); 840KB / 1.2MB;
+// nothing for a size the server did not give.
+function formatFileSize(bytes) {
   const n = Number(bytes);
   if (!bytes || !Number.isFinite(n) || n <= 0) return "";
-  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)}MB`;
-  return `${Math.max(1, Math.round(n / 1024))}KB`;
+  const kb = Math.round(n / 1024);
+  if (kb >= 1000) return `${(n / 1024 / 1024).toFixed(1)}MB`;
+  return `${Math.max(1, kb)}KB`;
 }
 
 // MM/DD in the viewer's time (Korea); nothing without a date.
@@ -285,7 +289,7 @@ function resourceMeta(row, file, drive) {
   const day = formatResDay(row.updated_at);
   const parts = drive
     ? ["구글 드라이브"]
-    : [RES_KIND_TEXT[resourceKind(file)], formatResSizeShort(row.file_size)];
+    : [RES_KIND_TEXT[resourceKind(file)], formatFileSize(row.file_size)];
   return [...parts, day && `${day} 업데이트`].filter(Boolean).join(" · ");
 }
 
@@ -546,12 +550,6 @@ function setTeacherResStatus(text) {
   if (teacherResStatus) teacherResStatus.textContent = text || "";
 }
 
-function formatResSize(bytes) {
-  const n = Number(bytes) || 0;
-  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(n / 1024))} KB`;
-}
-
 function formatResDate(iso) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
@@ -604,7 +602,13 @@ function buildResAdminRow(level, item, row) {
   const info = document.createElement("span");
   info.className = "res-admin-file";
   if (file) {
-    info.textContent = `${file} · ${formatResSize(row.file_size)} · ${formatResDate(row.updated_at)}`;
+    info.textContent = [
+      file,
+      formatFileSize(row.file_size),
+      formatResDate(row.updated_at),
+    ]
+      .filter(Boolean)
+      .join(" · ");
   } else if (drive) {
     info.textContent = ["구글 드라이브", formatResDate(row.updated_at)]
       .filter(Boolean)
