@@ -1207,10 +1207,9 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
   운영 증상("설정을 바꾸지 못했어요" + 켬으로 돌아감)이 똑같이 재현됨(로그인이 살아 있으면 세 스위치 모두 정상). 그래서
   `rbaSaveFlag`는 세션이 없으면 요청 없이 "관리자 로그인 상태를 확인할 수 없어요…", 서버 거절이면 문구 뒤 `(오류 <code>: <앞부분>)` +
   `console.error`. 다른 관리자 저장(내용·배너·회원)은 아직 옛 문구 그대로. 운영 진단 = 읽기 전용 DO(로컬 `docs/worker-briefs/2026-11-05-site-settings-diag-*`).
-- **헤더 글꼴:** '교사자료실' 5글자 = 나눔스퀘어라운드 Bold 부분 글꼴 `assets/fonts/cra-teacher-label-kr.woff2`(3,992 B). OFL의 예약 글꼴
-  이름 때문에 **이름을 바꿈**(`CRA Teacher Label KR`) + 라이선스 파일 같은 폴더. 원본 = `hangeul.pstatic.net/…/NanumSquareRoundB.ttf`
-  1회 내려받기(2026-11-03), fonttools(파이썬, package.json 아님)로 `text="교사자료실"`·hinting 없음·레이아웃 표 없음·woff2. 글자를 바꾸면
-  다시 만들고 `unicode-range`도 고친다. 아이콘 = Lucide v1.66.0 `folder`·`user-cog`(ISC, 인라인 SVG — `index.html` 주석).
+- **헤더 Teacher 버튼(#2 `2026-11-05`):** 한 줄 "Teacher"(Inter 800 14px, 아이콘과 세로 가운데). 예전 둘째 줄 '교사자료실'과 그
+  부분 글꼴(`cra-teacher-label-kr.woff2`·OFL 파일·`@font-face`)은 **지움** — 화면 읽기용 이름은 `aria-label="Teacher 교사자료실"`
+  그대로. 아이콘 = Lucide v1.66.0 `folder`·`user-cog`(ISC, 인라인 SVG — `index.html` 주석).
 - 헤더 버튼 폭(H6): 1024~1366 다섯 폭 모두 겹침 없음, 가장 좁은 틈 21px(지사 "My Branch", 1280). 버튼이 더 생기면 다시 잴 것.
 - **업로드:** supabase-js 대신 **XHR로 Storage REST에 직접**(진행 막대, 형식은 확장자로 — 한글은 브라우저가 빈 값을 준다), 동시 3개.
   경로 `<글 uuid>/<ms>-<6자>.<확장자>`(글 id는 화면이 `crypto.randomUUID`로 먼저 만든다). 테스트의 가짜 응답(route)은 업로드 진행
@@ -1226,7 +1225,7 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
 - 관리자 '+ 새 글 쓰기'는 공용 제목 줄에 있다 → `body[data-admin-view="board"]`(app.js `setAdminView`)와 `data-board-mode`로만 보인다.
 - 파일 이름 정렬 = `localeCompare("en", {numeric:true})`(3월 < 10월, 라틴 먼저 — 윈도 탐색기와 같은 순서; `"ko"`는 한글이 먼저).
 - 작업 함정: JS `replace(문자열, 문자열)`은 대체 문자열의 `$'`·`$&`를 특수 패턴으로 읽는다(SQL 정규식 `…)$'`가 깨짐) → 함수로 넘긴다.
-  `getComputedStyle().fontFamily`는 `Inter`(따옴표 없음)와 `"CRA Teacher Label KR"`(공백 있어 따옴표)로 다르게 돌려준다.
+  `getComputedStyle().fontFamily`는 `Inter`(따옴표 없음)와 `"Pretendard Std Variable"`(공백 있어 따옴표)로 다르게 돌려준다.
 
 ### 수정 1차 (`2026-11-04`, PM 지시서 F1~F4 · R1~R3)
 
@@ -1271,6 +1270,36 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
   함) 모두 같다. 테스트: teacher-resources "sizes up to 999KB…", resource-board "board file sizes…".
 - **사진 도구 함정:** `fullPage` 사진은 sticky 막대를 **원래 창 높이의 바닥**(페이지 중간)에 그린다 → 11/03 사진 도구는 전체 사진을
   찍을 때 창 높이를 페이지 높이로 늘렸다가 되돌린다.
+
+### 수정 2차 (`2026-11-05`, PM 지시서 #1~#5 · 로그인 끝남)
+
+- **이름(#3):** 게시판은 선생님·관리자 화면 모두 **'교사자료실'**(띄어쓰기 없음). 레벨별 옛 '교사 자료실'(배너 메뉴 '교사 자료실
+  파일', 월 선택 화면 버튼·자료 페이지)은 그대로 — 나중에 '레벨별 자료실'로 바꿀 예정(별도 지시). 휴대폰 관리자 메뉴 한 줄 확인됨.
+- **배경(#4):** `.app-shell`은 100vh 세로 flex, `<main>`이 푸터까지 늘어나는데 색은 게시판 section에만 있었다 → 짧은 목록·글이면
+  아래가 `<main>`의 흰색. `body[data-screen="board"] main { background: #eef6fd }`로 해결(높이 상수 없음, 다른 화면 무관).
+- **글꼴 선택(#5):** `site_settings` `board_font_ko` / `board_font_en` = `pretendard` | `nanum-gothic`(화면 허용 목록 `BOARD_FONTS`,
+  없거나 이상한 값 = 프리텐다드; 읽기 = `getSignupVisible` 한 번의 요청; **SQL 변경 없음** — 정책은 기존 읽기 공개·쓰기 `is_admin()`).
+  `#boardScreen`·관리자 미리보기의 `data-font-ko/-en` → CSS 변수 `--bd-en`, `--bd-ko` → `--bd-font` = 라틴 글꼴, 한글 글꼴, Noto Sans KR,
+  Inter. 라틴 글꼴은 `unicode-range`가 라틴·숫자·문장부호뿐이라 한글은 뒤의 한글 글꼴로 내려간다.
+  - 라틴 파일(`assets/fonts`, **수정하지 않은 원본 그대로** + OFL): `PretendardStdVariable.subset.6.woff2`(56,128 B, 가변 45~920 —
+    npm `pretendard-std@1.3.9` 동적 부분 글꼴 6번 = 저자가 만든 라틴 조각) · `NanumGothic-latin-400/700/800.woff2`(17~18KB씩 — Google
+    Fonts v26의 latin 조각). 직접 자르지 않은 이유: 두 글꼴 모두 OFL **예약 글꼴 이름**("Pretendard Std", "Nanum…")이 있어 잘라서
+    고치면 이름을 바꿔야 한다 → 원본 조각을 그대로 둠. 나눔고딕 라틴 별칭 이름 = `CRA Nanum Gothic Latin`(CSS 안의 이름일 뿐, 파일은 원본).
+  - 한글: 프리텐다드 = jsDelivr `pretendardvariable-dynamic-subset`(v1.3.9, `rbEnsureFont`) · 나눔고딕 = 관리자 화면과 같은 Google Fonts
+    CSS(`ensureAdminFont`, 400/700/800). **고른 것만** 불러온다(안 고른 CSS·파일 요청 0 — 테스트로 확인). 게시판 굵기 = 400·700·800
+    (두 글꼴 모두 진짜 굵기 파일 있음).
+  - `#adminScreen *`(관리자 한 글꼴 규칙, 우선순위 1,0,0)이 미리보기 글꼴을 덮는다 → 미리보기 규칙은 `#adminScreen .rb-font-preview`.
+  - 실제로 그려진 글꼴 확인 = CDP `CSS.getPlatformFontsForNode`(파일 안 이름: `Pretendard Variable`, `Pretendard Std Variable`,
+    `NanumGothic`/`NanumGothicExtraBold`). 4가지 조합 × 한글만·영문만 글자를 테스트가 본다.
+- **로그인 끝남 안내(§5):** `sb.auth.onAuthStateChange` `SIGNED_OUT`(다른 탭 로그아웃도 브로드캐스트로 옴 — 테스트 확인)이나 다른 탭의
+  LMS 로그아웃(`cra_lms` 삭제 → `storage` 이벤트)이 관리자 화면이 열린 동안 오면 `#loginEndedModal` + `#adminScreen.inert = true`
+  (쓰던 글자 그대로, 아무것도 누를 수 없음). 화면은 저절로 바뀌지 않고 [로그인 화면으로]만. 이 탭의 Log out은 `loggingOut`으로 제외.
+  서버에서만 만료된 LMS 세션은 못 잡음(다음 호출이 실패). 게시판 글쓰기 중 올리던 파일은 로그인이 없어 **못 지울 수 있다** → 월 1회
+  주인 없는 파일 확인 SQL(`docs/worker-briefs/2026-11-04-board-orphans-do.sql`, 로컬)로 찾는다.
+- 테스트 함정: 게시판에서 다른 `#`(예: `#admin`)로 가면 앱이 **스스로 새로고침** → 테스트의 `reload()`와 부딪혀 `ERR_ABORTED` →
+  `about:blank`를 거쳐 새로 연다. `stubBoard`는 컨텍스트 전체에 운영 Supabase 차단을 건다(다른 탭 안전망).
+- 작업 함정: 파이썬으로 파일을 고칠 때 끝 표식이 시작 표식보다 **앞에** 있으면 빈 문자열 치환으로 파일이 폭발한다(11/05 styles.css,
+  커밋 전 되돌림) — 끝 표식은 `s.index(B, a)`로 찾고 길이를 확인. 윈도 파이썬은 `newline=""` 없이 쓰면 CRLF가 된다.
 
 ## 요일 슬롯 게임 URL (`2026-10-22`, R1)
 

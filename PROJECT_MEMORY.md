@@ -17,12 +17,11 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`f12a9b9`** (`2026-11-05`: resource board — live SQL + Edge first, then the push). Older: archive.
+Live = **`5d55ff8`** (`2026-11-05`: 2차-1 #1 switch-save errors). Older: archive.
 
-- **Resource board** (briefs `11-03`, `11-04` 수정 1차): 자료실 게시판 운영 반영 `2026-11-05`; 빅웨이브가 게시판을
-  켬(글 1개), 교사 자료실 켜짐. NOTES "자료실 게시판".
-- **교사자료실 수정 2차** (brief `11-05`): **#1 커밋 완료** — 교사 자료실 스위치 끄기 실패 = 관리자 화면이 로그인 끝난 뒤에도
-  남아 저장이 익명으로 나감(로컬 재현); 스위치 저장이 로그인 없음·오류 번호를 알려 줌. 다음 = 빅웨이브 확인 → 푸시 → #2~#5.
+- **교사자료실 게시판** (briefs `11-03`, `11-04`, `11-05`): live, 게시판 켬(글 1개), 교사 자료실 켜짐. #1 live
+  (cause confirmed). **2차-2 커밋 완료(`2026-11-06`, 미푸시)**: #2 Teacher 한 줄 · #3 이름 '교사자료실' · #4 배경 ·
+  #5 글꼴 선택(`board_font_ko/en`, SQL 없음) · 로그인 끝남 안내. 다음 = 푸시. NOTES "수정 2차".
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"

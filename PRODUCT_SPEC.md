@@ -284,16 +284,18 @@ Menu button requirements:
 - The Korean labels are a PM-set exception to the English UI (teacher-only screens).
 - This replaces the cancelled header "선생님자료실" link button (former Phase 4 / R4).
 
-## Resource Board (자료실 게시판, 2026-11-03 · 수정 1차 2026-11-04)
+## Resource Board (교사자료실 게시판, 2026-11-03 · 수정 1차 2026-11-04 · 수정 2차 2026-11-05)
 
 A board of posts with attachments for teachers, next to the per-level 교사 자료실 above. PM briefs
-`2026-11-03` (B1-B12, T1-T3, H1-H6) and `2026-11-04` (F1-F4, R1-R3).
+`2026-11-03` (B1-B12, T1-T3, H1-H6), `2026-11-04` (F1-F4, R1-R3) and `2026-11-05` (2차: #1-#5, login ended).
+Its name on every screen (teachers' and admin) is **교사자료실** (no space); the per-level "교사 자료실"
+above keeps its name for now.
 
 - **Who reads:** the top admin and LMS branch (role 1) / teacher (role 2) accounts. They get a
-  "Teacher / 교사자료실" button in the header (before My Class / Admin; a folder icon on phones) that
+  "Teacher" button in the header (one line; before My Class / Admin; a folder icon on phones) that
   opens `#board`. Students (role 3) and visitors never see the button; an address sends them to the
   home page, and the server answers them nothing (RPCs + private Storage).
-- **Who writes:** the top admin only — admin screen → 자료실 (list, 자료실 설정, editor). Every write is
+- **Who writes:** the top admin only — admin screen → 교사자료실 (list, 교사자료실 설정, editor). Every write is
   an RPC that checks `is_admin()` again.
 - **List** (`#board[?level=&cat=&q=&sort=&page=]`): title/body search, level chips (a level = that
   level and 공통), category chips (7 to start: 월간교육안, 연간교육안, 상장, 테스트, 핵심문장 스크립트, 그림
@@ -302,9 +304,14 @@ A board of posts with attachments for teachers, next to the per-level 교사 자
   and reload keep them). NEW = posted in the last 7 days (KST); views count once per member per day.
 - **Post** (`#board/<id>`): tags, title, date · views · files, body, the attachments in the admin's
   order, 이전 글 / 다음 글 in the list's order, 목록으로.
-- **Font (F1):** the teachers' board screens (list, post, empty states, notes; PC and phone) are
-  Pretendard for every letter (Korean, Latin, numbers — level tags, NEW, dates, views, file names,
-  button labels). The header, footer, 교사 자료실 and all admin screens keep their fonts.
+- **Font (F1, #5):** the teachers' board screens (list, post, empty states, notes; PC and phone) wear one
+  face pair for every letter (Korean, Latin, numbers — level tags, NEW, dates, views, file names, button
+  labels). The top admin picks it in 교사자료실 설정: Korean [프리텐다드(기본) / 나눔고딕] and Latin
+  [프리텐다드(기본) / 나눔고딕], saved at once (`site_settings` `board_font_ko` / `board_font_en` =
+  `pretendard` | `nanum-gothic`; anything else = Pretendard), with a one-line preview. The header, footer,
+  교사 자료실 and all other admin screens keep their fonts.
+- **Background (#4):** the light-blue board background runs from the header to the footer however short
+  the page.
 - **Attachments:** up to 20 per post, each a file OR a Google Drive file link.
   - File: PDF · Excel (xlsx/xls) · 한글 (hwp/hwpx) · PowerPoint (pptx/ppt) · JPG · PNG, 10 MB max, in the
     private bucket `resource-board`. [내려받기] = a 15-second signed URL from the Edge Function
@@ -338,11 +345,15 @@ A board of posts with attachments for teachers, next to the per-level 교사 자
     browser's own question (its wording cannot be changed) only while uploads are pending; leaving
     then deletes them (`pagehide`, keepalive). A forced browser kill can leave files — a read-only
     check lists them (no delete SQL).
-- **Switches (자료실 설정, B12 · T1):** `resource_board_enabled` (default off) shows / hides the header
+- **Switches (교사자료실 설정, B12 · T1):** `resource_board_enabled` (default off) shows / hides the header
   button and the board for branch / teacher accounts (an address does not open it; posts and files
   stay; the top admin may still preview with a note). The 배너 tab's 교사 자료실 switch
   (`teacher_resources_enabled`, default on) hides the month-page 교사 자료실 button and list for everyone
   (files and links stay; the download function itself is unchanged).
+- **Login ended (2차 §5):** if the login ends while the admin screen is open (Log out in another tab,
+  an expired session — top admin or a branch / teacher account), a window says "로그인이 끝났어요." / "다시
+  로그인한 뒤 이어서 해 주세요." over the locked admin screen (nothing typed vanishes, nothing can be saved)
+  until [로그인 화면으로].
 
 ## Data Model Direction
 
