@@ -82,9 +82,8 @@
           <!-- 자료실 (resource-board.js, 2026-11-03): the top admin and LMS
                branch / teacher accounts while the board is on (app.js
                updateAdminUI → hidden). Icons: Lucide v1.66.0 'folder' and
-               'user-cog' (ISC license, inline SVG). The Korean line uses a
-               5-glyph subset of NanumSquareRound Bold (SIL OFL 1.1 —
-               assets/fonts/cra-teacher-label-kr-OFL.txt). -->
+               'user-cog' (ISC license, inline SVG). One line "Teacher" since
+               2026-11-05 (#2); the Korean name stays in aria-label. -->
           <button
             class="teacher-board-button"
             type="button"
@@ -102,10 +101,7 @@
                 d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
               ></path>
             </svg>
-            <span class="teacher-board-text" aria-hidden="true">
-              <span class="teacher-board-en">Teacher</span>
-              <span class="teacher-board-ko">교사자료실</span>
-            </span>
+            <span class="teacher-board-text" aria-hidden="true">Teacher</span>
           </button>
           <button
             class="admin-nav-button"
@@ -796,7 +792,7 @@
         >
           <div class="bd-wrap">
             <p class="bd-admin-note" id="boardAdminNote" hidden>
-              자료실이 지금 꺼져 있어요 — 최고관리자만 미리 볼 수 있어요.
+              교사자료실이 지금 꺼져 있어요 — 최고관리자만 미리 볼 수 있어요.
             </p>
             <div class="bd-list-view" id="boardListView">
               <div class="bd-head">
@@ -809,7 +805,7 @@
                         ></path>
                       </svg>
                     </span>
-                    <span>자료실</span>
+                    <span>교사자료실</span>
                   </h1>
                   <p class="bd-sub">
                     수업에 필요한 교사용 자료를 레벨·분류별로 찾아 내려받으세요.
@@ -1043,7 +1039,7 @@
                     d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
                   ></path>
                 </svg>
-                <span>자료실</span>
+                <span>교사자료실</span>
               </button>
             </nav>
             <div class="adm-backdrop" id="adminBackdrop" hidden></div>
@@ -1446,7 +1442,7 @@
 
               <!-- 자료실 view (2026-11-03, resource-board-admin.js — the top
                    admin only): the post list (그림 05: filters, title search,
-                   20 a page), 자료실 설정 (the board switch B12 + categories
+                   20 a page), 교사자료실 설정 (the board switch B12 + categories
                    B5), and the post editor (B4, B6-B8: drag-and-drop uploads,
                    order, Drive links). Every write is an RPC that checks
                    is_admin() again. -->
@@ -1500,7 +1496,7 @@
                     ></nav>
                   </div>
                   <div class="adm-box" id="rbSettings">
-                    <h2 class="admin-subtitle">자료실 설정</h2>
+                    <h2 class="admin-subtitle">교사자료실 설정</h2>
                     <div class="rb-settings-grid">
                       <div class="rb-settings-switch">
                         <label class="adm-switch">
@@ -1518,10 +1514,10 @@
                           >
                         </label>
                         <p class="admin-hint">
-                          켜면 지사·선생님 계정의 헤더에 'Teacher 교사자료실'
-                          버튼이 생겨요. 끄면 버튼이 사라지고, 주소로 들어와도
-                          열리지 않아요. 등록한 글과 파일은 그대로 남고, 꺼져
-                          있는 동안에도 여기서 글을 관리할 수 있어요.
+                          켜면 지사·선생님 계정의 헤더에 'Teacher' 버튼이
+                          생겨요. 끄면 버튼이 사라지고, 주소로 들어와도 열리지
+                          않아요. 등록한 글과 파일은 그대로 남고, 꺼져 있는
+                          동안에도 여기서 글을 관리할 수 있어요.
                         </p>
                       </div>
                       <div class="rb-settings-cats">
@@ -1552,6 +1548,47 @@
                           수 없어요.
                         </p>
                       </div>
+                    </div>
+                    <!-- #5 (2026-11-05): the board's faces — Korean and
+                         Latin apart (site_settings board_font_ko /
+                         board_font_en, saved on change; the preview below
+                         wears the picked pair). -->
+                    <div class="rb-settings-fonts" id="rbFontBox">
+                      <h3 class="rb-subtitle" id="rbFontTitle">게시판 글꼴</h3>
+                      <div class="rb-font-pickers">
+                        <label class="rb-font-pick" for="rbFontKo">
+                          <span>한글 글꼴</span>
+                          <select class="admin-member-select" id="rbFontKo">
+                            <option value="pretendard">프리텐다드(기본)</option>
+                            <option value="nanum-gothic">나눔고딕</option>
+                          </select>
+                        </label>
+                        <label class="rb-font-pick" for="rbFontEn">
+                          <span>영문 글꼴</span>
+                          <select class="admin-member-select" id="rbFontEn">
+                            <option value="pretendard">프리텐다드(기본)</option>
+                            <option value="nanum-gothic">나눔고딕</option>
+                          </select>
+                        </label>
+                      </div>
+                      <p
+                        class="rb-font-preview"
+                        id="rbFontPreview"
+                        data-font-ko="pretendard"
+                        data-font-en="pretendard"
+                      >
+                        Level 1 월간교육안 · March Lesson Plan 2026 — 3월 수업
+                        자료
+                      </p>
+                      <p class="admin-hint">
+                        선생님이 보는 교사자료실 목록·글 화면에만 적용돼요.
+                        고르면 바로 저장돼요.
+                      </p>
+                      <p
+                        class="admin-status"
+                        id="rbFontStatus"
+                        aria-live="polite"
+                      ></p>
                     </div>
                   </div>
                 </div>
@@ -2658,6 +2695,36 @@
             id="rbLeaveStay"
             data-rb-leave-stay
           ></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Login ended (2026-11-05, 2차-2 §5 — app.js showLoginEnded): the
+         admin screen stays as it was (nothing typed vanishes) but is locked
+         (inert) under this window until its one button. -->
+    <div class="admin-modal rb-leave-modal" id="loginEndedModal" hidden>
+      <div class="admin-modal-overlay"></div>
+      <div
+        class="admin-modal-card"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="loginEndedTitle"
+        aria-describedby="loginEndedText"
+      >
+        <h2 class="admin-modal-title rb-leave-title" id="loginEndedTitle">
+          로그인이 끝났어요.
+        </h2>
+        <p class="rb-leave-text" id="loginEndedText">
+          다시 로그인한 뒤 이어서 해 주세요.
+        </p>
+        <div class="admin-modal-actions">
+          <button
+            type="button"
+            class="admin-btn admin-btn-primary"
+            id="loginEndedGo"
+          >
+            로그인 화면으로
+          </button>
         </div>
       </div>
     </div>

@@ -287,7 +287,9 @@ function ranked(posts, { p_level, p_category, p_q, p_sort }) {
  * categories, holdUploads (true = uploads wait for sent.release()),
  * failUpload (name predicate), downloadStatus (e.g. 429), flagError (a
  * switch save answered with this failure: { status, json } — e.g. 401 +
- * PostgREST's {code: "42501", message} — and nothing is saved).
+ * PostgREST's {code: "42501", message} — and nothing is saved), fontKo /
+ * fontEn (the stored board_font_ko / board_font_en, any value; undefined =
+ * no row).
  */
 export async function stubBoard(page, options = {}) {
   const {
@@ -300,11 +302,13 @@ export async function stubBoard(page, options = {}) {
     failUpload = () => false,
     downloadStatus = 200,
     flagError = null,
+    fontKo = undefined,
+    fontEn = undefined,
   } = options;
   const db = {
     posts,
     categories,
-    flags: { board, teacherRes },
+    flags: { board, teacherRes, fontKo, fontEn },
     viewed: new Set(),
   };
   const sent = {
@@ -342,6 +346,10 @@ export async function stubBoard(page, options = {}) {
     is_new: isNew(p.created_at),
   });
 
+  // Safety net (PM 2026-11-05): a page of this context without its own
+  // stub (a second tab) never reaches the live project either — page routes
+  // win over this one, so stubbed pages are answered as below.
+  await page.context().route(SUPABASE, (route) => route.abort());
   await page.context().route(GOOGLE, (route) => {
     sent.google.push(route.request().url());
     return route.fulfill({
@@ -644,6 +652,8 @@ export async function stubBoard(page, options = {}) {
           db.flags.board = row.value === true;
         if (row.key === "teacher_resources_enabled")
           db.flags.teacherRes = row.value !== false;
+        if (row.key === "board_font_ko") db.flags.fontKo = row.value;
+        if (row.key === "board_font_en") db.flags.fontEn = row.value;
         return route.fulfill({ status: 201, json: [row] });
       }
       return route.fulfill({
@@ -651,6 +661,12 @@ export async function stubBoard(page, options = {}) {
           { key: "signup_visible", value: false },
           { key: "resource_board_enabled", value: db.flags.board },
           { key: "teacher_resources_enabled", value: db.flags.teacherRes },
+          ...(db.flags.fontKo === undefined
+            ? []
+            : [{ key: "board_font_ko", value: db.flags.fontKo }]),
+          ...(db.flags.fontEn === undefined
+            ? []
+            : [{ key: "board_font_en", value: db.flags.fontEn }]),
         ],
       });
     }

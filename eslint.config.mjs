@@ -189,6 +189,7 @@ export default [
         levelFromAny: "readonly",
         showMonthsFor: "readonly",
         openTeacherResources: "readonly",
+        ensureAdminFont: "readonly",
       },
     },
     rules: {
@@ -228,6 +229,8 @@ export default [
         makeDeleteButton: "readonly",
         primaryCell: "readonly",
         fillSelect: "readonly",
+        rbApplyFonts: "readonly",
+        boardFontOf: "readonly",
       },
     },
     rules: {

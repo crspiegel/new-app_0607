@@ -131,6 +131,10 @@ const rbaBoardToggle = document.querySelector("#rbBoardToggle");
 const rbaBoardToggleText = document.querySelector("#rbBoardToggleText");
 const rbaTeacherToggle = document.querySelector("#teacherResToggle");
 const rbaTeacherToggleText = document.querySelector("#teacherResToggleText");
+const rbaFontKo = document.querySelector("#rbFontKo");
+const rbaFontEn = document.querySelector("#rbFontEn");
+const rbaFontPreview = document.querySelector("#rbFontPreview");
+const rbaFontStatus = document.querySelector("#rbFontStatus");
 const rbaCatList = document.querySelector("#rbCatList");
 const rbaCatAddForm = document.querySelector("#rbCatAddForm");
 const rbaCatAddName = document.querySelector("#rbCatAddName");
@@ -227,6 +231,16 @@ function rbaSyncToggles() {
   }
 }
 
+// #5 (2026-11-05): the board's faces — the two pickers show the saved pair
+// and the preview wears it (only the 교사자료실 view calls this, so the 배너
+// tab never fetches a board font).
+function rbaSyncFonts() {
+  if (!rbaFontKo || !rbaFontEn) return;
+  rbaFontKo.value = siteFlags.fontKo;
+  rbaFontEn.value = siteFlags.fontEn;
+  rbApplyFonts(rbaFontPreview);
+}
+
 const RBA_FLAG_FAILED = "설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.";
 const RBA_FLAG_LOGIN =
   "관리자 로그인 상태를 확인할 수 없어요. 새로고침 뒤 다시 시도해 주세요.";
@@ -292,8 +306,8 @@ if (rbaBoardToggle) {
     rbaSyncToggles();
     rbaSay(
       next
-        ? "자료실을 켰어요. 지사·선생님 화면에 버튼이 보여요."
-        : "자료실을 껐어요.",
+        ? "교사자료실을 켰어요. 지사·선생님 화면에 버튼이 보여요."
+        : "교사자료실을 껐어요.",
     );
   });
 }
@@ -320,6 +334,29 @@ if (rbaTeacherToggle) {
   });
 }
 
+// #5: a picked face is saved at once (like the switches); a refused save
+// puts the picker back and says why (#1: no login / the error code).
+[
+  [rbaFontKo, "board_font_ko", "fontKo"],
+  [rbaFontEn, "board_font_en", "fontEn"],
+].forEach(([select, key, flag]) => {
+  if (!select) return;
+  select.addEventListener("change", async () => {
+    const next = boardFontOf(select.value);
+    select.disabled = true;
+    const failed = await rbaSaveFlag(key, next);
+    select.disabled = false;
+    if (failed) {
+      select.value = siteFlags[flag];
+      if (rbaFontStatus) rbaFontStatus.textContent = failed;
+      return;
+    }
+    siteFlags[flag] = next;
+    rbaSyncFonts();
+    if (rbaFontStatus) rbaFontStatus.textContent = "글꼴을 바꿨어요.";
+  });
+});
+
 // Opening the 배너 tab: the switch shows the current value.
 document
   .querySelectorAll('.admin-menu-btn[data-admin-view="banner"]')
@@ -340,9 +377,9 @@ function rbaShowMode(mode) {
     adminTitle.textContent =
       mode === "edit"
         ? rbaEd && !rbaEd.isNew
-          ? "자료실 글 수정"
-          : "자료실 글 쓰기"
-        : "자료실";
+          ? "교사자료실 글 수정"
+          : "교사자료실 글 쓰기"
+        : "교사자료실";
   }
 }
 
@@ -1774,9 +1811,14 @@ function rbaHashChanged() {
 
 adminViewOpeners.board = () => {
   rbaSay("");
+  if (rbaFontStatus) rbaFontStatus.textContent = "";
   rbaShowMode("list");
   rbaSyncToggles();
-  refreshSignupUI().then(rbaSyncToggles);
+  rbaSyncFonts();
+  refreshSignupUI().then(() => {
+    rbaSyncToggles();
+    rbaSyncFonts();
+  });
   rbaLoad();
 };
 
@@ -1785,4 +1827,12 @@ window.craBoardAdmin = {
     return rbaEd;
   },
   hashChanged: rbaHashChanged,
+  // The login ended (app.js, [로그인 화면으로]): close the editor without
+  // asking. Its unregistered uploads are deleted only if the last token
+  // still works — otherwise they stay (the monthly orphan check finds them).
+  drop() {
+    if (!rbaEd) return;
+    rbaDiscard({ keepalive: true });
+    rbaShowMode("list");
+  },
 };

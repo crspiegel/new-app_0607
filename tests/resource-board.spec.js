@@ -88,7 +88,7 @@ test("board header: Teacher for the top admin, branch and teacher while on — n
   }
 });
 
-test("board header: Teacher look and the Inter labels at 37px; Admin alone has the user-cog (H2-H4)", async ({
+test('board header: Teacher look — one line "Teacher" in Inter 800 14px beside the folder, both centred — and the Inter labels at 37px; Admin alone has the user-cog (H2-H4, #2)', async ({
   browser,
 }, info) => {
   desktopOnly(info);
@@ -118,15 +118,23 @@ test("board header: Teacher look and the Inter labels at 37px; Admin alone has t
           css(".teacher-board-icon").strokeWidth,
         ],
         en: [
-          css(".teacher-board-en").fontFamily.split(",")[0],
-          css(".teacher-board-en").fontWeight,
-          css(".teacher-board-en").fontSize,
+          css(".teacher-board-text").fontFamily.split(",")[0],
+          css(".teacher-board-text").fontWeight,
+          css(".teacher-board-text").fontSize,
+          document.querySelector("#teacherBoardBtn").textContent.trim(),
+          document.querySelectorAll("#teacherBoardBtn span").length,
         ],
-        ko: [
-          css(".teacher-board-ko").fontFamily.split(",")[0],
-          css(".teacher-board-ko").fontSize,
-          document.fonts.check('700 10px "CRA Teacher Label KR"', "교사자료실"),
-        ],
+        // vertical centres: the button, its folder and its word
+        middle: [
+          "#teacherBoardBtn",
+          ".teacher-board-icon",
+          ".teacher-board-text",
+        ].map((sel) => {
+          const r = box(sel);
+          return sel === "#teacherBoardBtn"
+            ? r.top + 2 + (r.height - 4) / 2 // inside the 2px rim
+            : r.top + r.height / 2;
+        }),
         nav: [
           css("#adminNavBtn").fontFamily.split(",")[0],
           css("#adminNavBtn").fontWeight,
@@ -153,8 +161,10 @@ test("board header: Teacher look and the Inter labels at 37px; Admin alone has t
     ]);
     expect(look.icon).toEqual([18, "2px"]);
     const unquote = ([family, ...rest]) => [family.replace(/"/g, ""), ...rest];
-    expect(unquote(look.en)).toEqual(["Inter", "800", "13px"]);
-    expect(unquote(look.ko)).toEqual(["CRA Teacher Label KR", "10px", true]);
+    expect(unquote(look.en)).toEqual(["Inter", "800", "14px", "Teacher", 1]);
+    const [mid, iconMid, textMid] = look.middle;
+    expect(Math.abs(iconMid - mid)).toBeLessThanOrEqual(1);
+    expect(Math.abs(textMid - mid)).toBeLessThanOrEqual(1);
     expect(unquote(look.nav)).toEqual(["Inter", "800", "14px", 37]);
     expect(unquote(look.logout)).toEqual(["Inter", "800", "14px", 37]);
     if (role === "admin") {
@@ -487,7 +497,7 @@ test("board post: the function's refusals are explained and the page stays (B6, 
   desktopOnly(info);
   for (const [status, text] of [
     [429, "오늘 다운로드 횟수를 모두 사용했습니다. 내일 다시 시도해 주세요."],
-    [403, "자료실이 지금은 닫혀 있어요."],
+    [403, "교사자료실이 지금은 닫혀 있어요."],
     [404, "이 파일은 지금 받을 수 없어요."],
     [401, "다시 로그인해 주세요."],
   ]) {
@@ -576,7 +586,7 @@ test("board admin: the list — pinned first, filters, 20 a page; delete asks tw
   await page.setViewportSize({ width: 1366, height: 900 });
   const sent = await stubBoard(page, { role: "admin" });
   await openAdminBoard(page);
-  await expect(page.locator("#adminTitle")).toHaveText("자료실");
+  await expect(page.locator("#adminTitle")).toHaveText("교사자료실");
   await expect(page.locator("#boardNewBtn")).toBeVisible();
   const rows = page.locator("#rbAdminList tbody tr");
   await expect(rows).toHaveCount(13);
@@ -673,7 +683,7 @@ test("board admin editor: dropped files upload 3 at a time in name order, typed 
   const sent = await stubBoard(page, { role: "admin", holdUploads: true });
   await openAdminBoard(page);
   await page.locator("#boardNewBtn").click();
-  await expect(page.locator("#adminTitle")).toHaveText("자료실 글 쓰기");
+  await expect(page.locator("#adminTitle")).toHaveText("교사자료실 글 쓰기");
   const files = [10, 3, 12, 4, 5, 6, 7, 8, 9, 11].map((m) => ({
     name: `L1_월간교육안_${m}월.pdf`,
     size: 1000 + m,
@@ -896,7 +906,7 @@ test("board admin editor: editing a post keeps its attachments by id; one taken 
     .locator("#rbAdminList tbody tr", { hasText: "2학기 테스트지 + 답안지" })
     .getByRole("button", { name: /수정/ })
     .click();
-  await expect(page.locator("#adminTitle")).toHaveText("자료실 글 수정");
+  await expect(page.locator("#adminTitle")).toHaveText("교사자료실 글 수정");
   await expect(page.locator("#rbEdTitle")).toHaveValue(
     "2학기 테스트지 + 답안지",
   );
@@ -969,15 +979,14 @@ const POST_TEXT = [
   ".bd-back",
 ];
 const KEPT = [
-  "#teacherBoardBtn .teacher-board-en",
-  "#teacherBoardBtn .teacher-board-ko",
+  "#teacherBoardBtn .teacher-board-text",
   "#adminNavBtn",
   "#logoutBtn",
   ".top-nav button",
   ".site-footer",
 ];
 
-test("board font: every letter of the teachers' list, post and empty pages is Pretendard; the header, 교사 자료실 and the admin keep theirs (F1)", async ({
+test("board font: every letter of the teachers' list, post and empty pages wears the board's stack — by default Pretendard Std (Latin) then Pretendard (Korean); the header, 교사 자료실 and the admin keep theirs (F1, #5)", async ({
   browser,
 }, info) => {
   desktopOnly(info);
@@ -993,6 +1002,7 @@ test("board font: every letter of the teachers' list, post and empty pages is Pr
     await expect(page.locator("#boardFontLink")).toHaveCount(0);
     const kept = await firstFonts(page, KEPT);
     expect(Object.values(kept)).not.toContain(PRETENDARD);
+    expect(Object.values(kept)).not.toContain(STD);
     await page.locator("#teacherBoardBtn").click();
     await expect(page.locator("#boardRows .bd-row")).toHaveCount(10);
     await expect(page.locator("#boardFontLink")).toHaveAttribute(
@@ -1000,7 +1010,7 @@ test("board font: every letter of the teachers' list, post and empty pages is Pr
       "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css",
     );
     const list = await firstFonts(page, LIST_TEXT);
-    for (const sel of LIST_TEXT) expect(list[sel], sel).toBe(PRETENDARD);
+    for (const sel of LIST_TEXT) expect(list[sel], sel).toBe(STD);
     // the header and footer did not change on the board
     expect(await firstFonts(page, KEPT)).toEqual(kept);
     // the face is really there (the pinned CSS and its pieces load)
@@ -1014,7 +1024,7 @@ test("board font: every letter of the teachers' list, post and empty pages is Pr
       "2026 수료 상장 양식",
     );
     const post = await firstFonts(page, POST_TEXT);
-    for (const sel of POST_TEXT) expect(post[sel], sel).toBe(PRETENDARD);
+    for (const sel of POST_TEXT) expect(post[sel], sel).toBe(STD);
     await page.goto("/#board?q=없는말");
     await expect(page.locator("#boardEmpty")).toBeVisible();
     const empty = await firstFonts(page, [
@@ -1022,7 +1032,7 @@ test("board font: every letter of the teachers' list, post and empty pages is Pr
       ".bd-empty-sub",
       ".bd-empty-btn",
     ]);
-    expect(Object.values(empty)).toEqual([PRETENDARD, PRETENDARD, PRETENDARD]);
+    expect(Object.values(empty)).toEqual([STD, STD, STD]);
     // 교사 자료실 and the admin: unchanged
     await page.goto("/#resources/level-2");
     await page.reload();
@@ -1030,6 +1040,7 @@ test("board font: every letter of the teachers' list, post and empty pages is Pr
     await expect(page.locator(".res-card").first()).toBeVisible();
     const res = await firstFonts(page, [".res-card", ".res-download"]);
     expect(Object.values(res)).not.toContain(PRETENDARD);
+    expect(Object.values(res)).not.toContain(STD);
     await page.goto("/#admin");
     await page.reload(); // #admin opens on load only
     await openAdminBoard(page, { goto: false });
@@ -1608,7 +1619,9 @@ test("board switch: off stays off after a reload and the branch account loses Te
   const text = page.locator("#rbBoardToggleText");
   await page.locator(".rb-settings-switch .adm-switch").click();
   await expect(text).toHaveText("사용자 화면에 표시: 끔");
-  await expect(page.locator("#rbAdminStatus")).toHaveText("자료실을 껐어요.");
+  await expect(page.locator("#rbAdminStatus")).toHaveText(
+    "교사자료실을 껐어요.",
+  );
   await page.reload();
   await openAdminBoard(page, { goto: false });
   await expect(page.locator("#rbBoardToggle")).not.toBeChecked();
@@ -1677,7 +1690,7 @@ test("switch save refused: the switch goes back and the sentence carries the err
   ]);
 });
 
-test("switch save after the login ended in another tab: no request, a sentence that says so (#1)", async ({
+test("switch save with no login left (its signal missed): no request, a sentence that says so (#1)", async ({
   page,
 }, info) => {
   desktopOnly(info);
@@ -1685,19 +1698,13 @@ test("switch save after the login ended in another tab: no request, a sentence t
   await page.goto("/#admin");
   await openBannerTab(page);
   await expect(page.locator("#teacherResToggle")).toBeChecked();
-  // another tab of the same browser: Log out (the admin page stays open here)
-  const other = await page.context().newPage();
-  await stubBoard(other, { role: "admin", board: true });
-  await other.goto("/");
-  await other.locator("#logoutBtn").click();
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        localStorage.getItem("sb-jguuexcgyvyljbcqfpib-auth-token"),
-      ),
-    )
-    .toBeNull();
-  await other.close();
+  // the stored login gone without any signal (another tab's Log out now
+  // shows the login-ended window — tested below; this is the save's own
+  // guard behind it)
+  await page.evaluate(() =>
+    localStorage.removeItem("sb-jguuexcgyvyljbcqfpib-auth-token"),
+  );
+  await expect(page.locator("#loginEndedModal")).toBeHidden();
   await page.locator("#teacherResAdmin .adm-switch").click();
   await expect(page.locator("#teacherResStatus")).toHaveText(FLAG_LOGIN);
   await expect(page.locator("#teacherResToggle")).toBeChecked();
@@ -1706,4 +1713,392 @@ test("switch save after the login ended in another tab: no request, a sentence t
   await expect(page.locator("#rbAdminStatus")).toHaveText(FLAG_LOGIN);
   await expect(page.locator("#rbBoardToggle")).toBeChecked();
   expect(sent.upserts).toEqual([]);
+});
+
+/* ---- 수정 2차-2 (PM brief 2026-11-05): #3 name, #4 background, #5 fonts ---- */
+
+test("board name: 교사자료실 on the teachers' screens and in the admin — the old level 교사 자료실 keeps its name (#3)", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  await stubBoard(page, { role: "admin", board: false });
+  await openBoard(page);
+  await expect(page.locator("#boardTitle")).toHaveText("교사자료실");
+  await expect(page.locator("#boardAdminNote")).toHaveText(
+    "교사자료실이 지금 꺼져 있어요 — 최고관리자만 미리 볼 수 있어요.",
+  );
+  await page.goto(`/#board/${pid(8)}`); // the board follows its own #
+  await expect(page.locator(".bd-card-title")).toBeVisible();
+  await expect(page.locator(".bd-crumb").first()).toHaveText("교사자료실");
+  // (leaving the board for another # reloads by itself — load afresh)
+  await page.goto("about:blank");
+  await openAdminBoard(page);
+  await expect(
+    page.locator('.admin-menu-btn[data-admin-view="board"]'),
+  ).toHaveText("교사자료실");
+  await expect(page.locator("#adminTitle")).toHaveText("교사자료실");
+  await expect(page.locator("#rbSettings .admin-subtitle")).toHaveText(
+    "교사자료실 설정",
+  );
+  await expect(page.locator("#rbSettings .rb-settings-switch")).toContainText(
+    "헤더에 'Teacher' 버튼이 생겨요.",
+  );
+  await page.locator(".rb-settings-switch .adm-switch").click();
+  await expect(page.locator("#rbAdminStatus")).toHaveText(
+    "교사자료실을 켰어요. 지사·선생님 화면에 버튼이 보여요.",
+  );
+  // the level resources keep "교사 자료실"
+  await page.locator('.admin-menu-btn[data-admin-view="banner"]').click();
+  await expect(page.locator("#teacherResAdmin .admin-subtitle")).toHaveText(
+    "교사 자료실 파일",
+  );
+});
+
+test("admin menu on a phone: 교사자료실 stays on one line inside the menu (#3)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  const page = await context.newPage();
+  await stubBoard(page, { role: "admin" });
+  await page.goto("/#admin");
+  await page.locator("#adminMenuToggle").click();
+  const btn = page.locator('.admin-menu-btn[data-admin-view="board"]');
+  await expect(btn).toBeVisible();
+  const fit = await btn.evaluate((el) => {
+    const label = el.querySelector("span");
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    const lines = new Set(
+      [...range.getClientRects()].map((r) => Math.round(r.top)),
+    ).size;
+    return {
+      lines,
+      inside: el.scrollWidth <= el.clientWidth,
+      labelRight: label.getBoundingClientRect().right,
+      btnRight: el.getBoundingClientRect().right,
+    };
+  });
+  expect(fit.lines).toBe(1);
+  expect(fit.inside).toBe(true);
+  expect(fit.labelRight).toBeLessThanOrEqual(fit.btnRight);
+  await context.close();
+});
+
+// The color under (x, y): the first painted background up the tree.
+const paintAt = (page, x, y) =>
+  page.evaluate(
+    ([px, py]) => {
+      let el = document.elementFromPoint(px, py);
+      while (el) {
+        const bg = getComputedStyle(el).backgroundColor;
+        if (bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") return bg;
+        el = el.parentElement;
+      }
+      return "none";
+    },
+    [x, y],
+  );
+
+test("board background: the light blue runs from the header to the footer — no post, one post, a short post; 1366 · 1024 · 390 (#4)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const BLUE = "rgb(238, 246, 253)";
+  const short = samplePosts().slice(0, 1);
+  short[0].body = "짧은 글";
+  short[0].attachments = short[0].attachments.slice(0, 1);
+  for (const width of [1366, 1024, 390]) {
+    for (const [posts, hash] of [
+      [[], "#board"],
+      [short, "#board"],
+      [short, `#board/${short[0].id}`],
+    ]) {
+      const context = await browser.newContext({
+        viewport: { width, height: 1100 },
+      });
+      const page = await context.newPage();
+      await stubBoard(page, { role: "teacher", posts });
+      await openBoard(page, hash);
+      await expect(page.locator("#boardScreen")).toHaveClass(/screen-active/);
+      await page.waitForTimeout(300);
+      const edges = await page.evaluate(() => ({
+        top: document.querySelector(".topbar").getBoundingClientRect().bottom,
+        bottom: document.querySelector(".site-footer").getBoundingClientRect()
+          .top,
+      }));
+      // the page is shorter than the window: the footer sits low
+      expect(edges.bottom).toBeGreaterThan(edges.top + 200);
+      for (let y = Math.ceil(edges.top) + 1; y < edges.bottom - 1; y += 25) {
+        expect(await paintAt(page, 4, y), `${width} ${hash} y=${y}`).toBe(BLUE);
+      }
+      await context.close();
+    }
+  }
+});
+
+const STD = "Pretendard Std Variable"; // the default stack's head
+// The fonts Chrome really drew a node's text with (CDP).
+async function drawnFonts(page, selector) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("DOM.enable");
+  await cdp.send("CSS.enable");
+  const { root } = await cdp.send("DOM.getDocument", { depth: -1 });
+  const { nodeId } = await cdp.send("DOM.querySelector", {
+    nodeId: root.nodeId,
+    selector,
+  });
+  const { fonts } = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
+  await cdp.detach();
+  return [...new Set(fonts.map((f) => f.familyName))].sort();
+}
+const faceLoaded = (page, family) =>
+  page.waitForFunction(
+    (fam) =>
+      [...document.fonts].some(
+        (f) => f.family.replace(/"/g, "") === fam && f.status === "loaded",
+      ),
+    family,
+    { timeout: 15000 },
+  );
+const FACE = {
+  ko: { pretendard: "Pretendard Variable", "nanum-gothic": "Nanum Gothic" },
+  en: {
+    pretendard: "Pretendard Std Variable",
+    "nanum-gothic": "CRA Nanum Gothic Latin",
+  },
+};
+// what each face's font file calls itself
+const DRAWN = {
+  ko: { pretendard: /^Pretendard Variable$/, "nanum-gothic": /^NanumGothic/ },
+  en: {
+    pretendard: /^Pretendard Std Variable$/,
+    "nanum-gothic": /^NanumGothic/,
+  },
+};
+const fontAsks = (urls) => ({
+  pretendardKo: urls.some((u) => /pretendard@v1\.3\.9\/dist\/web/.test(u)),
+  nanumKo: urls.some((u) =>
+    /fonts\.googleapis\.com\/css2\?family=Nanum\+Gothic:/.test(u),
+  ),
+  stdLatin: urls.some((u) => u.includes("/assets/fonts/PretendardStdVariable")),
+  nanumLatin: urls.some((u) => u.includes("/assets/fonts/NanumGothic-latin-")),
+});
+
+test("board font: Korean and Latin picked apart — each of the four pairs is really drawn, and only the picked faces are fetched (#5)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  for (const ko of ["pretendard", "nanum-gothic"]) {
+    for (const en of ["pretendard", "nanum-gothic"]) {
+      const context = await browser.newContext();
+      const page = await context.newPage();
+      const urls = [];
+      page.on("request", (r) => urls.push(r.url()));
+      await stubBoard(page, { role: "teacher", fontKo: ko, fontEn: en });
+      await openBoard(page);
+      await expect(page.locator("#boardRows .bd-row")).toHaveCount(10);
+      await expect(page.locator("#boardScreen")).toHaveAttribute(
+        "data-font-ko",
+        ko,
+      );
+      await expect(page.locator("#boardScreen")).toHaveAttribute(
+        "data-font-en",
+        en,
+      );
+      await faceLoaded(page, FACE.ko[ko]);
+      await faceLoaded(page, FACE.en[en]);
+      // Korean only: the title (교사자료실) · Latin only: a level tag
+      const koDrawn = await drawnFonts(page, "#boardTitle > span:last-child");
+      const enDrawn = await drawnFonts(
+        page,
+        "#boardRows .bd-level:not(.lv-common)",
+      );
+      const pair = `${ko} + ${en}`;
+      expect(koDrawn.length, pair).toBe(1);
+      expect(koDrawn[0], pair).toMatch(DRAWN.ko[ko]);
+      expect(enDrawn.length, pair).toBe(1);
+      expect(enDrawn[0], pair).toMatch(DRAWN.en[en]);
+      // the picked faces only
+      const asked = fontAsks(urls);
+      expect(asked, pair).toEqual({
+        pretendardKo: ko === "pretendard",
+        nanumKo: ko === "nanum-gothic",
+        stdLatin: en === "pretendard",
+        nanumLatin: en === "nanum-gothic",
+      });
+      await context.close();
+    }
+  }
+});
+
+test("board font settings: the admin picks, it saves at once and survives a reload; the preview is drawn in the pair (#5)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const sent = await stubBoard(page, { role: "admin" });
+  await openAdminBoard(page);
+  const ko = page.locator("#rbFontKo");
+  const en = page.locator("#rbFontEn");
+  const preview = page.locator("#rbFontPreview");
+  const status = page.locator("#rbFontStatus");
+  await expect(ko).toHaveValue("pretendard");
+  await expect(en).toHaveValue("pretendard");
+  await expect(ko.locator("option")).toHaveText([
+    "프리텐다드(기본)",
+    "나눔고딕",
+  ]);
+  await expect(preview).toHaveText(
+    "Level 1 월간교육안 · March Lesson Plan 2026 — 3월 수업 자료",
+  );
+  await ko.selectOption("nanum-gothic");
+  await expect(status).toHaveText("글꼴을 바꿨어요.");
+  await expect(preview).toHaveAttribute("data-font-ko", "nanum-gothic");
+  await expect(preview).toHaveAttribute("data-font-en", "pretendard");
+  await en.selectOption("nanum-gothic");
+  await expect(preview).toHaveAttribute("data-font-en", "nanum-gothic");
+  expect(sent.upserts).toEqual([
+    { key: "board_font_ko", value: "nanum-gothic" },
+    { key: "board_font_en", value: "nanum-gothic" },
+  ]);
+  // the preview is really drawn in the pair (Korean + Latin faces)
+  await faceLoaded(page, "Nanum Gothic");
+  await faceLoaded(page, "CRA Nanum Gothic Latin");
+  const drawn = await drawnFonts(page, "#rbFontPreview");
+  expect(drawn.every((f) => /^NanumGothic/.test(f))).toBe(true);
+  // the rest of the admin keeps its face
+  expect(
+    await page
+      .locator("#rbSettings .rb-subtitle")
+      .first()
+      .evaluate((el) => getComputedStyle(el).fontFamily),
+  ).not.toContain("Nanum Gothic Latin");
+  // a reload keeps the pair (the stub keeps what was saved)
+  await page.reload();
+  await openAdminBoard(page, { goto: false });
+  await expect(ko).toHaveValue("nanum-gothic");
+  await expect(en).toHaveValue("nanum-gothic");
+  await openBoard(page);
+  await expect(page.locator("#boardScreen")).toHaveAttribute(
+    "data-font-ko",
+    "nanum-gothic",
+  );
+  await context.close();
+});
+
+test("board font settings: odd values in the table = Pretendard on both; a refused save puts the picker back with the error code (#5)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const odd = await browser.newContext();
+  const p2 = await odd.newPage();
+  await stubBoard(p2, { role: "admin", fontKo: "comic-sans", fontEn: 42 });
+  await openBoard(p2);
+  await expect(p2.locator("#boardScreen")).toHaveAttribute(
+    "data-font-ko",
+    "pretendard",
+  );
+  await expect(p2.locator("#boardScreen")).toHaveAttribute(
+    "data-font-en",
+    "pretendard",
+  );
+  await p2.goto("about:blank"); // (leaving the board reloads by itself)
+  await openAdminBoard(p2);
+  await expect(p2.locator("#rbFontKo")).toHaveValue("pretendard");
+  await odd.close();
+
+  // a refused save: the picker goes back, the code is shown
+  const bad = await browser.newContext();
+  const p3 = await bad.newPage();
+  await stubBoard(p3, { role: "admin", flagError: RLS_ERROR });
+  await openAdminBoard(p3);
+  await p3.locator("#rbFontEn").selectOption("nanum-gothic");
+  await expect(p3.locator("#rbFontStatus")).toHaveText(FLAG_FAILED);
+  await expect(p3.locator("#rbFontEn")).toHaveValue("pretendard");
+  await expect(p3.locator("#rbFontPreview")).toHaveAttribute(
+    "data-font-en",
+    "pretendard",
+  );
+  await bad.close();
+});
+
+/* ---- The login ended while the admin screen is open (2차-2 §5) ---------- */
+
+const ENDED_TITLE = "로그인이 끝났어요.";
+const ENDED_TEXT = "다시 로그인한 뒤 이어서 해 주세요.";
+
+// Another tab of the same browser logs out with the header's button.
+async function logOutInAnotherTab(page, role) {
+  const other = await page.context().newPage();
+  await stubBoard(other, { role });
+  await other.goto("/");
+  await other.locator("#logoutBtn").click();
+  await expect(other.locator("#homeScreen")).toHaveClass(/screen-active/);
+  await other.close();
+}
+
+test("login ended: another tab's Log out puts a window over the locked admin screen — what was typed stays; [로그인 화면으로] goes to the login page (§5)", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  const sent = await stubBoard(page, { role: "admin" });
+  await openAdminBoard(page);
+  await page.locator("#rbCatAddName").fill("쓰던 분류");
+  await expect(page.locator("#loginEndedModal")).toBeHidden();
+  await logOutInAnotherTab(page, "admin");
+  const modal = page.locator("#loginEndedModal");
+  await expect(modal).toBeVisible();
+  await expect(page.locator("#loginEndedTitle")).toHaveText(ENDED_TITLE);
+  await expect(page.locator("#loginEndedText")).toHaveText(ENDED_TEXT);
+  await expect(page.locator("#loginEndedGo")).toBeFocused();
+  // locked: nothing in the admin screen can be pressed (no save goes out)
+  await expect(page.locator("#adminScreen")).toHaveJSProperty("inert", true);
+  await expect(page.locator("#rbCatAddName")).toHaveValue("쓰던 분류");
+  await page
+    .locator(".rb-settings-switch .adm-switch")
+    .click({ timeout: 1500 })
+    .catch(() => {});
+  await page.locator("#rbFontKo").focus();
+  await expect(page.locator("#rbFontKo")).not.toBeFocused();
+  expect(sent.upserts).toEqual([]);
+  // the screen did not change by itself
+  await expect(page.locator("#adminScreen")).toHaveClass(/screen-active/);
+  await page.locator("#loginEndedGo").click();
+  await expect(modal).toBeHidden();
+  await expect(page.locator("#loginScreen")).toHaveClass(/screen-active/);
+  await expect(page.locator("#adminScreen")).toHaveJSProperty("inert", false);
+});
+
+test("login alive: no window — while working, and on this tab's own Log out (§5)", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  await stubBoard(page, { role: "admin" });
+  await openAdminBoard(page);
+  await page.locator('.admin-menu-btn[data-admin-view="banner"]').click();
+  await page.waitForTimeout(500);
+  await expect(page.locator("#loginEndedModal")).toBeHidden();
+  await page.locator("#adminLogoutBtn").click();
+  await expect(page.locator("#homeScreen")).toHaveClass(/screen-active/);
+  await page.waitForTimeout(300);
+  await expect(page.locator("#loginEndedModal")).toBeHidden();
+});
+
+test("login ended for a branch account's admin menu too: another tab's Log out → the same window (§5)", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  await stubBoard(page, { role: "branch" });
+  await page.goto("/#admin");
+  await expect(page.locator("#adminScreen")).toHaveClass(/screen-active/);
+  await expect(page.locator("#loginEndedModal")).toBeHidden();
+  await logOutInAnotherTab(page, "branch");
+  await expect(page.locator("#loginEndedModal")).toBeVisible();
+  await expect(page.locator("#adminScreen")).toHaveJSProperty("inert", true);
+  await page.locator("#loginEndedGo").click();
+  await expect(page.locator("#loginScreen")).toHaveClass(/screen-active/);
 });

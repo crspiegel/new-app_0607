@@ -1976,7 +1976,19 @@ async function savePage(level, month) {
 // signup flag in one request — loadSiteFlags): 자료실 (resource_board_enabled,
 // default off — B12) and 교사 자료실 (teacher_resources_enabled, default on —
 // T1). Only what the page shows; the server checks the same switches.
-const siteFlags = { board: false, teacherRes: true };
+// #5 (2026-11-05): the board's Korean / Latin faces (board_font_ko /
+// board_font_en) ride in the same request — only a value on BOARD_FONTS
+// counts, anything else = the default (Pretendard).
+const BOARD_FONTS = ["pretendard", "nanum-gothic"];
+const siteFlags = {
+  board: false,
+  teacherRes: true,
+  fontKo: "pretendard",
+  fontEn: "pretendard",
+};
+function boardFontOf(value) {
+  return BOARD_FONTS.includes(value) ? value : "pretendard";
+}
 
 // Teacher resources (교사 자료실) are for admins and LMS branch (1) / teacher
 // (2) accounts — never students (3) or visitors — while the admin's switch
@@ -2315,10 +2327,16 @@ if (loginForm) {
 }
 
 // Log out — the site header's button and the admin top bar's do the same.
+let loggingOut = false; // this tab's own Log out — not "the login ended"
 async function logOut() {
-  // LMS first (needs the header; the token dies server-side), then Auth.
-  if (sb && lmsToken) await sb.rpc("lms_logout");
-  if (sb) await sb.auth.signOut();
+  loggingOut = true;
+  try {
+    // LMS first (needs the header; the token dies server-side), then Auth.
+    if (sb && lmsToken) await sb.rpc("lms_logout");
+    if (sb) await sb.auth.signOut();
+  } finally {
+    loggingOut = false;
+  }
   isAdmin = false;
   clearLmsSession();
   updateAdminUI();
@@ -2326,6 +2344,55 @@ async function logOut() {
   showScreen("home");
 }
 if (logoutBtn) logoutBtn.addEventListener("click", logOut);
+
+/* ---- The login ended while the admin screen is open (2차-2 §5) ----------
+   #1's cause (2026-11-05): Log out in another tab of this browser, or an
+   expired session whose refresh failed, left this tab's admin screen up
+   while every save went out without rights. Supabase tells every tab
+   (onAuthStateChange SIGNED_OUT — another tab's Log out arrives through its
+   broadcast); an LMS account (branch / teacher admin menus) lives in the
+   cra_lms entry, which another tab's Log out removes (the storage event —
+   an LMS session that only expires on the server is not seen here: its
+   next call fails as before). The admin screen stays as it was (nothing
+   typed vanishes) but is locked (inert, so no save can be pressed) under a
+   window whose one button goes to the login page. Board uploads not yet
+   registered may stay in Storage (no login to delete them) — NOTES. */
+const loginEndedModal = document.querySelector("#loginEndedModal");
+const loginEndedGo = document.querySelector("#loginEndedGo");
+
+function showLoginEnded() {
+  if (!loginEndedModal || !loginEndedModal.hidden) return;
+  if (document.body.dataset.screen !== "admin") return;
+  const screen = document.querySelector("#adminScreen");
+  if (screen) screen.inert = true;
+  loginEndedModal.hidden = false;
+  if (loginEndedGo) loginEndedGo.focus();
+}
+
+if (loginEndedGo) {
+  loginEndedGo.addEventListener("click", () => {
+    loginEndedModal.hidden = true;
+    const screen = document.querySelector("#adminScreen");
+    if (screen) screen.inert = false;
+    if (window.craBoardAdmin) window.craBoardAdmin.drop();
+    isAdmin = false;
+    clearLmsSession();
+    updateAdminUI();
+    setHash("login");
+    showScreen("login");
+  });
+}
+
+if (sb) {
+  sb.auth.onAuthStateChange((event) => {
+    if (event === "SIGNED_OUT" && !loggingOut && isAdmin) showLoginEnded();
+  });
+}
+window.addEventListener("storage", (event) => {
+  if (event.key === LMS_KEY && !event.newValue && state.lms && !isAdmin) {
+    showLoginEnded();
+  }
+});
 
 function populateAdminSelectors() {
   if (adminLevelSelect && !adminLevelSelect.options.length) {
@@ -2401,7 +2468,7 @@ const adminViewTitles = {
   branches: "지사 관리",
   bulk: "일괄 등록",
   banner: "배너 관리",
-  board: "자료실",
+  board: "교사자료실",
 };
 const adminViewOpeners = {};
 // List screens: the title row's 새로 추가 opens / closes this box.
@@ -2513,12 +2580,16 @@ async function getSignupVisible() {
       GAME_HOSTS_KEY,
       "resource_board_enabled",
       "teacher_resources_enabled",
+      "board_font_ko",
+      "board_font_en",
     ]);
   if (error || !data) return false;
   const byKey = Object.fromEntries(data.map((row) => [row.key, row.value]));
   setExtraGameHosts(byKey[GAME_HOSTS_KEY]);
   siteFlags.board = byKey.resource_board_enabled === true;
   siteFlags.teacherRes = byKey.teacher_resources_enabled !== false;
+  siteFlags.fontKo = boardFontOf(byKey.board_font_ko);
+  siteFlags.fontEn = boardFontOf(byKey.board_font_en);
   return byKey.signup_visible === true;
 }
 

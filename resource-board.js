@@ -15,7 +15,8 @@
      Google Drive file downloads straight from Google in a new tab (F2, the
      D64 address) — then 이전 글 / 다음 글 in the same order as the list it
      came from, and 목록으로 back to it.
-   - F1 (2026-11-04): this screen alone is set in Pretendard (rbEnsureFont).
+   - F1 (2026-11-04): this screen alone has its own face; #5 (2026-11-05):
+     the top admin picks it — Korean and Latin apart (rbApplyFonts).
    The filters live in the address, so Back / reload keep them. Every answer
    comes from the board_list / board_post_get RPCs (supabase-js rpc = POST;
    the server decides who may see what and counts a view once a KST day).
@@ -24,7 +25,7 @@
    open it even while it is off (a preview, with a note). */
 
 /* exported rbLevelTag, rbCategoryBadge, rbFormatSize, rbFileKind, rbSvg,
-   rbFollowHash */
+   rbFollowHash, rbApplyFonts */
 
 // F1: Pretendard (SIL OFL 1.1), the variable font's dynamic subset, a pinned
 // version from jsDelivr — fetched the first time the board opens (like the
@@ -54,7 +55,7 @@ const RB_MSG = {
   postFailed: "자료를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
   missing: "이 자료는 지금 볼 수 없어요. 숨겨졌거나 지워졌을 수 있어요.",
   needLogin: "다시 로그인해 주세요.",
-  off: "자료실이 지금은 닫혀 있어요.",
+  off: "교사자료실이 지금은 닫혀 있어요.",
   notReady: "이 파일은 지금 받을 수 없어요.",
   limit: "오늘 다운로드 횟수를 모두 사용했습니다. 내일 다시 시도해 주세요.",
   failed: "내려받지 못했어요. 잠시 후 다시 시도해 주세요.",
@@ -256,6 +257,21 @@ function rbEnsureFont() {
   document.head.append(link);
 }
 
+// #5 (2026-11-05): the picked faces (siteFlags.fontKo / fontEn, app.js) onto
+// an element that wears the board's font stack (#boardScreen, the admin's
+// preview) — styles.css "#5" turns data-font-ko / data-font-en into the
+// stack. Only the picked Korean CSS is fetched: Pretendard (above) or Nanum
+// Gothic (the admin screen's own Google Fonts CSS, app.js ensureAdminFont).
+// The Latin faces are files in assets/fonts that the browser fetches only
+// when the stack names them.
+function rbApplyFonts(el) {
+  if (!el) return;
+  el.dataset.fontKo = siteFlags.fontKo;
+  el.dataset.fontEn = siteFlags.fontEn;
+  if (siteFlags.fontKo === "nanum-gothic") ensureAdminFont();
+  else rbEnsureFont();
+}
+
 /* ---- The address -------------------------------------------------------- */
 
 // "#board…" → { id, query } or null for any other address.
@@ -333,7 +349,7 @@ function rbHome() {
 }
 
 function rbShowView(view) {
-  rbEnsureFont();
+  rbApplyFonts(document.querySelector("#boardScreen"));
   boardListView.hidden = view !== "list";
   boardDetailView.hidden = view !== "post";
   if (boardAdminNote) boardAdminNote.hidden = !(isAdmin && !siteFlags.board);
@@ -645,7 +661,7 @@ function rbNeighbor(kind, post, query) {
 function rbRenderCrumbs(post, category, query) {
   const home = rbEl("a", "bd-crumb");
   home.href = rbListHash(query);
-  home.append(rbSvg("bd-crumb-icon", "folder"), "자료실");
+  home.append(rbSvg("bd-crumb-icon", "folder"), "교사자료실");
   const parts = [home];
   if (category) {
     const cat = rbEl("a", "bd-crumb", category.name);
