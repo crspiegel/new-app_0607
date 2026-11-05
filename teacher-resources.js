@@ -1,10 +1,10 @@
-/* ==== Teacher resources (교사 자료실, 2026-10-29) ==========================
+/* ==== Teacher resources (레벨별 자료실, 2026-10-29) ========================
    Loaded AFTER app.js as a classic script, so it shares app.js's top-level
    lexical scope (sb, state, isAdmin, showScreen, setHash, applyLevelTheme,
    monthLevelTag, canSeeTeacherResources) the way hero-banner.js does.
 
    Three parts:
-   - the '교사 자료실' button on every level's month page — admins and LMS
+   - the '레벨별 자료실' button on every level's month page — admins and LMS
      branch (1) / teacher (2) accounts only (body.can-teacher-res, set by
      updateAdminUI on every login / logout / restore);
    - the level's resource page (#resources/<level>): the month page itself in

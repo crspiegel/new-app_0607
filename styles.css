@@ -6143,14 +6143,15 @@ body.bg-editing.bg-ghost .site-footer {
 }
 
 /* ==========================================================================
-   Teacher resources (교사 자료실, teacher-resources.js, 2026-10-29)
+   Teacher resources (레벨별 자료실 — 옛 이름 교사 자료실, teacher-resources.js,
+   2026-10-29)
    The resource page is the month page in another mode: body[data-screen=
    "resources"] hides the 3~12월 grid and shows 2-3 download buttons that
    reuse .month-button (same size, level color and lip) with their own text.
-   The '교사 자료실' button sits at the right end of the title row (>=768px)
+   The '레벨별 자료실' button sits at the right end of the title row (>=768px)
    or under the left-aligned title (phones); "월 선택" takes the same spot on the
    resource page. Korean labels are a PM-set exception to the English UI
-   (teacher-only screens) — NOTES "교사 자료실".
+   (teacher-only screens) — NOTES "레벨별 자료실".
    ========================================================================== */
 .teacher-res-button {
   display: none;
@@ -6210,7 +6211,7 @@ body[data-screen="resources"] #resourceStatus {
   display: block;
 }
 
-/* '교사 자료실' on the month page (D58): filled with the level color like the
+/* '레벨별 자료실' on the month page (D58): filled with the level color like the
    site's rounded level buttons; "월 선택" (resource page) stays outlined. */
 #teacherResBtn {
   border-color: var(--level-accent, var(--macaw-blue));

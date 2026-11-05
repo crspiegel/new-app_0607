@@ -2028,7 +2028,7 @@ function updateAdminUI() {
   // screen for the top admin ("Admin"), a branch account ("My Branch") and a
   // teacher ("My Class") — decision D8 / Phase 3.3; students get Log out only.
   // Login hides when signed in (CSS keys off body.signed-in). Every login /
-  // logout / restore passes through here, so the 교사 자료실 button flips
+  // logout / restore passes through here, so the 레벨별 자료실 button flips
   // without a reload.
   const signedIn = isAdmin || state.lms != null;
   const role = adminRole();

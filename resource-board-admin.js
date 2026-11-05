@@ -12,7 +12,7 @@
      삭제 (two presses — its files go from Storage too).
    - 자료실 설정: the board switch (B12, site_settings
      resource_board_enabled) and the categories (B5: rename, ↑ ↓, add, delete
-     when empty). The 배너 tab's 교사 자료실 switch (T1) lives here too.
+     when empty). The 배너 tab's 레벨별 자료실 switch (T1) lives here too.
    - The editor (B4, B6-B8): title, body, level, category, public, pinned;
      up to 20 attachments — files dropped (many at once, name order "3월 <
      10월") or picked, uploaded 3 at a time with a bar each straight to the
@@ -328,8 +328,8 @@ if (rbaTeacherToggle) {
     rbaSyncToggles();
     setTeacherResStatus(
       next
-        ? "교사 자료실을 켰어요. 월 선택 화면에 버튼이 다시 보여요."
-        : "교사 자료실을 껐어요. 올린 파일·링크는 그대로 있어요.",
+        ? "레벨별 자료실을 켰어요. 월 선택 화면에 버튼이 다시 보여요."
+        : "레벨별 자료실을 껐어요. 올린 파일·링크는 그대로 있어요.",
     );
   });
 }

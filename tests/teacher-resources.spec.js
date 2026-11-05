@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-// Teacher resources (B, 2026-10-29): the '교사 자료실' button on each level's
+// Teacher resources (B, 2026-10-29): the '레벨별 자료실' button on each level's
 // month page, the per-level resource page and the admin upload section in
 // the 배너 tab. Every Supabase request is answered here (REST, RPC, auth,
 // storage) — the live project is never reached. The RPC answers mirror
@@ -10,7 +10,7 @@ import path from "node:path";
 // checks the SQL side of the same contract).
 
 const SUPABASE = /^https:\/\/[^/]+\.supabase\.co\//;
-const BUTTON = "교사 자료실";
+const BUTTON = "레벨별 자료실"; // 옛 이름 '교사 자료실' (2026-11-06)
 const NEED_LOGIN = "다시 로그인해 주세요.";
 const FAILED = "내려받지 못했어요. 잠시 후 다시 시도해 주세요.";
 const LIMIT =

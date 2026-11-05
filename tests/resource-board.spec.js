@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   CATEGORIES,
   DRIVE_A,
@@ -9,7 +11,7 @@ import {
 
 // 자료실 (resource board, 2026-11-03 PM brief): the header's Teacher button
 // (H1-H6), the teachers' list and post screens (B1, B2, B9-B11), the switch
-// (B12), the admin list / settings / editor (B3-B8) and the 교사 자료실
+// (B12), the admin list / settings / editor (B3-B8) and the 레벨별 자료실
 // switch (T1, T2). Every Supabase request is answered by
 // tests/resource-board-stub.mjs — the live project is never reached; the SQL
 // side of the same contract is tests/resource-board-sql.spec.js.
@@ -986,7 +988,7 @@ const KEPT = [
   ".site-footer",
 ];
 
-test("board font: every letter of the teachers' list, post and empty pages wears the board's stack — by default Pretendard Std (Latin) then Pretendard (Korean); the header, 교사 자료실 and the admin keep theirs (F1, #5)", async ({
+test("board font: every letter of the teachers' list, post and empty pages wears the board's stack — by default Pretendard Std (Latin) then Pretendard (Korean); the header, 레벨별 자료실 and the admin keep theirs (F1, #5)", async ({
   browser,
 }, info) => {
   desktopOnly(info);
@@ -1033,7 +1035,7 @@ test("board font: every letter of the teachers' list, post and empty pages wears
       ".bd-empty-btn",
     ]);
     expect(Object.values(empty)).toEqual([STD, STD, STD]);
-    // 교사 자료실 and the admin: unchanged
+    // 레벨별 자료실 and the admin: unchanged
     await page.goto("/#resources/level-2");
     await page.reload();
     await page.waitForFunction(() => window.craTeacherRes.ready);
@@ -1433,7 +1435,7 @@ test("board admin editor: [등록하기] / [수정 완료] in the 게시 box and
   ]);
 });
 
-/* ---- 교사 자료실 switch (T1, T2) ------------------------------------------- */
+/* ---- 레벨별 자료실 switch (T1, T2) ----------------------------------------- */
 
 test("teacher resources switch: off hides the month-page button for everyone and sends #resources to the month page; on brings it back (T1, T2)", async ({
   browser,
@@ -1542,12 +1544,12 @@ test("teacher resources switch: off and on again whatever the board is — on or
     await page.locator("#teacherResAdmin .adm-switch").click();
     await expect(toggle).not.toBeChecked();
     await expect(status).toHaveText(
-      "교사 자료실을 껐어요. 올린 파일·링크는 그대로 있어요.",
+      "레벨별 자료실을 껐어요. 올린 파일·링크는 그대로 있어요.",
     );
     await page.locator("#teacherResAdmin .adm-switch").click();
     await expect(toggle).toBeChecked();
     await expect(status).toHaveText(
-      "교사 자료실을 켰어요. 월 선택 화면에 버튼이 다시 보여요.",
+      "레벨별 자료실을 켰어요. 월 선택 화면에 버튼이 다시 보여요.",
     );
     expect(sent.upserts).toEqual([
       { key: "teacher_resources_enabled", value: false },
@@ -1717,7 +1719,7 @@ test("switch save with no login left (its signal missed): no request, a sentence
 
 /* ---- 수정 2차-2 (PM brief 2026-11-05): #3 name, #4 background, #5 fonts ---- */
 
-test("board name: 교사자료실 on the teachers' screens and in the admin — the old level 교사 자료실 keeps its name (#3)", async ({
+test("board name: 교사자료실 on the teachers' screens and in the admin — the old level resources are 레벨별 자료실 (#3, renamed 2026-11-06)", async ({
   page,
 }, info) => {
   desktopOnly(info);
@@ -1747,10 +1749,10 @@ test("board name: 교사자료실 on the teachers' screens and in the admin — 
   await expect(page.locator("#rbAdminStatus")).toHaveText(
     "교사자료실을 켰어요. 지사·선생님 화면에 버튼이 보여요.",
   );
-  // the level resources keep "교사 자료실"
+  // the level resources: 레벨별 자료실 (with a space)
   await page.locator('.admin-menu-btn[data-admin-view="banner"]').click();
   await expect(page.locator("#teacherResAdmin .admin-subtitle")).toHaveText(
-    "교사 자료실 파일",
+    "레벨별 자료실 파일",
   );
 });
 
@@ -1784,6 +1786,179 @@ test("admin menu on a phone: 교사자료실 stays on one line inside the menu (
   expect(fit.lines).toBe(1);
   expect(fit.inside).toBe(true);
   expect(fit.labelRight).toBeLessThanOrEqual(fit.btnRight);
+  await context.close();
+});
+
+/* ---- 옛 '교사 자료실' → '레벨별 자료실' (PM brief 2026-11-06) ------------- */
+
+// The old name, with its space — "교사자료실" (no space) is the board.
+const OLD_NAME = "교사 자료실";
+const LEVEL_NAME = "레벨별 자료실";
+
+// Every place a person or a screen reader could meet a name: the text of
+// every element (the hidden screens too — they are all in the DOM), every
+// attribute (aria-label, title, placeholder, alt …), form values and the tab
+// title. Scripts and styles are code, not screen text.
+const oldNameSpots = (page) =>
+  page.evaluate((old) => {
+    const spots = [];
+    if (document.title.includes(old)) spots.push(`title: ${document.title}`);
+    const code = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE"]);
+    for (const el of document.querySelectorAll("*")) {
+      if (code.has(el.tagName)) continue;
+      const where = el.tagName.toLowerCase() + (el.id ? `#${el.id}` : "");
+      for (const node of el.childNodes) {
+        if (node.nodeType === Node.TEXT_NODE && node.data.includes(old))
+          spots.push(`${where}: ${node.data.trim()}`);
+      }
+      for (const attr of el.attributes) {
+        if (attr.value.includes(old))
+          spots.push(`${where}[${attr.name}]: ${attr.value}`);
+      }
+      if (typeof el.value === "string" && el.value.includes(old))
+        spots.push(`${where}.value: ${el.value}`);
+    }
+    return spots;
+  }, OLD_NAME);
+
+test("rename: the old name '교사 자료실' is nowhere on the teachers' or admin screens — the level resources are 레벨별 자료실 (2026-11-06)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  test.setTimeout(60000);
+  // A branch account: the month page's button, the resource page, the board.
+  const branch = await browser.newContext();
+  const tab = await branch.newPage();
+  await stubBoard(tab, { role: "branch" });
+  await tab.goto("/#months/level-2");
+  await tab.waitForFunction(() => window.craTeacherRes.ready);
+  const button = tab.getByRole("button", { name: LEVEL_NAME, exact: true });
+  await expect(button).toBeVisible();
+  expect(await oldNameSpots(tab)).toEqual([]);
+  await button.click();
+  await expect(tab).toHaveURL(/#resources\/level-2$/);
+  await expect(tab.locator("#resourceGrid .res-card").first()).toBeVisible();
+  await expect(tab.locator("#resourceGrid")).toHaveAttribute(
+    "aria-label",
+    LEVEL_NAME,
+  );
+  expect(await oldNameSpots(tab)).toEqual([]);
+  await tab.locator("#teacherBoardBtn").click();
+  await tab.waitForFunction(() => window.craBoard && window.craBoard.ready);
+  await expect(tab.locator("#boardRows .bd-row").first()).toBeVisible();
+  expect(await oldNameSpots(tab)).toEqual([]);
+  await branch.close();
+
+  // The admin: the 배너 tab's box, both switch messages, the board's view.
+  const admin = await browser.newContext();
+  const page = await admin.newPage();
+  await stubBoard(page, { role: "admin" });
+  await page.goto("/#admin");
+  await openBannerTab(page);
+  await expect(page.locator("#teacherResAdmin .admin-subtitle")).toHaveText(
+    "레벨별 자료실 파일",
+  );
+  await expect(
+    page.locator("#teacherResAdmin .admin-hint").first(),
+  ).toContainText(
+    "각 레벨 월 선택 화면의 '레벨별 자료실' 버튼과 그 자료 페이지",
+  );
+  await expect(page.locator("#teacherResAdminList .res-admin-tab")).toHaveCount(
+    4,
+  );
+  const status = page.locator("#teacherResStatus");
+  await page.locator("#teacherResAdmin .adm-switch").click();
+  await expect(status).toHaveText(
+    "레벨별 자료실을 껐어요. 올린 파일·링크는 그대로 있어요.",
+  );
+  expect(await oldNameSpots(page)).toEqual([]);
+  await page.locator("#teacherResAdmin .adm-switch").click();
+  await expect(status).toHaveText(
+    "레벨별 자료실을 켰어요. 월 선택 화면에 버튼이 다시 보여요.",
+  );
+  expect(await oldNameSpots(page)).toEqual([]);
+  await openAdminBoard(page, { goto: false });
+  expect(await oldNameSpots(page)).toEqual([]);
+  await admin.close();
+
+  // No script can put it on a screen later either: in the page's own
+  // scripts the old name is left only in whole-line code comments.
+  const html = readFileSync(path.resolve("index.html"), "utf8");
+  const scripts = [...html.matchAll(/<script src="([^":]+\.js)"/g)].map(
+    (m) => m[1],
+  );
+  expect(scripts).toContain("teacher-resources.js");
+  const inCode = [];
+  for (const file of scripts) {
+    readFileSync(path.resolve(file), "utf8")
+      .split("\n")
+      .forEach((line, i) => {
+        if (!line.includes(OLD_NAME)) return;
+        if (!/^\s*(\/\/|\/\*|\*)/.test(line)) inCode.push(`${file}:${i + 1}`);
+      });
+  }
+  expect(inCode).toEqual([]);
+});
+
+test("rename: the month page's '레벨별 자료실' stays on one line, on the screen and clear of the title — 1366 · 1024 · 768 · 390, every level", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  test.setTimeout(60000);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await stubBoard(page, { role: "branch" });
+  for (const level of ["beginner", "level-1", "level-2", "level-3"]) {
+    await page.goto("about:blank");
+    await page.goto(`/#months/${level}`);
+    await page.waitForFunction(() => window.craTeacherRes.ready);
+    await expect(page.locator("#teacherResBtn")).toBeVisible();
+    for (const [width, height] of [
+      [1366, 900],
+      [1024, 768],
+      [768, 1024],
+      [390, 844],
+    ]) {
+      await page.setViewportSize({ width, height });
+      const m = await page.evaluate(() => {
+        const btn = document.querySelector("#teacherResBtn");
+        const label = btn.querySelector("span");
+        const range = document.createRange();
+        range.selectNodeContents(label);
+        const r = (el) => el.getBoundingClientRect().toJSON();
+        return {
+          text: label.textContent,
+          lines: new Set(
+            [...range.getClientRects()].map((x) => Math.round(x.top)),
+          ).size,
+          fits: btn.scrollWidth <= btn.clientWidth,
+          button: r(btn),
+          label: r(label),
+          title: r(document.querySelector("#monthLevelTag")),
+          grid: r(document.querySelector("#monthGrid")),
+          screen: document.documentElement.clientWidth,
+          page: document.documentElement.scrollWidth,
+        };
+      });
+      const at = `${level} @${width}`;
+      expect(m.text, at).toBe(LEVEL_NAME);
+      expect(m.lines, at).toBe(1);
+      expect(m.fits, at).toBe(true);
+      expect(m.label.right, at).toBeLessThanOrEqual(m.button.right);
+      expect(m.button.left, at).toBeGreaterThanOrEqual(0);
+      expect(m.button.right, at).toBeLessThanOrEqual(m.screen);
+      expect(m.page, at).toBeLessThanOrEqual(m.screen); // no sideways scroll
+      expect(m.button.height, at).toBeLessThan(56);
+      if (width >= 768) {
+        // the title row: the button right of the (centred) title, a gap between
+        expect(m.button.left - m.title.right, at).toBeGreaterThanOrEqual(12);
+      } else {
+        // phones: under the title, above the month buttons
+        expect(m.button.top, at).toBeGreaterThanOrEqual(m.title.bottom);
+        expect(m.button.bottom, at).toBeLessThan(m.grid.top);
+      }
+    }
+  }
   await context.close();
 });
 
