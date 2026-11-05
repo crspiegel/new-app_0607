@@ -1472,3 +1472,238 @@ test("teacher resources switch: off hides the month-page button for everyone and
   await expect(p.locator("#teacherResBtn")).toBeVisible();
   await ctx.close();
 });
+
+/* ---- The two switches always save (교사자료실 수정 2차-1 #1, 2026-11-05) ----- */
+
+// The 배너 tab of an open admin page.
+async function openBannerTab(page) {
+  const menu = page.locator('.admin-menu-btn[data-admin-view="banner"]');
+  if (!(await menu.isVisible())) await page.locator("#adminMenuToggle").click();
+  await menu.click();
+}
+
+// An LMS branch account opening #resources/level-2 with the switches as the
+// admin left them.
+async function branchMonthPage(browser, flags) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await stubBoard(page, { role: "branch", ...flags });
+  await page.goto("/#resources/level-2");
+  await page.waitForFunction(() => window.craTeacherRes.ready);
+  return { context, page };
+}
+
+// PostgREST's answer when RLS refuses a write without admin rights.
+const RLS_ERROR = {
+  status: 401,
+  json: {
+    code: "42501",
+    details: null,
+    hint: null,
+    message:
+      'new row violates row-level security policy for table "site_settings"',
+  },
+};
+const FLAG_FAILED =
+  "설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요. (오류 42501: new row violates row-level security…)";
+const FLAG_LOGIN =
+  "관리자 로그인 상태를 확인할 수 없어요. 새로고침 뒤 다시 시도해 주세요.";
+
+test("teacher resources switch: off and on again whatever the board is — on or off, no post or one (#1)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const onePost = samplePosts().slice(0, 1);
+  for (const [board, posts] of [
+    [false, []],
+    [true, []],
+    [false, onePost],
+    [true, onePost],
+  ]) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const sent = await stubBoard(page, { role: "admin", board, posts });
+    await page.goto("/#admin");
+    await openBannerTab(page);
+    const toggle = page.locator("#teacherResToggle");
+    const status = page.locator("#teacherResStatus");
+    await expect(toggle).toBeChecked();
+    await page.locator("#teacherResAdmin .adm-switch").click();
+    await expect(toggle).not.toBeChecked();
+    await expect(status).toHaveText(
+      "교사 자료실을 껐어요. 올린 파일·링크는 그대로 있어요.",
+    );
+    await page.locator("#teacherResAdmin .adm-switch").click();
+    await expect(toggle).toBeChecked();
+    await expect(status).toHaveText(
+      "교사 자료실을 켰어요. 월 선택 화면에 버튼이 다시 보여요.",
+    );
+    expect(sent.upserts).toEqual([
+      { key: "teacher_resources_enabled", value: false },
+      { key: "teacher_resources_enabled", value: true },
+    ]);
+    await context.close();
+  }
+});
+
+test("teacher resources switch: off stays off after a reload, the branch account loses the button (its address too); on brings it back (#1)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const sent = await stubBoard(page, {
+    role: "admin",
+    board: true,
+    posts: samplePosts().slice(0, 1),
+  });
+  await page.goto("/#admin");
+  await openBannerTab(page);
+  await page.locator("#teacherResAdmin .adm-switch").click();
+  await expect(page.locator("#teacherResToggleText")).toHaveText(
+    "사용자 화면에 표시: 끔",
+  );
+  await page.reload();
+  await openBannerTab(page);
+  await expect(page.locator("#teacherResToggle")).not.toBeChecked();
+  await expect(page.locator("#teacherResToggleText")).toHaveText(
+    "사용자 화면에 표시: 끔",
+  );
+
+  let branch = await branchMonthPage(browser, sent.db.flags);
+  await expect(branch.page).toHaveURL(/#months\/level-2$/);
+  await expect(branch.page.locator("#monthScreen")).toHaveClass(
+    /screen-active/,
+  );
+  await expect(branch.page.locator("#teacherResBtn")).toBeHidden();
+  await branch.context.close();
+
+  await page.locator("#teacherResAdmin .adm-switch").click();
+  await expect(page.locator("#teacherResToggleText")).toHaveText(
+    "사용자 화면에 표시: 켬",
+  );
+  branch = await branchMonthPage(browser, sent.db.flags);
+  await expect(branch.page).toHaveURL(/#resources\/level-2$/);
+  // (a # change in the same document is not routed again — reload)
+  await branch.page.goto("/#months/level-2");
+  await branch.page.reload();
+  await branch.page.waitForFunction(() => window.craTeacherRes.ready);
+  await expect(branch.page.locator("#teacherResBtn")).toBeVisible();
+  await branch.context.close();
+  await context.close();
+});
+
+test("board switch: off stays off after a reload and the branch account loses Teacher; on brings it back (#1)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const sent = await stubBoard(page, {
+    role: "admin",
+    board: true,
+    posts: samplePosts().slice(0, 1),
+  });
+  await openAdminBoard(page);
+  const text = page.locator("#rbBoardToggleText");
+  await page.locator(".rb-settings-switch .adm-switch").click();
+  await expect(text).toHaveText("사용자 화면에 표시: 끔");
+  await expect(page.locator("#rbAdminStatus")).toHaveText("자료실을 껐어요.");
+  await page.reload();
+  await openAdminBoard(page, { goto: false });
+  await expect(page.locator("#rbBoardToggle")).not.toBeChecked();
+
+  const branchSees = async (on) => {
+    const ctx = await browser.newContext();
+    const p = await ctx.newPage();
+    await stubBoard(p, { role: "branch", board: sent.db.flags.board });
+    await openBoard(p);
+    if (on) {
+      await expect(p.locator("#boardScreen")).toHaveClass(/screen-active/);
+      await expect(p.locator("#teacherBoardBtn")).toBeVisible();
+    } else {
+      await expect(p.locator("#homeScreen")).toHaveClass(/screen-active/);
+      await expect(p.locator("#teacherBoardBtn")).toBeHidden();
+    }
+    await ctx.close();
+  };
+  await branchSees(false);
+  await page.locator(".rb-settings-switch .adm-switch").click();
+  await expect(text).toHaveText("사용자 화면에 표시: 켬");
+  await page.reload();
+  await openAdminBoard(page, { goto: false });
+  await expect(page.locator("#rbBoardToggle")).toBeChecked();
+  await branchSees(true);
+  expect(sent.upserts).toEqual([
+    { key: "resource_board_enabled", value: false },
+    { key: "resource_board_enabled", value: true },
+  ]);
+  await context.close();
+});
+
+test("switch save refused: the switch goes back and the sentence carries the error code; the console gets the whole error (#1)", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  const errors = [];
+  page.on("console", (m) => {
+    if (m.type() === "error") errors.push(m.text());
+  });
+  const sent = await stubBoard(page, {
+    role: "admin",
+    board: true,
+    flagError: RLS_ERROR,
+  });
+  await page.goto("/#admin");
+  await openBannerTab(page);
+  await page.locator("#teacherResAdmin .adm-switch").click();
+  await expect(page.locator("#teacherResStatus")).toHaveText(FLAG_FAILED);
+  await expect(page.locator("#teacherResToggle")).toBeChecked();
+  await expect(page.locator("#teacherResToggle")).toBeEnabled();
+  await expect(page.locator("#teacherResToggleText")).toHaveText(
+    "사용자 화면에 표시: 켬",
+  );
+  expect(errors.some((t) => t.includes("teacher_resources_enabled"))).toBe(
+    true,
+  );
+  // the board's switch says the same in its own line
+  await openAdminBoard(page, { goto: false });
+  await page.locator(".rb-settings-switch .adm-switch").click();
+  await expect(page.locator("#rbAdminStatus")).toHaveText(FLAG_FAILED);
+  await expect(page.locator("#rbBoardToggle")).toBeChecked();
+  expect(sent.upserts.map((u) => u.key)).toEqual([
+    "teacher_resources_enabled",
+    "resource_board_enabled",
+  ]);
+});
+
+test("switch save after the login ended in another tab: no request, a sentence that says so (#1)", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  const sent = await stubBoard(page, { role: "admin", board: true });
+  await page.goto("/#admin");
+  await openBannerTab(page);
+  await expect(page.locator("#teacherResToggle")).toBeChecked();
+  // another tab of the same browser: Log out (the admin page stays open here)
+  const other = await page.context().newPage();
+  await stubBoard(other, { role: "admin", board: true });
+  await other.goto("/");
+  await other.locator("#logoutBtn").click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        localStorage.getItem("sb-jguuexcgyvyljbcqfpib-auth-token"),
+      ),
+    )
+    .toBeNull();
+  await other.close();
+  await page.locator("#teacherResAdmin .adm-switch").click();
+  await expect(page.locator("#teacherResStatus")).toHaveText(FLAG_LOGIN);
+  await expect(page.locator("#teacherResToggle")).toBeChecked();
+  await openAdminBoard(page, { goto: false });
+  await page.locator(".rb-settings-switch .adm-switch").click();
+  await expect(page.locator("#rbAdminStatus")).toHaveText(FLAG_LOGIN);
+  await expect(page.locator("#rbBoardToggle")).toBeChecked();
+  expect(sent.upserts).toEqual([]);
+});

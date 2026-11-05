@@ -227,21 +227,64 @@ function rbaSyncToggles() {
   }
 }
 
+const RBA_FLAG_FAILED = "설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.";
+const RBA_FLAG_LOGIN =
+  "관리자 로그인 상태를 확인할 수 없어요. 새로고침 뒤 다시 시도해 주세요.";
+
+// "(오류 42501: new row violates row-level security…)" — the code (or the
+// HTTP status) and the start of the message, for the top admin to pass on.
+function rbaErrorTag(error, status) {
+  const code = String((error && error.code) || status || "");
+  const text = String((error && error.message) || "").trim();
+  // about 40 letters, cut after a whole word
+  const head =
+    text.length > 40 ? `${text.slice(0, 40).replace(/\s+\S*$/, "")}…` : text;
+  return `(오류${code ? ` ${code}` : ""}${head ? `: ${head}` : ""})`;
+}
+
+// Save one switch → "" when saved, else the sentence to show (#1,
+// 2026-11-05). The admin page can outlive its login (Log out in another tab
+// of this browser, an expired session): the page still shows the admin
+// screen, but a write would go out without admin rights and RLS refuses it
+// (42501) — so no login = no request and a sentence that says so.
 async function rbaSaveFlag(key, value) {
-  if (!sb || !isAdmin) return false;
-  const { error } = await sb.from("site_settings").upsert({ key, value });
-  return !error;
+  if (!sb || !isAdmin) return RBA_FLAG_LOGIN;
+  try {
+    const {
+      data: { session },
+    } = await sb.auth.getSession();
+    if (!session) {
+      window.console.error(
+        `[cra] site_settings ${key}: no admin login (session gone)`,
+      );
+      return RBA_FLAG_LOGIN;
+    }
+    const { error, status } = await sb
+      .from("site_settings")
+      .upsert({ key, value });
+    if (!error) return "";
+    window.console.error(
+      `[cra] site_settings ${key} = ${value} failed`,
+      status,
+      error,
+    );
+    return `${RBA_FLAG_FAILED} ${rbaErrorTag(error, status)}`;
+  } catch (error) {
+    // (a thrown error — the switch must not stay locked without a word)
+    window.console.error(`[cra] site_settings ${key} = ${value} threw`, error);
+    return `${RBA_FLAG_FAILED} ${rbaErrorTag(error)}`;
+  }
 }
 
 if (rbaBoardToggle) {
   rbaBoardToggle.addEventListener("change", async () => {
     const next = rbaBoardToggle.checked;
     rbaBoardToggle.disabled = true;
-    const ok = await rbaSaveFlag("resource_board_enabled", next);
+    const failed = await rbaSaveFlag("resource_board_enabled", next);
     rbaBoardToggle.disabled = false;
-    if (!ok) {
+    if (failed) {
       rbaBoardToggle.checked = !next;
-      rbaSay("설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.");
+      rbaSay(failed);
       return;
     }
     siteFlags.board = next;
@@ -259,13 +302,11 @@ if (rbaTeacherToggle) {
   rbaTeacherToggle.addEventListener("change", async () => {
     const next = rbaTeacherToggle.checked;
     rbaTeacherToggle.disabled = true;
-    const ok = await rbaSaveFlag("teacher_resources_enabled", next);
+    const failed = await rbaSaveFlag("teacher_resources_enabled", next);
     rbaTeacherToggle.disabled = false;
-    if (!ok) {
+    if (failed) {
       rbaTeacherToggle.checked = !next;
-      setTeacherResStatus(
-        "설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.",
-      );
+      setTeacherResStatus(failed);
       return;
     }
     siteFlags.teacherRes = next;

@@ -1202,6 +1202,11 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
 - **스위치 2개**(`site_settings` `resource_board_enabled` 기본 false · `teacher_resources_enabled` 기본 true): 화면은 회원가입 표시와 같은
   한 번의 요청으로 읽고(`getSignupVisible`) **`craAuthReady` 전에** 기다린다(딥 링크 판단에 필요). 서버 `site_flag`는 jsonb `true`/`false`만
   인정하고 나머지는 기본값. T3: 교사 자료실 끄면 목록 함수가 지사·선생님에게 0행(관리자는 그대로), **내려받기 함수는 그대로**(지시서).
+- **스위치 저장 실패(`2026-11-05` #1):** 관리자 화면은 로그인이 끝나도(같은 브라우저 다른 탭의 Log out, 세션 만료) 그대로 남는다 —
+  앱에 `onAuthStateChange` 처리기가 없어 `isAdmin`이 true로 남고, 저장 요청은 익명으로 나가 RLS가 42501로 거절. 로컬에서 이 순서로
+  운영 증상("설정을 바꾸지 못했어요" + 켬으로 돌아감)이 똑같이 재현됨(로그인이 살아 있으면 세 스위치 모두 정상). 그래서
+  `rbaSaveFlag`는 세션이 없으면 요청 없이 "관리자 로그인 상태를 확인할 수 없어요…", 서버 거절이면 문구 뒤 `(오류 <code>: <앞부분>)` +
+  `console.error`. 다른 관리자 저장(내용·배너·회원)은 아직 옛 문구 그대로. 운영 진단 = 읽기 전용 DO(로컬 `docs/worker-briefs/2026-11-05-site-settings-diag-*`).
 - **헤더 글꼴:** '교사자료실' 5글자 = 나눔스퀘어라운드 Bold 부분 글꼴 `assets/fonts/cra-teacher-label-kr.woff2`(3,992 B). OFL의 예약 글꼴
   이름 때문에 **이름을 바꿈**(`CRA Teacher Label KR`) + 라이선스 파일 같은 폴더. 원본 = `hangeul.pstatic.net/…/NanumSquareRoundB.ttf`
   1회 내려받기(2026-11-03), fonttools(파이썬, package.json 아님)로 `text="교사자료실"`·hinting 없음·레이아웃 표 없음·woff2. 글자를 바꾸면

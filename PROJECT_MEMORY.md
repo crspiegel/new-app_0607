@@ -17,10 +17,12 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`a4da52b`** (`2026-11-02`: 3B `4a9b23d`, D63, D64+D65 — live SQL first, then the push). Older: archive.
+Live = **`f12a9b9`** (`2026-11-05`: resource board — live SQL + Edge first, then the push). Older: archive.
 
-- **Resource board** (briefs `11-03`, `11-04` 수정 1차): SQL `5c7d1dd` + `19a66cc`, 화면 커밋 완료 `2026-11-04`
-  (all local, unpushed). Next = 운영 반영 대기 (live guide ①~⑥, PM). NOTES "자료실 게시판".
+- **Resource board** (briefs `11-03`, `11-04` 수정 1차): 자료실 게시판 운영 반영 `2026-11-05`; 빅웨이브가 게시판을
+  켬(글 1개), 교사 자료실 켜짐. NOTES "자료실 게시판".
+- **교사자료실 수정 2차** (brief `11-05`): **#1 커밋 완료** — 교사 자료실 스위치 끄기 실패 = 관리자 화면이 로그인 끝난 뒤에도
+  남아 저장이 익명으로 나감(로컬 재현); 스위치 저장이 로그인 없음·오류 번호를 알려 줌. 다음 = 빅웨이브 확인 → 푸시 → #2~#5.
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"

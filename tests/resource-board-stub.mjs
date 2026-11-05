@@ -285,7 +285,9 @@ function ranked(posts, { p_level, p_category, p_q, p_sort }) {
  * options: role (null | "student" | "teacher" | "branch" | "admin"),
  * board (the switch, default true), teacherRes (default true), posts,
  * categories, holdUploads (true = uploads wait for sent.release()),
- * failUpload (name predicate), downloadStatus (e.g. 429).
+ * failUpload (name predicate), downloadStatus (e.g. 429), flagError (a
+ * switch save answered with this failure: { status, json } — e.g. 401 +
+ * PostgREST's {code: "42501", message} — and nothing is saved).
  */
 export async function stubBoard(page, options = {}) {
   const {
@@ -297,6 +299,7 @@ export async function stubBoard(page, options = {}) {
     holdUploads = false,
     failUpload = () => false,
     downloadStatus = 200,
+    flagError = null,
   } = options;
   const db = {
     posts,
@@ -632,6 +635,11 @@ export async function stubBoard(page, options = {}) {
         const body = request.postDataJSON();
         const row = Array.isArray(body) ? body[0] : body;
         sent.upserts.push(row);
+        if (flagError)
+          return route.fulfill({
+            status: flagError.status,
+            json: flagError.json,
+          });
         if (row.key === "resource_board_enabled")
           db.flags.board = row.value === true;
         if (row.key === "teacher_resources_enabled")
