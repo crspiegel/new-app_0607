@@ -243,11 +243,11 @@ Menu button requirements:
 - Host `play.tps-education.com` (publisher Vimeo embedded directly); `www.cambridgereading.com/q/…`
   also works (publisher page framed).
 
-## Teacher Resources (교사 자료실, 2026-10-29)
+## Teacher Resources (레벨별 자료실, 2026-10-29) (옛 이름 '교사 자료실', 2026-11-06 변경)
 
 - Who: admins and LMS branch (role 1) / teacher (role 2) accounts. Students (role 3) and visitors
   never see the button or the page; the server refuses them too (RPCs + Storage policy).
-- Each level's month page has a '교사 자료실' button at the right end of the title row (under the
+- Each level's month page has a '레벨별 자료실' button at the right end of the title row (under the
   title on phones). It opens that level's resource page `#resources/<key>`: the same page with the
   March-December buttons replaced by download buttons, same level colors.
 - Cards (fixed names, D63 2026-11-02): Beginner, Level 1 → 월간교육안 · 연간교육안 · 상장; Level 2, Level 3
@@ -279,17 +279,17 @@ Menu button requirements:
   `teacher-resource-download` and opened in the same tab (the file is saved, the page stays).
 - Limit: 30 downloads per LMS member per day (KST); admins unlimited. Over the limit the page says
   "오늘 다운로드 횟수를 모두 사용했습니다. 내일 다시 시도해 주세요."
-- Admin: 배너 tab → "교사 자료실 파일": per slot the current file name · size · date, upload (replace —
+- Admin: 배너 tab → "레벨별 자료실 파일": per slot the current file name · size · date, upload (replace —
   the old file is deleted) and a two-click delete.
 - The Korean labels are a PM-set exception to the English UI (teacher-only screens).
 - This replaces the cancelled header "선생님자료실" link button (former Phase 4 / R4).
 
 ## Resource Board (교사자료실 게시판, 2026-11-03 · 수정 1차 2026-11-04 · 수정 2차 2026-11-05)
 
-A board of posts with attachments for teachers, next to the per-level 교사 자료실 above. PM briefs
+A board of posts with attachments for teachers, next to the 레벨별 자료실 above. PM briefs
 `2026-11-03` (B1-B12, T1-T3, H1-H6), `2026-11-04` (F1-F4, R1-R3) and `2026-11-05` (2차: #1-#5, login ended).
-Its name on every screen (teachers' and admin) is **교사자료실** (no space); the per-level "교사 자료실"
-above keeps its name for now.
+Its name on every screen (teachers' and admin) is **교사자료실** (no space); the per-level one above is
+**레벨별 자료실** (with a space).
 
 - **Who reads:** the top admin and LMS branch (role 1) / teacher (role 2) accounts. They get a
   "Teacher" button in the header (one line; before My Class / Admin; a folder icon on phones) that
@@ -309,7 +309,7 @@ above keeps its name for now.
   labels). The top admin picks it in 교사자료실 설정: Korean [프리텐다드(기본) / 나눔고딕] and Latin
   [프리텐다드(기본) / 나눔고딕], saved at once (`site_settings` `board_font_ko` / `board_font_en` =
   `pretendard` | `nanum-gothic`; anything else = Pretendard), with a one-line preview. The header, footer,
-  교사 자료실 and all other admin screens keep their fonts.
+  레벨별 자료실 and all other admin screens keep their fonts.
 - **Background (#4):** the light-blue board background runs from the header to the footer however short
   the page.
 - **Attachments:** up to 20 per post, each a file OR a Google Drive file link.
@@ -321,7 +321,7 @@ above keeps its name for now.
     page; no Storage traffic, not counted in the daily limit). The row says "구글 드라이브 · 바로 받기". A
     very big file (about 100 MB+) may show Google's one-time "can't scan for viruses" page first.
   - Phones: an icon-only [내려받기]; a long file name wraps after `_` `-` `.` or a space, 2 lines max (R1).
-- **Download limit:** the same 30 a day per LMS member (KST) as 교사 자료실 — one shared count (board
+- **Download limit:** the same 30 a day per LMS member (KST) as 레벨별 자료실 — one shared count (board
   rows logged as `level='board'`). Admins unlimited. A missing file is not counted.
 - **Editor (admin):** title (required, 100), body (optional, 5,000), level (공통 / one level), category,
   공개, 📌 고정. Files are dropped (many at once, name order "3월 < 10월") or picked, uploaded 3 at a
@@ -347,8 +347,8 @@ above keeps its name for now.
     check lists them (no delete SQL).
 - **Switches (교사자료실 설정, B12 · T1):** `resource_board_enabled` (default off) shows / hides the header
   button and the board for branch / teacher accounts (an address does not open it; posts and files
-  stay; the top admin may still preview with a note). The 배너 tab's 교사 자료실 switch
-  (`teacher_resources_enabled`, default on) hides the month-page 교사 자료실 button and list for everyone
+  stay; the top admin may still preview with a note). The 배너 tab's 레벨별 자료실 switch
+  (`teacher_resources_enabled`, default on) hides the month-page 레벨별 자료실 button and list for everyone
   (files and links stay; the download function itself is unchanged).
 - **Login ended (2차 §5):** if the login ends while the admin screen is open (Log out in another tab,
   an expired session — top admin or a branch / teacher account), a window says "로그인이 끝났어요." / "다시

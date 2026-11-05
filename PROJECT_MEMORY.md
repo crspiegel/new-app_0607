@@ -17,11 +17,11 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`5d55ff8`** (`2026-11-05`: 2차-1 #1 switch-save errors). Older: archive.
+Live = **`6508b41`** + its docs commit (`2026-11-06`: 옛 기능 이름 '레벨별 자료실'). Older: archive.
 
-- **교사자료실 게시판** (briefs `11-03`, `11-04`, `11-05`): live, 게시판 켬(글 1개), 교사 자료실 켜짐. #1 live
-  (cause confirmed). **2차-2 커밋 완료(`2026-11-06`, 미푸시)**: #2 Teacher 한 줄 · #3 이름 '교사자료실' · #4 배경 ·
-  #5 글꼴 선택(`board_font_ko/en`, SQL 없음) · 로그인 끝남 안내. 다음 = 푸시. NOTES "수정 2차".
+- **교사자료실 게시판** (briefs `11-03`~`11-06`): live, 게시판 켬, 레벨별 자료실 켜짐. 2차-1 #1 · 2차-2(#2 Teacher 한 줄 ·
+  #3 이름 · #4 배경 · #5 글꼴 `board_font_ko/en` · 로그인 끝남 안내) live. **이름 변경 커밋·푸시 완료**(`2026-11-06`, 화면
+  글자만, SQL 없음): 옛 '교사 자료실' → '레벨별 자료실'. 끄는 시점은 따로 정함. NOTES "수정 2차", "이름 변경".
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"
@@ -31,7 +31,7 @@ Live = **`5d55ff8`** (`2026-11-05`: 2차-1 #1 switch-save errors). Older: archiv
 - **A levels + B teacher resources** — design `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`.
   - A **done**: levels rename live `2026-10-31` (55 rows, all new keys); CHECKs `content_pages_level_key`,
     `page_backgrounds_level_key`; admin saves allowed again.
-  - B live: '교사 자료실' (admin + LMS role 1/2) → private bucket; download via Edge Function
+  - B live: '레벨별 자료실' (옛 '교사 자료실'; admin + LMS role 1/2) → private bucket; download via Edge Function
     `teacher-resource-download` (15 s, 30/day; `supabase/functions/README.md`). D58 cards, D63, **D64·D65 live
     `2026-11-02`** (a slot = a file OR a Google Drive file ID; 월간 3~12월 + 3 new kinds = 62 slots, 2-column cards,
     month panel, admin level tabs).

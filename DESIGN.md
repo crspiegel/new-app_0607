@@ -49,8 +49,8 @@ For this project, use Duolingo ABC only as a style reference for color, spacing,
   [Pretendard (default) / Nanum Gothic] apart. Stack = Latin face (Latin · numbers · punctuation only:
   `Pretendard Std Variable` or `CRA Nanum Gothic Latin`, files in `assets/fonts`) → Korean face (`Pretendard
 Variable` from jsDelivr v1.3.9 or `Nanum Gothic` from Google Fonts) → Noto Sans KR → Inter. Only the
-  picked faces load. Header, footer, 교사 자료실 and admin keep their fonts (the admin's preview line wears
-  the pair).
+  picked faces load. Header, footer, 레벨별 자료실 (옛 이름 '교사 자료실', 2026-11-06 변경) and admin
+  keep their fonts (the admin's preview line wears the pair).
 - Global hard rule: **no italics anywhere** (`font-style: normal !important` +
   `font-synthesis: none` on `*`, `html`, `body`, `button`).
 

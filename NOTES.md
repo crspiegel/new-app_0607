@@ -278,7 +278,7 @@ similar work** so the same problems don't recur. Append to this as you learn mor
   다음부터 `p_branch_id`로 보내는 게 좋다(3B-2 화면 지시서 때).
 - ⚠ 대량 생성은 행마다 bcrypt → Supabase `statement_timeout`(anon 3초, authenticated 8초)에 걸릴 수 있다. 로컬 실측(3B-3, PostgreSQL 18.6
   이 PC) 약 3.5ms/행(PGlite WASM 약 5ms/행) → 클라이언트 한도 `BULK_MAX_ROWS` = 100. 운영 실측 전(멈춤 3 뒤 실계정 확인 때).
-- advisory lock 번호(겹치면 서로 기다린다): 7301 로그인 아이디 키 · 7302 교사 자료실 다운로드 한도 · 7303 계정 아이디 쓰기(생성·변경) ·
+- advisory lock 번호(겹치면 서로 기다린다): 7301 로그인 아이디 키 · 7302 레벨별 자료실 (옛 이름 '교사 자료실', 2026-11-06 변경) 다운로드 한도 · 7303 계정 아이디 쓰기(생성·변경) ·
   7304 학생별 반 넣기(D51 검사 경쟁 방지) · 7305 자료실 분류 쓰기(글 저장은 같은 번호의 공유 잠금, 2026-11-03). 새 잠금은 새 번호로. **한 호출이 잠금을 여러 개 잡으면 쓰기 전에 잠금 번호 순으로 한꺼번에**
   (3B-3 N4: `lms_bulk_assign`) — 행마다 잡으면 반대 순서의 두 호출이 서로 기다리다 한쪽이 40P01로 끝난다.
 - PGlite는 연결이 하나라 **동시 실행(교착·고유 제약 경쟁)은 재현 불가** → `tests/lms-3b-concurrency.spec.js`가 `embedded-postgres`
@@ -1114,7 +1114,7 @@ level, book, slot)`)에서만.
   48장 중 1장 — 실패 1건은 재실행으로 확인하고, 같은 장이 반복 실패할 때만 진짜 변화로 본다.
 - Windows: Vite 개발 서버가 떠 있으면 감시 중인 폴더의 `git mv`가 `Permission denied` → 서버를 끄고 옮긴다.
 
-## 교사 자료실 (`2026-10-29`, B — Phase 4 대체)
+## 레벨별 자료실 (`2026-10-29`, B — Phase 4 대체)
 
 - **자료페이지 = 월 화면의 "자료 모드".** `screens.resources`가 `#monthScreen` 자체이고 `body[data-screen="resources"]`가
   월 버튼을 숨기고 `#resourceGrid`를 보인다 → 헤더·제목·레벨 색·배경(페이지1)·반응형 규칙이 월 페이지와 저절로 같다.
@@ -1151,7 +1151,7 @@ level, book, slot)`)에서만.
   `pg_stat_statements`·SQL Editor 기록에 남을 수 있다.
 - 폰에서는 월 페이지 제목이 원래 **왼쪽 정렬**이다 → 버튼은 제목 아래 같은 왼쪽 선. ≥768은 제목 줄 오른쪽 끝(absolute,
   제목 위치 불변 — 테스트가 버튼 유무로 제목 rect를 비교).
-- 영어 UI 규칙 예외: '교사 자료실'·버튼 이름·안내 문구는 PM이 정한 한국어(교사 전용 화면, R4 때와 같은 예외).
+- 영어 UI 규칙 예외: '레벨별 자료실'·버튼 이름·안내 문구는 PM이 정한 한국어(교사 전용 화면, R4 때와 같은 예외).
 - 테스트 함정: `x?.token ?? "missing"`은 토큰이 `null`일 때도 "missing"이 된다 — 없음과 null을 구분하려면 찾은 뒤 분기.
 - (D58 디자인, `2026-11-02`) 자료실 페이지 = 칸마다 카드 한 장(한 줄에 하나): 파일 아이콘(PDF = 글줄, 엑셀 = 표 + "PDF"/"XLS") ·
   제목 + "PDF · 1.2MB · 11/02 업데이트" · [내려받기]. 파일 없는 칸은 "아직 올라온 자료가 없어요"(버튼 아님). 형식·크기·날짜는
@@ -1188,20 +1188,20 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
 - 옛 화면은 목록에 모르는 칸이 와도 **무시**한다(`resourceSlots`를 돌며 `rows.find`) → 칸 추가는 "SQL 먼저, 화면 나중"이 안전.
   `tests/fixtures/teacher-resources-4a9b23d.js`(D63 전 운영 화면, 수정 금지)로 확인. 운영 SQL Editor용 반영본은 DO 블록 하나로
   migration.sql에서 잘라 만든다(로컬 `docs/worker-briefs/2026-11-02-d63-sql-check.mjs` — 전체 카탈로그 비교).
-- 월 페이지 '교사 자료실' 버튼은 레벨 색 채움(`#teacherResBtn`), 자료실 페이지 '월 선택'은 테두리 그대로(같은 `.teacher-res-button`).
+- 월 페이지 '레벨별 자료실' 버튼은 레벨 색 채움(`#teacherResBtn`), 자료실 페이지 '월 선택'은 테두리 그대로(같은 `.teacher-res-button`).
   카드 회색 글자는 `#666`(사이트 `--muted-ink` #777은 흰 바탕 14px에서 4.5:1 미달).
 
 ## 자료실 게시판 (`2026-11-03`, PM 지시서 B1~B12 · T1~T3 · H1~H6)
 
-- **파일:** SQL = `migration.sql` "Resource board" 블록(+ 교사 자료실 블록의 `site_flag`·T3), 읽기 전용 점검 `supabase/lms/verify-resource-board.sql`.
+- **파일:** SQL = `migration.sql` "Resource board" 블록(+ 레벨별 자료실 블록의 `site_flag`·T3), 읽기 전용 점검 `supabase/lms/verify-resource-board.sql`.
   화면 = `resource-board.js`(선생님) · `resource-board-admin.js`(관리자·스위치 2개) · `styles.css` 끝(헤더 버튼 + `bd-*` + `rb-*`).
   테스트 = `tests/resource-board-sql.spec.js`(PGlite) · `tests/resource-board.spec.js` + 가짜 Supabase `tests/resource-board-stub.mjs`.
 - **주소:** `#board[?level=&cat=&q=&sort=&page=]` · `#board/<글 uuid>[?…]`. 앱 전체에 hashchange 처리기가 없어서 **게시판 파일만**
-  hashchange를 듣는다 — 게시판 밖으로 뒤로 가기는 `rbLeave`(홈·월 화면·교사 자료실, 그 밖은 새로고침). 테스트에서 같은 페이지의
+  hashchange를 듣는다 — 게시판 밖으로 뒤로 가기는 `rbLeave`(홈·월 화면·레벨별 자료실, 그 밖은 새로고침). 테스트에서 같은 페이지의
   `page.goto("/#months/…")`는 다시 라우팅되지 않는다 → `page.reload()`.
 - **스위치 2개**(`site_settings` `resource_board_enabled` 기본 false · `teacher_resources_enabled` 기본 true): 화면은 회원가입 표시와 같은
   한 번의 요청으로 읽고(`getSignupVisible`) **`craAuthReady` 전에** 기다린다(딥 링크 판단에 필요). 서버 `site_flag`는 jsonb `true`/`false`만
-  인정하고 나머지는 기본값. T3: 교사 자료실 끄면 목록 함수가 지사·선생님에게 0행(관리자는 그대로), **내려받기 함수는 그대로**(지시서).
+  인정하고 나머지는 기본값. T3: 레벨별 자료실 끄면 목록 함수가 지사·선생님에게 0행(관리자는 그대로), **내려받기 함수는 그대로**(지시서).
 - **스위치 저장 실패(`2026-11-05` #1):** 관리자 화면은 로그인이 끝나도(같은 브라우저 다른 탭의 Log out, 세션 만료) 그대로 남는다 —
   앱에 `onAuthStateChange` 처리기가 없어 `isAdmin`이 true로 남고, 저장 요청은 익명으로 나가 RLS가 42501로 거절. 로컬에서 이 순서로
   운영 증상("설정을 바꾸지 못했어요" + 켬으로 돌아감)이 똑같이 재현됨(로그인이 살아 있으면 세 스위치 모두 정상). 그래서
@@ -1218,8 +1218,8 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
   `fetch(keepalive)` + **떠나기 전에 받아 둔 토큰**(로그아웃이 세션을 먼저 지워도 지워지게). 강제 종료·정전은 남을 수 있음(사람이 버킷 확인).
 - 저장 = 첨부 목록 전체를 순서대로 보냄(기존은 `{id}`만). 빠진 기존 첨부의 경로를 서버가 돌려주면 **그때** Storage에서 지운다.
   이미 붙은 파일을 "새 파일"로 다시 보내면 거절(보안 검토 L1 — 지워질 객체를 새 행이 가리키는 사고).
-- 내려받기 30회는 교사 자료실과 같은 기록표·같은 잠금(7302): 게시판 행은 `level='board'`, `slot=<첨부 id>`. 객체가 없으면 세지 않음.
-  `verify-teacher-resources.sql` 21번은 "교사 자료실 기록을 만지는 함수는 목록에 있어야" → `board_attachment_issue`를 25번으로 넣음.
+- 내려받기 30회는 레벨별 자료실과 같은 기록표·같은 잠금(7302): 게시판 행은 `level='board'`, `slot=<첨부 id>`. 객체가 없으면 세지 않음.
+  `verify-teacher-resources.sql` 21번은 "레벨별 자료실 기록을 만지는 함수는 목록에 있어야" → `board_attachment_issue`를 25번으로 넣음.
 - `board_post_get`은 조회수를 쓰는 volatile 함수 → PostgREST **GET으로 부르면 읽기 전용 트랜잭션 오류**. supabase-js `rpc`(POST)만.
 - 분류 7개는 **표를 만들 때 한 번만** 채운다(DO 블록) → 운영 apply DO는 그 블록 안쪽만 잘라 넣는다(DO 안에 DO 불가).
 - 관리자 '+ 새 글 쓰기'는 공용 제목 줄에 있다 → `body[data-admin-view="board"]`(app.js `setAdminView`)와 `data-board-mode`로만 보인다.
@@ -1237,14 +1237,14 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
   Fredoka)을 이기려고 마지막에 둔다. 이 규칙 아래에 게시판 글꼴 규칙을 새로 쓰면 그쪽이 이긴다. 라이선스 = **SIL OFL 1.1**
   (글꼴을 우리 저장소에 두지 않고 CDN에서 그대로 씀 — 이름 변경 의무 없음). CSP는 없음(`vercel.json`·`index.html` 확인).
   jsDelivr가 막히면 대체 글꼴(Noto Sans KR → Inter)로 보인다. 테스트도 jsDelivr에서 받는다(supabase-js와 같은 의존).
-- **F2:** 게시판 드라이브 첨부 = 교사 자료실 D64와 같은 `driveDownloadUrl`(`uc?export=download`) + 새 탭, 모양은 파일과 같은
+- **F2:** 게시판 드라이브 첨부 = 레벨별 자료실 D64와 같은 `driveDownloadUrl`(`uc?export=download`) + 새 탭, 모양은 파일과 같은
   `.bd-att-dl`(그러나 `<a>`) — 클릭 처리는 계속 `button.bd-att-dl`만 잡는다(링크가 Edge Function을 부르지 않게).
 - **F3 떠나기 확인:** 보류 업로드 = `!id && kind === "file"`(올리는 중·대기·완료·실패; 거절된 파일·드라이브·등록된 것 제외).
   사이트 안 이동 3곳(메뉴·사이트 보기·로그아웃)은 document **캡처 단계 클릭**에서 막고(`stopImmediatePropagation`), [중단하기]면
   새 토큰 → keepalive 삭제 → 같은 버튼을 `rbaPassing`으로 다시 누른다. `#` 바뀜·뒤로 가기는 resource-board.js의 hashchange가
   **먼저** `craBoardAdmin.hashChanged()`를 묻는다(관리자 파일이 뒤에 로드 — 같은 window 처리기 순서에 기대지 않음). 머묾 =
   `history.replaceState`로 편집기를 연 주소로 되돌림(hashchange 안 생김), 나감 = 편집기 닫고 `rbFollowHash()`(게시판이면 그 화면,
-  아니면 `rbLeave`: 홈·월·교사 자료실·그 밖은 새로고침). 우리 창 = `role="alertdialog"`, 처음 초점 [계속 올리기], Tab은 두 버튼만,
+  아니면 `rbLeave`: 홈·월·레벨별 자료실·그 밖은 새로고침). 우리 창 = `role="alertdialog"`, 처음 초점 [계속 올리기], Tab은 두 버튼만,
   `focusin`으로 밖으로 새는 초점 되돌림, Esc·배경 = 머묾. `window.confirm` 쓰지 않음.
 - **beforeunload 문구는 브라우저가 정한다(바꿀 수 없음).** 보류 업로드가 있을 때만 처리기를 **붙이고**, 없으면 뗀다
   (`rbaSyncUnload` — 늘 붙여 두면 bfcache를 막는 브라우저가 있음). 크롬은 사용자가 페이지를 한 번이라도 누른 뒤에만 묻는다.
@@ -1257,7 +1257,7 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
   "바뀐 내용" = 열 때 찍은 `rbaSnapshot()`(제목·내용·레벨·분류·공개·고정·첨부 id 순서)과 비교.
 - **R1:** 파일 이름 = `_`·`-`·`.` 뒤에 `<wbr>` + `word-break: keep-all`(한글 낱말 안에서 안 끊김), 정말 긴 조각만 `anywhere`.
   ⚠ **look-behind 정규식(`(?<=…)`) 금지** — 아이폰 Safari 16.3 이하는 파일 전체를 못 읽어 사이트가 멈춘다(반복문으로 처리).
-- **R2:** 처음 설치 분류 '그림 자료실'(띄어쓰기, 교사 자료실 칸 이름과 같게) — 로컬 커밋 `19a66cc`. 운영 apply·verify DO는
+- **R2:** 처음 설치 분류 '그림 자료실'(띄어쓰기, 레벨별 자료실 칸 이름과 같게) — 로컬 커밋 `19a66cc`. 운영 apply·verify DO는
   `board-sql-check.mjs`가 다시 만들었다(검사 17/17).
 - **테스트 함정:** ① 같은 문서 안에서 `page.goto("/#admin")`은 `#` 이동일 뿐 관리자 화면을 열지 않는다(`#admin`은 **처음 로드할 때만**
   열림) → `reload` 또는 다른 주소(`/?x=1#admin`). ② 새로고침을 사이에 둔 history 항목으로 **뒤로 가기는 다른 문서 이동** →
@@ -1265,7 +1265,7 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
   `new Event("beforeunload", {cancelable:true})` → `defaultPrevented`로 켜짐 확인, 실제 창은 `page.close({ runBeforeUnload: true })`
   → `dialog` 이벤트. ④ 데스크톱에선 ↑↓ 버튼이 숨겨져 있다(휴대폰 전용) → 손잡이에 `press("ArrowDown")`.
 - **크기 표시(PM 발견, 해결):** 파일 크기는 **한 함수** `formatFileSize`(teacher-resources.js — 게시판보다 먼저 로드)로 통일 —
-  KB로 반올림해 **1,000KB 이상이면 MB**(소수 한 자리, "1006KB" → "1.0MB"), 붙여 씀("840KB"), 크기 없으면 빈칸. 교사 자료실 카드 ·
+  KB로 반올림해 **1,000KB 이상이면 MB**(소수 한 자리, "1006KB" → "1.0MB"), 붙여 씀("840KB"), 크기 없으면 빈칸. 레벨별 자료실 카드 ·
   관리자 배너 탭 줄(예전 "4.2 MB" 띄어쓰기 → "4.2MB") · 게시판 상세 · 게시판 관리자 첨부 줄(`rbFormatSize`는 이 함수를 부르기만
   함) 모두 같다. 테스트: teacher-resources "sizes up to 999KB…", resource-board "board file sizes…".
 - **사진 도구 함정:** `fullPage` 사진은 sticky 막대를 **원래 창 높이의 바닥**(페이지 중간)에 그린다 → 11/03 사진 도구는 전체 사진을
@@ -1273,8 +1273,8 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
 
 ### 수정 2차 (`2026-11-05`, PM 지시서 #1~#5 · 로그인 끝남)
 
-- **이름(#3):** 게시판은 선생님·관리자 화면 모두 **'교사자료실'**(띄어쓰기 없음). 레벨별 옛 '교사 자료실'(배너 메뉴 '교사 자료실
-  파일', 월 선택 화면 버튼·자료 페이지)은 그대로 — 나중에 '레벨별 자료실'로 바꿀 예정(별도 지시). 휴대폰 관리자 메뉴 한 줄 확인됨.
+- **이름(#3):** 게시판은 선생님·관리자 화면 모두 **'교사자료실'**(띄어쓰기 없음). 옛 레벨별 기능(배너 메뉴 상자, 월 선택 화면 버튼·자료
+  페이지)은 이때 이름을 그대로 두었다가 `2026-11-06`에 '레벨별 자료실'로 바꿈(아래 "이름 변경"). 휴대폰 관리자 메뉴 한 줄 확인됨.
 - **배경(#4):** `.app-shell`은 100vh 세로 flex, `<main>`이 푸터까지 늘어나는데 색은 게시판 section에만 있었다 → 짧은 목록·글이면
   아래가 `<main>`의 흰색. `body[data-screen="board"] main { background: #eef6fd }`로 해결(높이 상수 없음, 다른 화면 무관).
 - **글꼴 선택(#5):** `site_settings` `board_font_ko` / `board_font_en` = `pretendard` | `nanum-gothic`(화면 허용 목록 `BOARD_FONTS`,
@@ -1300,6 +1300,19 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
   `about:blank`를 거쳐 새로 연다. `stubBoard`는 컨텍스트 전체에 운영 Supabase 차단을 건다(다른 탭 안전망).
 - 작업 함정: 파이썬으로 파일을 고칠 때 끝 표식이 시작 표식보다 **앞에** 있으면 빈 문자열 치환으로 파일이 폭발한다(11/05 styles.css,
   커밋 전 되돌림) — 끝 표식은 `s.index(B, a)`로 찾고 길이를 확인. 윈도 파이썬은 `newline=""` 없이 쓰면 CRLF가 된다.
+
+### 이름 변경 '레벨별 자료실' (`2026-11-06`, PM 지시서)
+
+- 옛 레벨별 기능(월 선택 화면 버튼 · 자료 페이지 · 배너 메뉴 상자 '레벨별 자료실 파일' · 켜기/끄기 알림)의 **화면 이름만**
+  '레벨별 자료실'(띄어쓰기 있음). 게시판은 '교사자료실'(띄어쓰기 없음). 그대로 둔 것: 분류 이름(그림 자료실 등), DB 키
+  `teacher_resources_enabled`, 코드 이름, 주소 `#resources/…`, SQL·Edge Function 주석(SQL 변경 없음), 옛 화면 고정본 `tests/fixtures/*`.
+  자료 페이지 카드 묶음의 화면 읽기용 이름(`#resourceGrid` aria-label)도 "교사 자료" → "레벨별 자료실".
+- 버튼은 한 글자 늘어 160×48px, 모든 레벨 · 1366/1024/768/390에서 한 줄. 제목과 가장 가까운 곳이 768 Beginner(오른쪽 간격 102px)
+  → CSS 그대로.
+- 검사(`resource-board.spec.js` "rename:" 2개): 화면 DOM 전체(숨은 화면 · 속성 · 입력값 · 탭 제목)에 옛 이름(띄어쓰기 포함 문자열) 0,
+  index.html이 부르는 스크립트에는 **줄 전체 주석에만** 남을 수 있음(문자열로 다시 넣으면 실패) + 버튼 폭 검사.
+- 환경 함정: 이 PC의 5173에 다른 프로젝트 Vite가 `::1`(IPv6)로 떠 있을 수 있다. 이 프로젝트는 `127.0.0.1:5173`이라 함께 돈다.
+  `Get-NetTCPConnection`은 그 소켓의 상태 칸을 비우거나 FinWait로 보여 "비어 있음" 판단이 헷갈린다 → 주소까지 본다.
 
 ## 요일 슬롯 게임 URL (`2026-10-22`, R1)
 
