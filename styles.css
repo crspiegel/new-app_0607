@@ -6941,22 +6941,26 @@ body.is-admin .admin-cog-icon {
    header icons (Beginner yellow · 1 red · 2 blue · 3 purple); every
    control 44px or more; a table on PCs, cards on phones.
    ==================================================================== */
-/* #5 (2026-11-05, after F1): the board's faces, picked by the top admin
-   (site_settings board_font_ko / board_font_en = 'pretendard' |
-   'nanum-gothic' → data-font-ko / data-font-en on #boardScreen and on the
-   admin's preview, resource-board.js rbApplyFonts). The Latin face comes
-   first and covers only Latin, numbers and punctuation (its
-   unicode-range), so every Korean letter falls through to the Korean face
-   behind it; the fallback is the font the board had before. A face is
-   fetched only when its family is in the stack and a letter needs it — the
+/* #5 (2026-11-05, after F1; D77 2026-11-06): the board's faces, picked by
+   the top admin (site_settings board_font_ko / board_font_en =
+   'pretendard' | 'nanum-square-round' → data-font-ko / data-font-en on
+   #boardScreen and on the admin's preview, resource-board.js
+   rbApplyFonts). The Latin face comes first and covers only Latin, numbers
+   and punctuation (its unicode-range), so every Korean letter falls
+   through to the Korean face behind it; a letter neither draws falls to
+   the site's Korean (Noto Sans KR), then the system's. A face is fetched
+   only when its family is in the stack and a letter needs it — the
    unpicked ones are never asked for. Applied at the end of this section
    (.board-screen *).
-   Latin = files kept here, unmodified (SIL OFL 1.1, licenses beside them):
-   Pretendard Std's own Latin piece (variable 45-920, pretendard-std@1.3.9
-   dynamic subset no. 6) and Google Fonts' Nanum Gothic Latin pieces (400 ·
-   700 · 800, v26). Korean = Pretendard Variable from jsDelivr (pinned
-   v1.3.9, rbEnsureFont) or Nanum Gothic from Google Fonts (the admin's own
-   CSS, app.js ensureAdminFont). */
+   Pretendard: Latin = Pretendard Std's own Latin piece kept here,
+   unmodified (variable 45-920, pretendard-std@1.3.9 dynamic subset no. 6,
+   SIL OFL 1.1, license beside it); Korean = Pretendard Variable from
+   jsDelivr (pinned v1.3.9, rbEnsureFont).
+   나눔스퀘어라운드 (D77): "CRA NanumSquareRound" (Korean) and "CRA
+   NanumSquareRound Latin" — their @font-face rules are in
+   nanum-square-round.css (NAVER's original files on jsDelivr, pinned; the
+   Korean range = only the letters the files really draw), added only when
+   it is picked (rbEnsureNsrFont). */
 @font-face {
   font-family: "Pretendard Std Variable";
   src: url("assets/fonts/PretendardStdVariable.subset.6.woff2")
@@ -6969,49 +6973,19 @@ body.is-admin .admin-cog-icon {
     U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF,
     U+FFFD;
 }
-@font-face {
-  font-family: "CRA Nanum Gothic Latin";
-  src: url("assets/fonts/NanumGothic-latin-400.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "CRA Nanum Gothic Latin";
-  src: url("assets/fonts/NanumGothic-latin-700.woff2") format("woff2");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "CRA Nanum Gothic Latin";
-  src: url("assets/fonts/NanumGothic-latin-800.woff2") format("woff2");
-  font-weight: 800;
-  font-style: normal;
-  font-display: swap;
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
 .board-screen,
 .rb-font-preview {
   --bd-en: "Pretendard Std Variable";
   --bd-ko: "Pretendard Variable";
   --bd-font: var(--bd-en), var(--bd-ko), "Noto Sans KR", var(--font-nav);
 }
-.board-screen[data-font-en="nanum-gothic"],
-.rb-font-preview[data-font-en="nanum-gothic"] {
-  --bd-en: "CRA Nanum Gothic Latin";
+.board-screen[data-font-en="nanum-square-round"],
+.rb-font-preview[data-font-en="nanum-square-round"] {
+  --bd-en: "CRA NanumSquareRound Latin";
 }
-.board-screen[data-font-ko="nanum-gothic"],
-.rb-font-preview[data-font-ko="nanum-gothic"] {
-  --bd-ko: "Nanum Gothic";
+.board-screen[data-font-ko="nanum-square-round"],
+.rb-font-preview[data-font-ko="nanum-square-round"] {
+  --bd-ko: "CRA NanumSquareRound";
 }
 
 .bd-sr,

@@ -189,7 +189,6 @@ export default [
         levelFromAny: "readonly",
         showMonthsFor: "readonly",
         openTeacherResources: "readonly",
-        ensureAdminFont: "readonly",
       },
     },
     rules: {

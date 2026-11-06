@@ -248,28 +248,38 @@ function rbBreakable(name) {
   return frag;
 }
 
-function rbEnsureFont() {
-  if (document.getElementById("boardFontLink")) return;
+function rbAddStylesheet(id, href) {
+  if (document.getElementById(id)) return;
   const link = document.createElement("link");
-  link.id = "boardFontLink";
+  link.id = id;
   link.rel = "stylesheet";
-  link.href = RB_FONT_URL;
+  link.href = href;
   document.head.append(link);
+}
+function rbEnsureFont() {
+  rbAddStylesheet("boardFontLink", RB_FONT_URL);
+}
+// D77: 나눔스퀘어라운드's @font-face rules (Korean + its Latin alias) — a
+// file of this site, added only when it is picked.
+function rbEnsureNsrFont() {
+  rbAddStylesheet("boardFontNsrLink", "nanum-square-round.css");
 }
 
 // #5 (2026-11-05): the picked faces (siteFlags.fontKo / fontEn, app.js) onto
 // an element that wears the board's font stack (#boardScreen, the admin's
 // preview) — styles.css "#5" turns data-font-ko / data-font-en into the
-// stack. Only the picked Korean CSS is fetched: Pretendard (above) or Nanum
-// Gothic (the admin screen's own Google Fonts CSS, app.js ensureAdminFont).
-// The Latin faces are files in assets/fonts that the browser fetches only
-// when the stack names them.
+// stack. Only the picked faces' CSS is added: Pretendard's Korean CSS
+// (above) and, D77 (2026-11-06), nanum-square-round.css when 나눔스퀘어라운드
+// is picked for either; the Latin Pretendard Std is a file in assets/fonts.
+// The browser fetches a face's file only when the stack names it and a
+// letter needs it.
 function rbApplyFonts(el) {
   if (!el) return;
   el.dataset.fontKo = siteFlags.fontKo;
   el.dataset.fontEn = siteFlags.fontEn;
-  if (siteFlags.fontKo === "nanum-gothic") ensureAdminFont();
-  else rbEnsureFont();
+  if (siteFlags.fontKo === "pretendard") rbEnsureFont();
+  if (siteFlags.fontKo === "nanum-square-round") rbEnsureNsrFont();
+  if (siteFlags.fontEn === "nanum-square-round") rbEnsureNsrFont();
 }
 
 /* ---- The address -------------------------------------------------------- */

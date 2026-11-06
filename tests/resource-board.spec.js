@@ -28,6 +28,9 @@ async function openBoard(page, hash = "#board") {
 // a test of Back needs its history entries in the same document).
 async function openAdminBoard(page, { goto = true } = {}) {
   if (goto) await page.goto("/#admin");
+  // the admin screen is up before the menu is judged (D77: with the font
+  // CDNs refused, "load" can come before the admin screen shows)
+  await expect(page.locator("#adminScreen")).toHaveClass(/screen-active/);
   const menu = page.locator('.admin-menu-btn[data-admin-view="board"]');
   if (!(await menu.isVisible())) await page.locator("#adminMenuToggle").click();
   await menu.click();
@@ -2038,37 +2041,103 @@ const faceLoaded = (page, family) =>
     family,
     { timeout: 15000 },
   );
+// D77 (2026-11-06): the two faces on each picker = 프리텐다드 (default) and
+// 나눔스퀘어라운드 (nanum-square-round.css, added only when picked: NAVER's
+// original files of @kfonts/nanum-square-round 0.2.0 on jsDelivr, pinned —
+// Regular for 400, ExtraBold for 700 and 800; 빅웨이브 11/06: the board's
+// bold is ExtraBold, so the Bold file is never asked for).
+// 나눔고딕 is off the pickers; a stored 'nanum-gothic' counts as an odd
+// value (= 프리텐다드).
+const FONT_KEYS = ["pretendard", "nanum-square-round"];
+const NSR = "nanum-square-round";
 const FACE = {
-  ko: { pretendard: "Pretendard Variable", "nanum-gothic": "Nanum Gothic" },
-  en: {
-    pretendard: "Pretendard Std Variable",
-    "nanum-gothic": "CRA Nanum Gothic Latin",
-  },
+  ko: { pretendard: PRETENDARD, [NSR]: "CRA NanumSquareRound" },
+  en: { pretendard: STD, [NSR]: "CRA NanumSquareRound Latin" },
 };
-// what each face's font file calls itself
-const DRAWN = {
-  ko: { pretendard: /^Pretendard Variable$/, "nanum-gothic": /^NanumGothic/ },
-  en: {
-    pretendard: /^Pretendard Std Variable$/,
-    "nanum-gothic": /^NanumGothic/,
-  },
-};
+const NSR_FILE =
+  /^https:\/\/cdn\.jsdelivr\.net\/npm\/@kfonts\/nanum-square-round@0\.2\.0\/NanumSquareRound(L|R|B|EB)\.woff2$/;
+// any 나눔스퀘어라운드 request to the CDN (pinned file or not)
+const NSR_CDN = /^https:\/\/cdn\.jsdelivr\.net\/.*nanum-?square-?round/i;
+// These tests never reach a font CDN: every font request to one (Google
+// Fonts; a stylesheet or font file on jsDelivr — not supabase-js, a script
+// there) is refused, and the page still lists it. A CDN face is judged by
+// what the page asks for, the stack it wears and the browser reaching for
+// it (refused = "error"); the Latin Pretendard Std file is ours
+// (assets/fonts), so it is really drawn.
+const isFontCdn = (url) =>
+  /^fonts\.(googleapis|gstatic)\.com$/.test(url.hostname) ||
+  (url.hostname === "cdn.jsdelivr.net" &&
+    /\.(css|woff2?|ttf|otf)$/.test(url.pathname));
+const blockFontCdn = (context) =>
+  context.route(isFontCdn, (route) => route.abort());
 const fontAsks = (urls) => ({
   pretendardKo: urls.some((u) => /pretendard@v1\.3\.9\/dist\/web/.test(u)),
-  nanumKo: urls.some((u) =>
-    /fonts\.googleapis\.com\/css2\?family=Nanum\+Gothic:/.test(u),
-  ),
+  nsrCss: urls.some((u) => u.endsWith("/nanum-square-round.css")),
+  nsr: urls.some((u) => NSR_CDN.test(u)),
   stdLatin: urls.some((u) => u.includes("/assets/fonts/PretendardStdVariable")),
-  nanumLatin: urls.some((u) => u.includes("/assets/fonts/NanumGothic-latin-")),
+  // the old pick: Google's Nanum Gothic CSS / files or our old Latin pieces
+  // (Nanum Gothic Coding, a site font, is something else)
+  nanumGothic: urls.some((u) =>
+    /Nanum\+Gothic(?!\+)|\/nanumgothic\/|NanumGothic-latin-/i.test(u),
+  ),
 });
+// The 나눔스퀘어라운드 files asked for, by weight letter (a URL that is not
+// one of the four pinned files shows up whole).
+const nsrFiles = (urls) =>
+  [
+    ...new Set(
+      urls
+        .filter((u) => NSR_CDN.test(u))
+        .map((u) => (NSR_FILE.exec(u) || [null, u])[1]),
+    ),
+  ].sort();
+// The first three families of an element's font stack (quotes dropped).
+const stackHead = (page, selector) =>
+  page
+    .locator(selector)
+    .first()
+    .evaluate((el) =>
+      getComputedStyle(el)
+        .fontFamily.split(",")
+        .slice(0, 3)
+        .map((f) => f.trim().replace(/"/g, "")),
+    );
+// The browser reached for a face (needed it and asked: "loaded" / "error").
+const faceTried = (page, family) =>
+  page.waitForFunction(
+    (fam) =>
+      [...document.fonts].some(
+        (f) =>
+          f.family.replace(/"/g, "") === fam &&
+          (f.status === "loaded" || f.status === "error"),
+      ),
+    family,
+    { timeout: 15000 },
+  );
+// A face nobody needed: not on the page, or there but never loaded.
+const notReached = async (page, family) =>
+  (await faceStates(page, family)).filter((s) => s !== "unloaded");
+const faceStates = (page, family) =>
+  page.evaluate(
+    (fam) =>
+      [
+        ...new Set(
+          [...document.fonts]
+            .filter((f) => f.family.replace(/"/g, "") === fam)
+            .map((f) => f.status),
+        ),
+      ].sort(),
+    family,
+  );
 
-test("board font: Korean and Latin picked apart — each of the four pairs is really drawn, and only the picked faces are fetched (#5)", async ({
+test("board font: Korean and Latin picked apart — each of the four pairs wears its stack, the browser reaches only for the picked faces and asks only for their files; never 나눔고딕 (#5, D77)", async ({
   browser,
 }, info) => {
   desktopOnly(info);
-  for (const ko of ["pretendard", "nanum-gothic"]) {
-    for (const en of ["pretendard", "nanum-gothic"]) {
+  for (const ko of FONT_KEYS) {
+    for (const en of FONT_KEYS) {
       const context = await browser.newContext();
+      await blockFontCdn(context);
       const page = await context.newPage();
       const urls = [];
       page.on("request", (r) => urls.push(r.url()));
@@ -2083,38 +2152,73 @@ test("board font: Korean and Latin picked apart — each of the four pairs is re
         "data-font-en",
         en,
       );
-      await faceLoaded(page, FACE.ko[ko]);
-      await faceLoaded(page, FACE.en[en]);
-      // Korean only: the title (교사자료실) · Latin only: a level tag
-      const koDrawn = await drawnFonts(page, "#boardTitle > span:last-child");
-      const enDrawn = await drawnFonts(
-        page,
-        "#boardRows .bd-level:not(.lv-common)",
-      );
       const pair = `${ko} + ${en}`;
-      expect(koDrawn.length, pair).toBe(1);
-      expect(koDrawn[0], pair).toMatch(DRAWN.ko[ko]);
-      expect(enDrawn.length, pair).toBe(1);
-      expect(enDrawn[0], pair).toMatch(DRAWN.en[en]);
-      // the picked faces only
+      // Latin face → Korean face → the site's Korean (Noto Sans KR) → …
+      for (const sel of [
+        "#boardTitle > span:last-child",
+        "#boardRows .bd-level:not(.lv-common)",
+        "#boardRows .bd-t",
+      ]) {
+        expect(await stackHead(page, sel), `${pair} ${sel}`).toEqual([
+          FACE.en[en],
+          FACE.ko[ko],
+          "Noto Sans KR",
+        ]);
+      }
+      // the browser reaches for the picked faces …
+      if (ko === NSR) await faceTried(page, FACE.ko[NSR]);
+      if (en === NSR) {
+        await faceTried(page, FACE.en[NSR]);
+      } else {
+        // Latin only (a level tag): really drawn in our Pretendard Std file
+        await faceLoaded(page, STD);
+        expect(
+          await drawnFonts(page, "#boardRows .bd-level:not(.lv-common)"),
+          pair,
+        ).toEqual([STD]);
+      }
+      await page.evaluate(() => document.fonts.ready);
+      // … and never for the others
+      if (ko !== NSR)
+        expect(await notReached(page, FACE.ko[NSR]), pair).toEqual([]);
+      if (en !== NSR) {
+        expect(await notReached(page, FACE.en[NSR]), pair).toEqual([]);
+      } else {
+        expect(await notReached(page, STD), pair).toEqual([]);
+      }
+      // only the picked files are asked for — no 나눔고딕 anywhere
       const asked = fontAsks(urls);
       expect(asked, pair).toEqual({
         pretendardKo: ko === "pretendard",
-        nanumKo: ko === "nanum-gothic",
+        nsrCss: ko === NSR || en === NSR,
+        nsr: ko === NSR || en === NSR,
         stdLatin: en === "pretendard",
-        nanumLatin: en === "nanum-gothic",
+        nanumGothic: false,
       });
+      // 나눔스퀘어라운드: the pinned originals, the weights the board wears —
+      // Regular (400) and ExtraBold (700 · 800); never Light, never Bold
+      if (asked.nsr) {
+        const files = nsrFiles(urls);
+        expect(files, pair).toContain("EB");
+        expect(
+          files.filter((w) => !["R", "EB"].includes(w)),
+          pair,
+        ).toEqual([]);
+      }
       await context.close();
     }
   }
 });
 
-test("board font settings: the admin picks, it saves at once and survives a reload; the preview is drawn in the pair (#5)", async ({
+test("board font settings: both pickers offer 프리텐다드(기본) · 나눔스퀘어라운드; a pick saves at once and survives a reload; the preview wears the pair (#5, D77)", async ({
   browser,
 }, info) => {
   desktopOnly(info);
   const context = await browser.newContext();
+  await blockFontCdn(context);
   const page = await context.newPage();
+  const urls = [];
+  page.on("request", (r) => urls.push(r.url()));
   const sent = await stubBoard(page, { role: "admin" });
   await openAdminBoard(page);
   const ko = page.locator("#rbFontKo");
@@ -2123,75 +2227,146 @@ test("board font settings: the admin picks, it saves at once and survives a relo
   const status = page.locator("#rbFontStatus");
   await expect(ko).toHaveValue("pretendard");
   await expect(en).toHaveValue("pretendard");
-  await expect(ko.locator("option")).toHaveText([
-    "프리텐다드(기본)",
-    "나눔고딕",
-  ]);
+  for (const select of [ko, en]) {
+    await expect(select.locator("option")).toHaveText([
+      "프리텐다드(기본)",
+      "나눔스퀘어라운드",
+    ]);
+    expect(
+      await select
+        .locator("option")
+        .evaluateAll((options) => options.map((o) => o.value)),
+    ).toEqual(FONT_KEYS);
+  }
   await expect(preview).toHaveText(
     "Level 1 월간교육안 · March Lesson Plan 2026 — 3월 수업 자료",
   );
-  await ko.selectOption("nanum-gothic");
+  await ko.selectOption(NSR);
   await expect(status).toHaveText("글꼴을 바꿨어요.");
-  await expect(preview).toHaveAttribute("data-font-ko", "nanum-gothic");
+  await expect(preview).toHaveAttribute("data-font-ko", NSR);
   await expect(preview).toHaveAttribute("data-font-en", "pretendard");
-  await en.selectOption("nanum-gothic");
-  await expect(preview).toHaveAttribute("data-font-en", "nanum-gothic");
+  await en.selectOption(NSR);
+  await expect(preview).toHaveAttribute("data-font-en", NSR);
+  await expect(status).toHaveText("글꼴을 바꿨어요.");
   expect(sent.upserts).toEqual([
-    { key: "board_font_ko", value: "nanum-gothic" },
-    { key: "board_font_en", value: "nanum-gothic" },
+    { key: "board_font_ko", value: NSR },
+    { key: "board_font_en", value: NSR },
   ]);
-  // the preview is really drawn in the pair (Korean + Latin faces)
-  await faceLoaded(page, "Nanum Gothic");
-  await faceLoaded(page, "CRA Nanum Gothic Latin");
-  const drawn = await drawnFonts(page, "#rbFontPreview");
-  expect(drawn.every((f) => /^NanumGothic/.test(f))).toBe(true);
+  // the preview wears the pair and the browser reaches for both faces
+  expect(await stackHead(page, "#rbFontPreview")).toEqual([
+    FACE.en[NSR],
+    FACE.ko[NSR],
+    "Noto Sans KR",
+  ]);
+  await faceTried(page, FACE.ko[NSR]);
+  await faceTried(page, FACE.en[NSR]);
+  expect(fontAsks(urls).nsrCss).toBe(true);
   // the rest of the admin keeps its face
   expect(
     await page
       .locator("#rbSettings .rb-subtitle")
       .first()
       .evaluate((el) => getComputedStyle(el).fontFamily),
-  ).not.toContain("Nanum Gothic Latin");
+  ).not.toContain("NanumSquareRound");
+  // the pinned originals only (the preview's bold = ExtraBold, never the
+  // Bold file); the old Latin pieces are gone
+  expect(nsrFiles(urls)).toContain("EB");
+  expect(nsrFiles(urls).filter((w) => !["R", "EB"].includes(w))).toEqual([]);
+  expect(urls.filter((u) => u.includes("NanumGothic-latin-"))).toEqual([]);
   // a reload keeps the pair (the stub keeps what was saved)
   await page.reload();
   await openAdminBoard(page, { goto: false });
-  await expect(ko).toHaveValue("nanum-gothic");
-  await expect(en).toHaveValue("nanum-gothic");
+  await expect(ko).toHaveValue(NSR);
+  await expect(en).toHaveValue(NSR);
   await openBoard(page);
   await expect(page.locator("#boardScreen")).toHaveAttribute(
     "data-font-ko",
-    "nanum-gothic",
+    NSR,
+  );
+  await expect(page.locator("#boardScreen")).toHaveAttribute(
+    "data-font-en",
+    NSR,
   );
   await context.close();
 });
 
-test("board font settings: odd values in the table = Pretendard on both; a refused save puts the picker back with the error code (#5)", async ({
+test("board font settings: the old 나눔고딕 value and odd values = 프리텐다드 on both, with no 나눔고딕 asked for; a refused save puts the picker back with the error code (#5, D77)", async ({
   browser,
 }, info) => {
   desktopOnly(info);
-  const odd = await browser.newContext();
-  const p2 = await odd.newPage();
-  await stubBoard(p2, { role: "admin", fontKo: "comic-sans", fontEn: 42 });
-  await openBoard(p2);
-  await expect(p2.locator("#boardScreen")).toHaveAttribute(
+  // the old value (나눔고딕, before D77) on both — a teacher's board
+  const old = await browser.newContext();
+  await blockFontCdn(old);
+  const p1 = await old.newPage();
+  const urls = [];
+  p1.on("request", (r) => urls.push(r.url()));
+  await stubBoard(p1, {
+    role: "teacher",
+    fontKo: "nanum-gothic",
+    fontEn: "nanum-gothic",
+  });
+  await openBoard(p1);
+  await expect(p1.locator("#boardRows .bd-row")).toHaveCount(10);
+  await expect(p1.locator("#boardScreen")).toHaveAttribute(
     "data-font-ko",
     "pretendard",
   );
-  await expect(p2.locator("#boardScreen")).toHaveAttribute(
+  await expect(p1.locator("#boardScreen")).toHaveAttribute(
     "data-font-en",
     "pretendard",
   );
-  await p2.goto("about:blank"); // (leaving the board reloads by itself)
-  await openAdminBoard(p2);
-  await expect(p2.locator("#rbFontKo")).toHaveValue("pretendard");
-  await odd.close();
+  expect(await stackHead(p1, "#boardRows .bd-t")).toEqual([
+    STD,
+    PRETENDARD,
+    "Noto Sans KR",
+  ]);
+  await faceLoaded(p1, STD);
+  await p1.evaluate(() => document.fonts.ready);
+  expect(fontAsks(urls)).toEqual({
+    pretendardKo: true,
+    nsrCss: false,
+    nsr: false,
+    stdLatin: true,
+    nanumGothic: false,
+  });
+  await old.close();
+
+  // the old value in the admin's pickers, and odd values
+  for (const [fontKo, fontEn] of [
+    ["nanum-gothic", "nanum-gothic"],
+    ["comic-sans", 42],
+  ]) {
+    const odd = await browser.newContext();
+    await blockFontCdn(odd);
+    const p2 = await odd.newPage();
+    await stubBoard(p2, { role: "admin", fontKo, fontEn });
+    await openBoard(p2);
+    await expect(p2.locator("#boardScreen")).toHaveAttribute(
+      "data-font-ko",
+      "pretendard",
+    );
+    await expect(p2.locator("#boardScreen")).toHaveAttribute(
+      "data-font-en",
+      "pretendard",
+    );
+    await p2.goto("about:blank"); // (leaving the board reloads by itself)
+    await openAdminBoard(p2);
+    await expect(p2.locator("#rbFontKo")).toHaveValue("pretendard");
+    await expect(p2.locator("#rbFontEn")).toHaveValue("pretendard");
+    await expect(p2.locator("#rbFontPreview")).toHaveAttribute(
+      "data-font-ko",
+      "pretendard",
+    );
+    await odd.close();
+  }
 
   // a refused save: the picker goes back, the code is shown
   const bad = await browser.newContext();
+  await blockFontCdn(bad);
   const p3 = await bad.newPage();
   await stubBoard(p3, { role: "admin", flagError: RLS_ERROR });
   await openAdminBoard(p3);
-  await p3.locator("#rbFontEn").selectOption("nanum-gothic");
+  await p3.locator("#rbFontEn").selectOption(NSR);
   await expect(p3.locator("#rbFontStatus")).toHaveText(FLAG_FAILED);
   await expect(p3.locator("#rbFontEn")).toHaveValue("pretendard");
   await expect(p3.locator("#rbFontPreview")).toHaveAttribute(
@@ -2199,6 +2374,95 @@ test("board font settings: odd values in the table = Pretendard on both; a refus
     "pretendard",
   );
   await bad.close();
+});
+
+test("board font: 나눔스퀘어라운드's Korean face takes only the letters NAVER's files really draw — 펲 (an empty outline there) falls to the next font, 똠 · 가 · ₩ stay; the Latin alias keeps to Latin; bold (700) is the ExtraBold file (D77)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const context = await browser.newContext();
+  await blockFontCdn(context);
+  const page = await context.newPage();
+  await stubBoard(page, { role: "teacher", fontKo: NSR, fontEn: NSR });
+  await openBoard(page);
+  await expect(page.locator("#boardRows .bd-row")).toHaveCount(10);
+  await faceTried(page, FACE.ko[NSR]);
+  // per family: its weights, and for each letter whether its faces take it
+  // (true / false — the same on every face — or "mixed")
+  const takes = await page.evaluate(
+    ({ families, letters }) => {
+      const inRange = (range, cp) =>
+        range.split(",").some((part) => {
+          const [a, b = a] = part.trim().replace(/^U\+/i, "").split("-");
+          return cp >= parseInt(a, 16) && cp <= parseInt(b, 16);
+        });
+      const out = {};
+      for (const fam of families) {
+        const faces = [...document.fonts].filter(
+          (f) => f.family.replace(/"/g, "") === fam,
+        );
+        out[fam] = { weights: faces.map((f) => f.weight).sort() };
+        for (const ch of letters) {
+          const each = faces.map((f) =>
+            inRange(f.unicodeRange, ch.codePointAt(0)),
+          );
+          out[fam][ch] = each.every(Boolean)
+            ? true
+            : each.some(Boolean)
+              ? "mixed"
+              : false;
+        }
+      }
+      return out;
+    },
+    {
+      families: [FACE.ko[NSR], FACE.en[NSR]],
+      letters: ["가", "똠", "펲", "₩", "A", "€"],
+    },
+  );
+  const weights = ["300", "400", "700", "800"];
+  expect(takes[FACE.ko[NSR]]).toEqual({
+    weights,
+    가: true,
+    똠: true,
+    펲: false,
+    "₩": true,
+    A: true,
+    "€": false,
+  });
+  expect(takes[FACE.en[NSR]]).toEqual({
+    weights,
+    가: false,
+    똠: false,
+    펲: false,
+    "₩": false,
+    A: true,
+    "€": true, // (not in the files: the browser goes on to the next face)
+  });
+  // the file behind each weight, from the stylesheet's own rules: the
+  // board's bold (700) is the ExtraBold file too (빅웨이브 11/06 — Bold
+  // looked thin next to Pretendard Bold); the Bold file is never named
+  const files = await page.evaluate(() => {
+    const sheet = [...document.styleSheets].find((s) =>
+      (s.href || "").endsWith("/nanum-square-round.css"),
+    );
+    const out = {};
+    for (const rule of sheet.cssRules) {
+      if (!(rule instanceof CSSFontFaceRule)) continue;
+      const fam = rule.style.getPropertyValue("font-family").replace(/"/g, "");
+      const src = rule.style.getPropertyValue("src");
+      out[fam] = out[fam] || {};
+      out[fam][rule.style.getPropertyValue("font-weight")] =
+        (/NanumSquareRound(\w+)\.woff2/.exec(src) || [null, src])[1];
+    }
+    return out;
+  });
+  const byWeight = { 300: "L", 400: "R", 700: "EB", 800: "EB" };
+  expect(files).toEqual({
+    [FACE.ko[NSR]]: byWeight,
+    [FACE.en[NSR]]: byWeight,
+  });
+  await context.close();
 });
 
 /* ---- The login ended while the admin screen is open (2차-2 §5) ---------- */

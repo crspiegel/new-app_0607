@@ -1978,8 +1978,9 @@ async function savePage(level, month) {
 // T1). Only what the page shows; the server checks the same switches.
 // #5 (2026-11-05): the board's Korean / Latin faces (board_font_ko /
 // board_font_en) ride in the same request — only a value on BOARD_FONTS
-// counts, anything else = the default (Pretendard).
-const BOARD_FONTS = ["pretendard", "nanum-gothic"];
+// counts, anything else = the default (Pretendard). D77 (2026-11-06):
+// 나눔스퀘어라운드 took 나눔고딕's place, so an old 'nanum-gothic' = Pretendard.
+const BOARD_FONTS = ["pretendard", "nanum-square-round"];
 const siteFlags = {
   board: false,
   teacherRes: true,
