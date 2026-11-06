@@ -17,11 +17,12 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`6508b41`** + its docs commit (`2026-11-06`: 옛 기능 이름 '레벨별 자료실'). Older: archive.
+Live = **`652c9f1`** (`2026-11-06`: 옛 기능 이름 '레벨별 자료실'). Older: archive.
 
 - **교사자료실 게시판** (briefs `11-03`~`11-06`): live, 게시판 켬, 레벨별 자료실 켜짐. 2차-1 #1 · 2차-2(#2 Teacher 한 줄 ·
   #3 이름 · #4 배경 · #5 글꼴 `board_font_ko/en` · 로그인 끝남 안내) live. **이름 변경 커밋·푸시 완료**(`2026-11-06`, 화면
   글자만, SQL 없음): 옛 '교사 자료실' → '레벨별 자료실'. 끄는 시점은 따로 정함. NOTES "수정 2차", "이름 변경".
+  **D77**: 게시판 글꼴 나눔고딕 → 나눔스퀘어라운드(굵게 EB, 옛 값 = 프리텐다드, SQL 없음) — 미커밋·화면 확인 대기.
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"

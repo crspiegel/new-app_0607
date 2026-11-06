@@ -304,12 +304,14 @@ Its name on every screen (teachers' and admin) is **교사자료실** (no space)
   and reload keep them). NEW = posted in the last 7 days (KST); views count once per member per day.
 - **Post** (`#board/<id>`): tags, title, date · views · files, body, the attachments in the admin's
   order, 이전 글 / 다음 글 in the list's order, 목록으로.
-- **Font (F1, #5):** the teachers' board screens (list, post, empty states, notes; PC and phone) wear one
-  face pair for every letter (Korean, Latin, numbers — level tags, NEW, dates, views, file names, button
-  labels). The top admin picks it in 교사자료실 설정: Korean [프리텐다드(기본) / 나눔고딕] and Latin
-  [프리텐다드(기본) / 나눔고딕], saved at once (`site_settings` `board_font_ko` / `board_font_en` =
-  `pretendard` | `nanum-gothic`; anything else = Pretendard), with a one-line preview. The header, footer,
-  레벨별 자료실 and all other admin screens keep their fonts.
+- **Font (F1, #5, D77):** the teachers' board screens (list, post, empty states, notes; PC and phone) wear
+  one face pair for every letter (Korean, Latin, numbers — level tags, NEW, dates, views, file names,
+  button labels). The top admin picks it in 교사자료실 설정: Korean [프리텐다드(기본) / 나눔스퀘어라운드]
+  and Latin [프리텐다드(기본) / 나눔스퀘어라운드], saved at once ("글꼴을 바꿨어요."; `site_settings`
+  `board_font_ko` / `board_font_en` = `pretendard` | `nanum-square-round`; anything else, the old
+  `nanum-gothic` included = Pretendard), with a one-line preview. Only the picked faces load. A letter
+  나눔스퀘어라운드 does not draw falls to the next font (never a blank or a box). The header, footer,
+  레벨별 자료실 and all other admin screens keep their fonts (the admin's own Korean stays 나눔고딕).
 - **Background (#4):** the light-blue board background runs from the header to the footer however short
   the page.
 - **Attachments:** up to 20 per post, each a file OR a Google Drive file link.

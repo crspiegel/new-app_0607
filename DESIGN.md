@@ -44,13 +44,16 @@ For this project, use Duolingo ABC only as a style reference for color, spacing,
 - **Special-purpose:** `Sniglet` (level names / level-icon numbers), `Manrope 800`
   (month-select & content month numbers), `Concert One` (month-select fallback
   number rule), `Baloo 2` (content H2 — currently hidden).
-- **교사자료실 게시판 (teachers' board, F1 2026-11-04 · #5 2026-11-05):** its own face for every letter of
-  `#boardScreen`, picked by the top admin — Korean [Pretendard (default) / Nanum Gothic] and Latin
-  [Pretendard (default) / Nanum Gothic] apart. Stack = Latin face (Latin · numbers · punctuation only:
-  `Pretendard Std Variable` or `CRA Nanum Gothic Latin`, files in `assets/fonts`) → Korean face (`Pretendard
-Variable` from jsDelivr v1.3.9 or `Nanum Gothic` from Google Fonts) → Noto Sans KR → Inter. Only the
-  picked faces load. Header, footer, 레벨별 자료실 (옛 이름 '교사 자료실', 2026-11-06 변경) and admin
-  keep their fonts (the admin's preview line wears the pair).
+- **교사자료실 게시판 (teachers' board, F1 2026-11-04 · #5 2026-11-05 · D77 2026-11-06):** its own face for
+  every letter of `#boardScreen`, picked by the top admin — Korean [Pretendard (default) / NanumSquareRound
+  (나눔스퀘어라운드)] and Latin [the same two] apart. Stack = Latin face (Latin · numbers · punctuation only:
+  `Pretendard Std Variable`, a file in `assets/fonts`, or `CRA NanumSquareRound Latin`) → Korean face
+  (`Pretendard Variable` from jsDelivr v1.3.9 or `CRA NanumSquareRound` — NAVER's files from jsDelivr,
+  `nanum-square-round.css`, only the letters they really draw) → Noto Sans KR → Inter → system. Only the
+  picked faces load. Weights: 400 · 700 · 800 (900 → 800); in NanumSquareRound 400 = Regular and 700 · 800 =
+  ExtraBold (2026-11-06: its Bold looked thin next to Pretendard Bold — the Bold file is never loaded). Header, footer,
+  레벨별 자료실 (옛 이름 '교사 자료실', 2026-11-06 변경) and admin keep their fonts (the admin's preview
+  line wears the pair).
 - Global hard rule: **no italics anywhere** (`font-style: normal !important` +
   `font-synthesis: none` on `*`, `html`, `body`, `button`).
 

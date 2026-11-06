@@ -1277,20 +1277,40 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
   페이지)은 이때 이름을 그대로 두었다가 `2026-11-06`에 '레벨별 자료실'로 바꿈(아래 "이름 변경"). 휴대폰 관리자 메뉴 한 줄 확인됨.
 - **배경(#4):** `.app-shell`은 100vh 세로 flex, `<main>`이 푸터까지 늘어나는데 색은 게시판 section에만 있었다 → 짧은 목록·글이면
   아래가 `<main>`의 흰색. `body[data-screen="board"] main { background: #eef6fd }`로 해결(높이 상수 없음, 다른 화면 무관).
-- **글꼴 선택(#5):** `site_settings` `board_font_ko` / `board_font_en` = `pretendard` | `nanum-gothic`(화면 허용 목록 `BOARD_FONTS`,
-  없거나 이상한 값 = 프리텐다드; 읽기 = `getSignupVisible` 한 번의 요청; **SQL 변경 없음** — 정책은 기존 읽기 공개·쓰기 `is_admin()`).
-  `#boardScreen`·관리자 미리보기의 `data-font-ko/-en` → CSS 변수 `--bd-en`, `--bd-ko` → `--bd-font` = 라틴 글꼴, 한글 글꼴, Noto Sans KR,
-  Inter. 라틴 글꼴은 `unicode-range`가 라틴·숫자·문장부호뿐이라 한글은 뒤의 한글 글꼴로 내려간다.
-  - 라틴 파일(`assets/fonts`, **수정하지 않은 원본 그대로** + OFL): `PretendardStdVariable.subset.6.woff2`(56,128 B, 가변 45~920 —
-    npm `pretendard-std@1.3.9` 동적 부분 글꼴 6번 = 저자가 만든 라틴 조각) · `NanumGothic-latin-400/700/800.woff2`(17~18KB씩 — Google
-    Fonts v26의 latin 조각). 직접 자르지 않은 이유: 두 글꼴 모두 OFL **예약 글꼴 이름**("Pretendard Std", "Nanum…")이 있어 잘라서
-    고치면 이름을 바꿔야 한다 → 원본 조각을 그대로 둠. 나눔고딕 라틴 별칭 이름 = `CRA Nanum Gothic Latin`(CSS 안의 이름일 뿐, 파일은 원본).
-  - 한글: 프리텐다드 = jsDelivr `pretendardvariable-dynamic-subset`(v1.3.9, `rbEnsureFont`) · 나눔고딕 = 관리자 화면과 같은 Google Fonts
-    CSS(`ensureAdminFont`, 400/700/800). **고른 것만** 불러온다(안 고른 CSS·파일 요청 0 — 테스트로 확인). 게시판 굵기 = 400·700·800
-    (두 글꼴 모두 진짜 굵기 파일 있음).
+- **글꼴 선택(#5, D77로 바뀜 — 아래 "나눔스퀘어라운드"):** `site_settings` `board_font_ko` / `board_font_en` = `pretendard` |
+  `nanum-square-round`(화면 허용 목록 `BOARD_FONTS`, 없거나 이상한 값 = 프리텐다드; 읽기 = `getSignupVisible` 한 번의 요청; **SQL 변경
+  없음** — 값에 제한 없음, 정책은 기존 읽기 공개·쓰기 `is_admin()`). `#boardScreen`·관리자 미리보기의 `data-font-ko/-en` → CSS 변수
+  `--bd-en`, `--bd-ko` → `--bd-font` = 라틴 글꼴, 한글 글꼴, Noto Sans KR, Inter. 라틴 글꼴은 `unicode-range`가 라틴·숫자·문장부호뿐이라
+  한글은 뒤의 한글 글꼴로 내려간다.
+  - 프리텐다드 라틴 파일(`assets/fonts`, **수정하지 않은 원본 그대로** + OFL): `PretendardStdVariable.subset.6.woff2`(56,128 B, 가변
+    45~920 — npm `pretendard-std@1.3.9` 동적 부분 글꼴 6번 = 저자가 만든 라틴 조각). 직접 자르지 않은 이유: OFL **예약 글꼴 이름**이
+    있어 잘라서 고치면 이름을 바꿔야 한다 → 원본 조각을 그대로 둠. 한글 = jsDelivr `pretendardvariable-dynamic-subset`(v1.3.9,
+    `rbEnsureFont`). **고른 것만** 불러온다(안 고른 CSS·파일 요청 0 — 테스트로 확인).
   - `#adminScreen *`(관리자 한 글꼴 규칙, 우선순위 1,0,0)이 미리보기 글꼴을 덮는다 → 미리보기 규칙은 `#adminScreen .rb-font-preview`.
-  - 실제로 그려진 글꼴 확인 = CDP `CSS.getPlatformFontsForNode`(파일 안 이름: `Pretendard Variable`, `Pretendard Std Variable`,
-    `NanumGothic`/`NanumGothicExtraBold`). 4가지 조합 × 한글만·영문만 글자를 테스트가 본다.
+  - 실제로 그려진 글꼴 확인 = CDP `CSS.getPlatformFontsForNode`(파일 안 이름: `Pretendard Std Variable`, `NanumSquareRoundEB` 등).
+- **나눔스퀘어라운드(D77, `2026-11-06`):** 나눔고딕을 목록에서 빼고 이것으로 바꿈(옛 값 `nanum-gothic` = 프리텐다드로 보임, 운영 값은
+  두 칸 모두 `pretendard`). 관리자 화면 자체 글꼴(한글 나눔고딕 · 영문 Inter, `ensureAdminFont`)은 그대로. 옛 나눔고딕 라틴 조각
+  (`NanumGothic-latin-*.woff2` + OFL)은 저장소에서 지움.
+  - 파일: 네이버 원본 4개(L 300 · R 400 · B 700 · EB 800, SIL OFL 1.1, 예약 이름 "Nanum")의 WOFF2 = npm `@kfonts/nanum-square-round@0.2.0`
+    (jsDelivr 버전 고정). 고른 이유: 같은 패키지에 든 네이버 TTF와 글자 모양·글자 목록·이름이 **완전히 같음**(fontTools로 비교). 다른 후보
+    `typeface-nanum-square-round@1.0.2`는 글리프가 2개 더 있어(변환 도구가 바꿈) 뺌. 굵기 대응: 400→R, **700·800·900→EB**(빅웨이브
+    11/06: B는 프리텐다드 Bold 옆에서 가늘어 보임 → 파일은 그대로 두고 CSS의 700 글꼴 정의만 EB 파일을 가리킴; 500·600은 게시판에
+    없음, 있으면 CSS가 400·700으로 고름), `font-synthesis: none`이라 가짜 굵게 없음. **L·B는 받지 않음**.
+  - **함정(중요): 원본 파일이 한글 11,172자를 모두 글자표에 올려 두었지만 8,693자는 모양이 비어 있다**(그려지는 한글 2,479자 = KS X 1001
+    2,350자 + 똠·쀍·햏·뷁 등). 글자표에 있으면 브라우저는 다음 글꼴로 넘어가지 않고 **빈칸**을 그린다(예: '펲'). → 한글 얼굴
+    `CRA NanumSquareRound`의 `unicode-range` = 실제로 그려지는 3,610개 코드만(빈칸·제어 문자 포함, 1,828구간). 그 밖 글자(펲, €, 한자)는
+    Noto Sans KR → 시스템으로 간다. 이 범위가 길어서(79KB, 서버 압축 시 약 5~9KB) `styles.css`가 아니라 **`nanum-square-round.css`**에 두고
+    고를 때만 붙인다(`rbEnsureNsrFont`, `<link id="boardFontNsrLink">`). 이 파일은 손으로 고치지 않는다 — 로컬 스크립트
+    (`docs/worker-briefs/2026-11-06-board-font/make-nsr-css.py`, fontTools, 원본 4개 + SHA256)로 만든다. 글꼴 버전을 바꾸면 다시 만든다.
+  - 영문 별칭 `CRA NanumSquareRound Latin` = 같은 파일 + 라틴 범위(그 범위에서 파일에 있는 글자는 모두 그려짐). 한글·영문 둘 다 고르면
+    선생님 게시판에서는 같은 파일을 **한 번만** 받는다(사진 도구로 확인: R·EB 각 1회, B 0). 단 관리자 미리보기(700, 한글·영문이
+    한 줄에)는 같은 파일을 **동시에 두 번** 받는다(CDP로 확인 — B를 쓰던 때도 똑같이 2번, 이번 변경과 무관; 최고 관리자 화면만이라 그대로 둠).
+  - 테스트(`resource-board.spec.js` "board font…" 5개): **글꼴 CDN 요청은 모두 막는다**(Google Fonts, jsDelivr의 css·woff2 — supabase-js
+    스크립트는 막지 않음). 그래서 CDN 글꼴은 "그려짐" 대신 요청 주소 · 글꼴 순서 · 브라우저가 그 글꼴을 찾았는지(`FontFace` 상태)로 보고,
+    한글 범위는 `FontFace.unicodeRange`로 본다(펲 빠짐, 똠·가 있음). 굵기별 파일은 스타일시트의 `@font-face` 규칙으로 보고(700·800 =
+    EB), 요청은 R·EB뿐인지(B 0) 본다. 실제 모양 확인은 로컬 사진 도구(실제 CDN).
+  - 테스트 함정: 글꼴 CDN을 막으면 `load`가 관리자 화면보다 먼저 와서 `openAdminBoard`가 메뉴를 너무 일찍 본다(데스크톱에서 숨은 ☰를
+    누르려다 30초 멈춤) → 도우미가 `#adminScreen.screen-active`를 먼저 기다린다.
 - **로그인 끝남 안내(§5):** `sb.auth.onAuthStateChange` `SIGNED_OUT`(다른 탭 로그아웃도 브로드캐스트로 옴 — 테스트 확인)이나 다른 탭의
   LMS 로그아웃(`cra_lms` 삭제 → `storage` 이벤트)이 관리자 화면이 열린 동안 오면 `#loginEndedModal` + `#adminScreen.inert = true`
   (쓰던 글자 그대로, 아무것도 누를 수 없음). 화면은 저절로 바뀌지 않고 [로그인 화면으로]만. 이 탭의 Log out은 `loggingOut`으로 제외.
