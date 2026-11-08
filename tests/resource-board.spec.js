@@ -1386,12 +1386,14 @@ test("board post (D81): 모두 받기 locks both buttons while it runs; the prog
     getDelay: 700,
   });
   await openBoard(page, `#board/${pid(31)}`);
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("button", { name: "모두 받기 (ZIP · 7개)" }).click();
+  // D84: with a pick the top button is [선택한 N개 받기] — so the picks
+  // (for the 선택 바's button) come once 모두 받기 is running
   await page.getByRole("checkbox", { name: "L1_11월_활동지.pdf 선택" }).check();
   await page
     .getByRole("checkbox", { name: "L1_11월_평가표.xlsx 선택" })
     .check();
-  const downloaded = page.waitForEvent("download");
-  await page.getByRole("button", { name: "모두 받기 (ZIP · 7개)" }).click();
   const status = page.locator(".bd-zip-status");
   await expect(status).toHaveClass(/is-working/);
   await expect(status.locator(".bd-zip-line")).toHaveText(
@@ -1432,7 +1434,8 @@ test("board post (D81): picks — two = a ZIP of those two, one = no ZIP (the ro
   await expect(bar).toBeHidden();
   await expect(page.locator(".bd-att.is-picked")).toHaveCount(0);
   expect(await allBox.evaluate((el) => el.indeterminate)).toBe(false);
-  // two picked: the bar under the box, the picked rows framed
+  // two picked: the bar at the box's end (D84: inside it), the picked rows
+  // framed
   await page
     .getByRole("checkbox", { name: "L1_11월_평가표.xlsx 선택" })
     .check();
@@ -1527,7 +1530,11 @@ test("board post (D81): one file (or only links) = no ZIP tools; a ZIP over 200M
   await page.getByRole("checkbox", { name: "전체 선택" }).check();
   await page.getByRole("checkbox", { name: "큰자료_21.pdf 선택" }).uncheck();
   await expect(page.locator(".bd-zip-bar-count")).toHaveText("20개 선택");
-  await page.getByRole("button", { name: "선택한 20개 받기 (ZIP)" }).click();
+  // (D84: the top button has the same name now — the bar's one)
+  await page
+    .locator("#boardZipBar")
+    .getByRole("button", { name: "선택한 20개 받기 (ZIP)" })
+    .click();
   await expect(page.locator(".bd-zip-status")).toHaveClass(
     /is-working|is-done/,
   );
@@ -1721,6 +1728,471 @@ test("board post on a phone (D81): [모두 받기] the box's full width, the bar
     undefined,
   );
   await context.close();
+});
+
+/* ---- D84 선택 바 따라다니기 · 맨 위 버튼 · 바 진행 표시 (2026-11-09) -------- */
+
+const manyFiles = () =>
+  Array.from({ length: 24 }, (_, i) =>
+    file(`12월_자료_${String(i + 1).padStart(2, "0")}.pdf`, 100000 + i * 1000),
+  );
+// The top button's look, and the first line of its icon.
+const topLook = (top) =>
+  top.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return {
+      bg: s.backgroundColor,
+      border: `${s.borderTopWidth} ${s.borderTopColor}`,
+      color: s.color,
+      shadow: s.boxShadow,
+      font: `${s.fontWeight} ${s.fontSize}`,
+      radius: s.borderTopLeftRadius,
+      height: Math.round(el.getBoundingClientRect().height),
+      icon: el.querySelector("svg path").getAttribute("d"),
+    };
+  });
+// The progress bar inside the 선택 바: its size, colours and how full.
+const trackLook = (track) =>
+  track.evaluate((el) => {
+    const s = getComputedStyle(el);
+    const fill = el.firstElementChild;
+    return {
+      width: Math.round(el.getBoundingClientRect().width),
+      height: s.height,
+      radius: s.borderTopLeftRadius,
+      bg: s.backgroundColor,
+      fill: getComputedStyle(fill).backgroundColor,
+      part:
+        fill.getBoundingClientRect().width / el.getBoundingClientRect().width,
+      hidden: el.getAttribute("aria-hidden"),
+    };
+  });
+
+test("board post (D84): on a PC the 선택 바 follows the window's bottom (16px) over a long list and stops at the box's end, above 목록으로", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  await stubBoard(page, { posts: zipPost(manyFiles()), fileBody: bodyOf });
+  await openBoard(page, `#board/${pid(31)}`);
+  const bar = page.locator("#boardZipBar");
+  const box = page.locator(".bd-atts");
+  // the bar is the 첨부파일 box's last part (it stops where the box ends)
+  expect(
+    await bar.evaluate(
+      (el) =>
+        el.parentElement.classList.contains("bd-atts") &&
+        el === el.parentElement.lastElementChild,
+    ),
+  ).toBe(true);
+  // a file near the top of the list is picked
+  const first = page.getByRole("checkbox", { name: "12월_자료_01.pdf 선택" });
+  await first.scrollIntoViewIfNeeded();
+  await first.check();
+  await expect(bar).toBeVisible();
+  await bar.evaluate((el) =>
+    Promise.all(el.getAnimations().map((a) => a.finished)),
+  );
+  const look = await bar.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return [s.position, s.bottom, s.boxShadow, s.backgroundColor, s.zIndex];
+  });
+  expect(look.slice(0, 4)).toEqual([
+    "sticky",
+    "16px",
+    "rgba(28, 93, 150, 0.32) 0px 6px 18px 0px",
+    "rgb(28, 93, 150)",
+  ]);
+  // above the rows, below the site header (20)
+  expect(Number(look[4])).toBeGreaterThan(0);
+  expect(Number(look[4])).toBeLessThan(20);
+  // anywhere in the list (the box's end still below the window): 16px
+  // over the window's bottom
+  const vh = page.viewportSize().height;
+  const boxEnd = await box.evaluate(
+    (el) => el.getBoundingClientRect().bottom + window.scrollY,
+  );
+  for (const below of [0, 700, 250]) {
+    if (below) {
+      await page.evaluate(
+        (top) => window.scrollTo(0, top),
+        boxEnd - below - vh,
+      );
+    }
+    const r = await bar.boundingBox();
+    expect(Math.round(vh - (r.y + r.height))).toBe(16);
+  }
+  // the very end: the bar rests at the box's end, under the last row, and
+  // 이전·다음 글 and 목록으로 stay clear
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  const r = await bar.boundingBox();
+  const inner = await box.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return (
+      el.getBoundingClientRect().bottom -
+      parseFloat(s.borderBottomWidth) -
+      parseFloat(s.paddingBottom)
+    );
+  });
+  expect(Math.abs(r.y + r.height - inner)).toBeLessThanOrEqual(1);
+  const lastRow = await page.locator(".bd-att").last().boundingBox();
+  expect(r.y).toBeGreaterThanOrEqual(lastRow.y + lastRow.height);
+  const neighbors = await page.locator("#boardNeighbors").boundingBox();
+  expect(r.y + r.height).toBeLessThan(neighbors.y);
+  const back = await page.locator("#boardBack").boundingBox();
+  expect(r.y + r.height).toBeLessThan(back.y);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+});
+
+test("board post (D84): the bar rises (0.15 s) as it appears on a PC — not with reduced motion, not on a phone", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const rise = (bar) =>
+    bar.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return `${s.animationName} ${s.animationDuration}`;
+    });
+  for (const [options, want] of [
+    [{}, "bd-zip-rise 0.15s"],
+    [{ reducedMotion: "reduce" }, "none 0s"],
+    [
+      {
+        viewport: { width: 375, height: 812 },
+        isMobile: true,
+        hasTouch: true,
+      },
+      "none 0s",
+    ],
+  ]) {
+    const context = await browser.newContext(options);
+    const page = await context.newPage();
+    await stubBoard(page, { posts: zipPost(zipFiles()) });
+    await openBoard(page, `#board/${pid(31)}`);
+    await page
+      .getByRole("checkbox", { name: "L1_11월_활동지.pdf 선택" })
+      .check();
+    const bar = page.locator("#boardZipBar");
+    await expect(bar).toBeVisible();
+    expect(await rise(bar)).toBe(want);
+    await context.close();
+  }
+});
+
+test("board post (D84): the top button follows the picks — 모두 받기 / 선택한 1개 받기 / 선택한 N개 받기 (ZIP) — keeps the focus, and gets what the bar's button gets", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  const attachments = zipFiles();
+  const sent = await stubBoard(page, {
+    posts: zipPost(attachments),
+    fileBody: bodyOf,
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  const top = page.locator("#boardZipAllBtn");
+  const bar = page.locator("#boardZipBar");
+  // nothing picked: D81 as it was (white, blue frame, the ZIP box)
+  await expect(top).toHaveAccessibleName("모두 받기 (ZIP · 7개)");
+  const idle = await topLook(top);
+  expect(idle).toMatchObject({
+    bg: "rgb(255, 255, 255)",
+    border: "2px rgb(28, 176, 246)",
+    color: "rgb(20, 119, 184)",
+  });
+  // the same button changes while it has the focus (a check ticked
+  // elsewhere): the focus stays on it
+  await top.focus();
+  const tick = (n) =>
+    page.evaluate(
+      (i) => document.querySelectorAll(".bd-att input[data-pick]")[i].click(),
+      n,
+    );
+  await tick(0);
+  await expect(top).toHaveAccessibleName("선택한 1개 받기");
+  expect(await top.evaluate((el) => document.activeElement === el)).toBe(true);
+  expect(await topLook(top)).toEqual({
+    bg: "rgb(28, 176, 246)",
+    border: "2px rgb(28, 176, 246)",
+    color: "rgb(255, 255, 255)",
+    shadow: "rgb(24, 153, 214) 0px 3px 0px 0px",
+    font: "800 14px",
+    radius: "13px",
+    height: 44,
+    icon: "M12 4v11", // a row's [내려받기] arrow
+  });
+  await tick(3);
+  await expect(top).toHaveAccessibleName("선택한 2개 받기 (ZIP)");
+  expect(await top.evaluate((el) => document.activeElement === el)).toBe(true);
+  // two: the same ZIP from the top button as from the bar's
+  const [fromTop] = await Promise.all([
+    page.waitForEvent("download"),
+    top.click(),
+  ]);
+  expect(fromTop.suggestedFilename()).toBe(`${ZIP_TITLE}_선택 2개.zip`);
+  const a = await zipOf(fromTop);
+  expect(a.entries.map((e) => e.name)).toEqual([
+    "L1_11월_활동지.pdf",
+    "11월 수업 슬라이드 — 그림책 함께 읽기.pptx",
+  ]);
+  await expect(page.locator(".bd-zip-status")).toHaveClass(/is-done/);
+  // the picks stay after a ZIP (D81), so the button still says so
+  await expect(top).toHaveAccessibleName("선택한 2개 받기 (ZIP)");
+  const [fromBar] = await Promise.all([
+    page.waitForEvent("download"),
+    bar.locator(".bd-zip-get").click(),
+  ]);
+  expect(fromBar.suggestedFilename()).toBe(fromTop.suggestedFilename());
+  const b = await zipOf(fromBar);
+  expect(b.entries.map((e) => e.name)).toEqual(a.entries.map((e) => e.name));
+  expect(b.text).toEqual(a.text);
+  expect(sent.fn).toHaveLength(4);
+  // all picks off: back to 모두 받기 at once
+  await bar.getByRole("button", { name: "선택 해제" }).click();
+  await expect(top).toHaveAccessibleName("모두 받기 (ZIP · 7개)");
+  expect(await topLook(top)).toEqual(idle);
+  // one: no ZIP — the file itself, as the bar's [선택한 1개 받기]
+  await page
+    .getByRole("checkbox", { name: "L1_11월_단어카드.hwp 선택" })
+    .check();
+  await expect(top).toHaveAccessibleName("선택한 1개 받기");
+  const [single] = await Promise.all([
+    page.waitForEvent("download"),
+    top.click(),
+  ]);
+  expect(single.suggestedFilename()).toBe("L1_11월_단어카드.hwp");
+  expect(sent.fn.at(-1).body).toEqual({ attachment: attachments[1].id });
+  expect(sent.fn).toHaveLength(5);
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText("1개 선택");
+  await expect(bar.locator(".bd-zip-bar-track")).toBeHidden();
+});
+
+test("board post (D84): while a ZIP is made the bar shows it too — n / N개, 창을 닫지 말아 주세요, a thin bar; 선택 해제 and 받기 locked; back to N개 선택 after (done or failed)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const attachments = zipFiles();
+  const picks = [0, 2, 4].map((i) => attachments[i]);
+  const slow = picks[2].id;
+  let context = await browser.newContext();
+  let page = await context.newPage();
+  await stubBoard(page, {
+    posts: zipPost(attachments),
+    fileBody: bodyOf,
+    getDelay: (att) => (att && att.id === slow ? 2500 : 50),
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  for (const att of picks) {
+    await page.getByRole("checkbox", { name: `${att.name} 선택` }).check();
+  }
+  const bar = page.locator("#boardZipBar");
+  const track = bar.locator(".bd-zip-bar-track");
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText("3개 선택");
+  await expect(track).toBeHidden();
+  // from the page's end (the status far above)
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  const downloaded = page.waitForEvent("download");
+  await bar.locator(".bd-zip-get").click();
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText(
+    "압축하는 중… 2 / 3개",
+  );
+  // D81 brings the status into view: under the site header, not behind it
+  await expect(page.locator(".bd-zip-status")).toBeInViewport();
+  const statusTop = (await page.locator(".bd-zip-status").boundingBox()).y;
+  const header = await page.locator(".topbar").boundingBox();
+  expect(statusTop).toBeGreaterThanOrEqual(header.y + header.height);
+  await expect(bar.locator(".bd-zip-bar-sub")).toHaveText(
+    "창을 닫지 말아 주세요",
+  );
+  await expect(track).toBeVisible();
+  const look = await trackLook(track);
+  expect(look).toMatchObject({
+    width: 260,
+    height: "6px",
+    radius: "99px",
+    bg: "rgb(63, 125, 179)",
+    fill: "rgb(143, 212, 251)",
+    hidden: "true",
+  });
+  expect(look.part).toBeCloseTo(2 / 3, 1);
+  expect(
+    await bar
+      .locator(".bd-zip-bar-sub")
+      .evaluate((el) => [
+        getComputedStyle(el).color,
+        getComputedStyle(el).fontSize,
+      ]),
+  ).toEqual(["rgb(214, 233, 248)", "13px"]);
+  // the same numbers as the status above — the only one read aloud
+  await expect(page.locator(".bd-zip-status .bd-zip-line")).toHaveText(
+    "압축하는 중… 2 / 3개 (창을 닫지 말아 주세요)",
+  );
+  expect(
+    await bar.evaluate(
+      (el) =>
+        Boolean(el.closest("[aria-live], [role='status']")) ||
+        Boolean(el.querySelector("[aria-live], [role='status']")),
+    ),
+  ).toBe(false);
+  // locked: 선택 해제, both 받기 buttons; the checks and 전체 선택 as in D81
+  // (not locked)
+  await expect(bar.getByRole("button", { name: "선택 해제" })).toBeDisabled();
+  await expect(bar.locator(".bd-zip-get")).toBeDisabled();
+  await expect(page.locator("#boardZipAllBtn")).toBeDisabled();
+  await expect(page.getByRole("checkbox", { name: "전체 선택" })).toBeEnabled();
+  await expect(page.locator(".bd-att input[data-pick]").first()).toBeEnabled();
+  await downloaded;
+  // done: "N개 선택" again, the picks kept (D81), everything unlocked
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText("3개 선택");
+  await expect(bar.locator(".bd-zip-bar-sub")).toHaveText(
+    /^압축 파일\(ZIP\) 1개로 받아요 · /,
+  );
+  await expect(track).toBeHidden();
+  await expect(page.locator(".bd-att.is-picked")).toHaveCount(3);
+  await expect(bar.getByRole("button", { name: "선택 해제" })).toBeEnabled();
+  await expect(bar.locator(".bd-zip-get")).toBeEnabled();
+  await expect(page.locator("#boardZipAllBtn")).toBeEnabled();
+  await context.close();
+  // every file refused: the bar comes back the same way
+  context = await browser.newContext();
+  page = await context.newPage();
+  await stubBoard(page, { posts: zipPost(zipFiles()), downloadStatus: 429 });
+  await openBoard(page, `#board/${pid(31)}`);
+  await page.getByRole("checkbox", { name: "전체 선택" }).check();
+  await page.locator("#boardZipBar .bd-zip-get").click();
+  await expect(page.locator(".bd-zip-status")).toHaveClass(/is-error/);
+  await expect(page.locator(".bd-zip-bar-count")).toHaveText("7개 선택");
+  await expect(page.locator(".bd-zip-bar-track")).toBeHidden();
+  await expect(page.locator("#boardZipBar .bd-zip-get")).toBeEnabled();
+  await context.close();
+});
+
+test("board post on a phone (D84): the top button follows the picks the same way (the whole text, 15px); the bar stays fixed at the bottom and shows the ZIP's progress across its text line", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const context = await browser.newContext({
+    viewport: { width: 375, height: 812 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  const attachments = zipFiles();
+  const slow = attachments[3].id;
+  await stubBoard(page, {
+    posts: zipPost(attachments),
+    fileBody: bodyOf,
+    getDelay: (att) => (att && att.id === slow ? 2500 : 50),
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  const top = page.locator("#boardZipAllBtn");
+  await expect(top).toHaveAccessibleName("모두 받기 (ZIP · 7개)");
+  const idle = await topLook(top);
+  await page.getByRole("checkbox", { name: "L1_11월_활동지.pdf 선택" }).check();
+  await expect(top).toHaveAccessibleName("선택한 1개 받기");
+  await page
+    .getByRole("checkbox", {
+      name: "11월 수업 슬라이드 — 그림책 함께 읽기.pptx 선택",
+    })
+    .check();
+  // the whole text on a phone too ("(ZIP)" fits the full-width button)
+  await expect(top).toHaveAccessibleName("선택한 2개 받기 (ZIP)");
+  await expect(top).toHaveText("선택한 2개 받기 (ZIP)");
+  expect(await topLook(top)).toMatchObject({
+    bg: "rgb(28, 176, 246)",
+    color: "rgb(255, 255, 255)",
+    shadow: "rgb(24, 153, 214) 0px 3px 0px 0px",
+    font: "800 15px",
+    height: 48,
+  });
+  // the bar: fixed 12px over the bottom as in D81
+  const bar = page.locator("#boardZipBar");
+  expect(await bar.evaluate((el) => getComputedStyle(el).position)).toBe(
+    "fixed",
+  );
+  let r = await bar.boundingBox();
+  expect(Math.round(812 - (r.y + r.height))).toBe(12);
+  // from the page's end: the status comes into view under the header
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  const downloaded = page.waitForEvent("download");
+  await bar.locator(".bd-zip-get").click();
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText(
+    "압축하는 중… 1 / 2개",
+  );
+  await expect(page.locator(".bd-zip-status")).toBeInViewport();
+  const header = await page.locator(".topbar").boundingBox();
+  expect(
+    (await page.locator(".bd-zip-status").boundingBox()).y,
+  ).toBeGreaterThanOrEqual(header.y + header.height);
+  await expect(bar.locator(".bd-zip-bar-sub")).toHaveText(
+    "창을 닫지 말아 주세요",
+  );
+  // the progress bar spans the text line (the bar's inside width)
+  const track = bar.locator(".bd-zip-bar-track");
+  const look = await trackLook(track);
+  const inside = await bar.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return Math.round(
+      el.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight),
+    );
+  });
+  expect(Math.abs(look.width - inside)).toBeLessThanOrEqual(1);
+  expect(look).toMatchObject({ height: "6px", bg: "rgb(63, 125, 179)" });
+  expect(look.part).toBeCloseTo(0.5, 1);
+  r = await bar.boundingBox();
+  expect(Math.round(812 - (r.y + r.height))).toBe(12);
+  await downloaded;
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText("2개 선택");
+  await expect(track).toBeHidden();
+  await bar.getByRole("button", { name: "해제" }).click();
+  await expect(top).toHaveAccessibleName("모두 받기 (ZIP · 7개)");
+  expect(await topLook(top)).toEqual(idle);
+  await context.close();
+});
+
+test("board post (D84): over 200MB from the 선택 바 far down — the refusal comes into view below the site header; no ZIP starts", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  // 24 files of 10,000,000 bytes: all = 240,000,000 > 200MB
+  const big = Array.from({ length: 24 }, (_, i) =>
+    file(`큰자료_${String(i + 1).padStart(2, "0")}.pdf`, 10000000),
+  );
+  const sent = await stubBoard(page, { posts: zipPost(big) });
+  const lib = fflateAsks(page);
+  await openBoard(page, `#board/${pid(31)}`);
+  await page.getByRole("checkbox", { name: "전체 선택" }).check();
+  const bar = page.locator("#boardZipBar");
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText("24개 선택");
+  await page.evaluate(() =>
+    window.scrollTo(0, document.documentElement.scrollHeight),
+  );
+  const status = page.locator(".bd-zip-status");
+  await expect(status).not.toBeInViewport();
+  await bar.getByRole("button", { name: "선택한 24개 받기 (ZIP)" }).click();
+  await expect(status).toHaveClass(/is-error/);
+  await expect(status.locator(".bd-zip-line")).toHaveText(
+    "한 번에 200MB까지 받을 수 있어요. 파일을 골라서 나눠 받아 주세요.",
+  );
+  // in view, below the header (the same place as a ZIP's start)
+  await expect(status).toBeInViewport();
+  const header = await page.locator(".topbar").boundingBox();
+  expect((await status.boundingBox()).y).toBeGreaterThanOrEqual(
+    header.y + header.height,
+  );
+  // still refused before anything starts: no URL, no ZIP library, no lock
+  expect(sent.fn).toEqual([]);
+  expect(lib).toEqual([]);
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText("24개 선택");
+  await expect(bar.locator(".bd-zip-get")).toBeEnabled();
 });
 
 test("board admin editor: editing a post keeps its attachments by id; one taken out goes from Storage after the save (B8)", async ({

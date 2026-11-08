@@ -733,7 +733,8 @@ function rbAttachmentRow(att, zip = false) {
 
 // The post's 첨부파일 box: its head (title; D81: [전체 선택] + [모두 받기]
 // when two or more FILES can go in a ZIP), the Google note, the ZIP status,
-// the rows — and the 선택 바 that goes under the box (null without a ZIP).
+// the rows — and the 선택 바 as the box's last part (D84: on a PC it sticks
+// to the window's bottom and stops where the box ends; null without a ZIP).
 function rbAttsBox(attachments, title) {
   const files = attachments.filter((a) => !rbLinkInfo(a.kind));
   const links = attachments.filter((a) => rbLinkInfo(a.kind));
@@ -787,19 +788,22 @@ function rbAttsBox(attachments, title) {
   const status = rbEl("div", "bd-zip-status");
   status.id = "boardZipStatus";
   status.setAttribute("role", "status");
-  box.append(status, list);
   const bar = rbZipBar();
+  box.append(status, list, bar);
   rbZip = { title, files, picked: new Set(), job: null, box, bar, status };
   return { box, bar };
 }
 
 /* ---- D81 모두 받기 · 선택 받기 (ZIP, 2026-11-08) ----------------------------
    A post with two or more FILE attachments: [전체 선택] + [모두 받기 (ZIP ·
-   N개)] in the box head, a check on each file row, and the 선택 바 under
-   the box once something is picked (a phone: fixed at the bottom). The ZIP
-   is made HERE: each file's URL comes from the Edge Function exactly as for
-   its row's [내려받기] (one URL = one of the day's downloads, 15 s), and it
-   is fetched at once — three files at a time. fflate (vendor/, MIT), loaded
+   N개)] in the box head, a check on each file row, and the 선택 바 at the
+   box's end once something is picked (a phone: fixed at the bottom).
+   D84 (2026-11-09): on a PC the bar sticks 16px over the window's bottom
+   until the box ends; while something is picked the top button is
+   [선택한 N개 받기] (= the bar's button); the bar shows a ZIP's progress.
+   The ZIP is made HERE: each file's URL comes from the Edge Function
+   exactly as for its row's [내려받기] (one URL = one of the day's
+   downloads, 15 s), and it is fetched at once — three files at a time. fflate (vendor/, MIT), loaded
    on the first ZIP only, stores the formats that are compressed already as
    they are and deflates the old xls / ppt at level 1 (speed first); it
    marks a non-ASCII (Korean) name as UTF-8 (general purpose bit 11), which
@@ -813,8 +817,9 @@ const RB_ZIP_MAX_BYTES = 200 * 1024 * 1024; // 200MB at a time
 const RB_ZIP_PARALLEL = 3;
 const RB_ZIP_DEFLATE = ["xls", "ppt"]; // the rest: stored (level 0)
 const RB_ZIP_MSG = {
-  working: (n, total) =>
-    `압축하는 중… ${n} / ${total}개 (창을 닫지 말아 주세요)`,
+  count: (n, total) => `압축하는 중… ${n} / ${total}개`,
+  wait: "창을 닫지 말아 주세요",
+  working: (n, total) => `${RB_ZIP_MSG.count(n, total)} (${RB_ZIP_MSG.wait})`,
   done: (count, size, name) =>
     `압축 파일을 받았어요 (${count}개 · ${size}). 내려받기 폴더에서 ‘${name}’을 확인해 주세요.`,
   tooBig: "한 번에 200MB까지 받을 수 있어요. 파일을 골라서 나눠 받아 주세요.",
@@ -907,9 +912,15 @@ function rbZipBar() {
   bar.id = "boardZipBar";
   bar.hidden = true;
   const text = rbEl("div", "bd-zip-bar-text");
+  // D84: a thin progress bar while a ZIP is made (only seen — the status
+  // above is what is read aloud)
+  const track = rbEl("span", "bd-zip-bar-track");
+  track.setAttribute("aria-hidden", "true");
+  track.append(rbEl("span", "bd-zip-bar-fill"));
   text.append(
     rbEl("strong", "bd-zip-bar-count"),
     rbEl("span", "bd-zip-bar-sub"),
+    track,
   );
   const clear = rbEl("button", "bd-zip-clear");
   clear.type = "button";
@@ -934,8 +945,14 @@ function rbZipBytes(atts) {
   return atts.reduce((sum, a) => sum + (Number(a.size) || 0), 0);
 }
 
-// The checks, [전체 선택], the 선택 바 and the two buttons (locked while a
-// ZIP is being made) follow the picked set.
+// [선택한 1개 받기] / [선택한 N개 받기 (ZIP)] — the bar's button on a PC
+// and (D84) the top button, on a phone too.
+function rbZipPickLabel(count) {
+  return count === 1 ? "선택한 1개 받기" : `선택한 ${count}개 받기 (ZIP)`;
+}
+
+// The checks, [전체 선택], the 선택 바 and the buttons (locked while a ZIP
+// is being made) follow the picked set.
 function rbZipSync() {
   if (!rbZip) return;
   const { box, bar, files, picked, job } = rbZip;
@@ -950,22 +967,56 @@ function rbZipSync() {
   const count = picked.size;
   bar.hidden = count === 0;
   if (count) {
-    const size = rbFormatSize(rbZipBytes(rbZipPicked()));
-    const tail = size ? ` · ${size}` : "";
-    bar.querySelector(".bd-zip-bar-count").textContent = `${count}개 선택`;
-    bar.querySelector(".bd-zip-bar-sub").textContent =
-      count === 1
-        ? `1개는 압축하지 않고 바로 받아요${tail}`
-        : `압축 파일(ZIP) 1개로 받아요${tail}`;
     const [pc, phone] = bar.querySelectorAll(".bd-zip-get span");
-    pc.textContent =
-      count === 1 ? "선택한 1개 받기" : `선택한 ${count}개 받기 (ZIP)`;
+    pc.textContent = rbZipPickLabel(count);
     phone.textContent =
       count === 1 ? "선택한 1개 받기" : `선택한 ${count}개 받기`;
   }
-  box.querySelector("#boardZipAllBtn").disabled = Boolean(job);
+  rbZipBarText();
+  // D84: the top button follows the picks — none: [모두 받기 (ZIP · N개)]
+  // as in D81; some: what the bar's button says, blue with a row's arrow.
+  // The same element all along (only its inside changes), so a keyboard
+  // focus on it stays.
+  const top = box.querySelector("#boardZipAllBtn");
+  top.classList.toggle("is-pick", count > 0);
+  top.replaceChildren(
+    rbSvg("bd-zip-btn-icon", count ? "download" : "archive"),
+    rbEl(
+      "span",
+      "",
+      count ? rbZipPickLabel(count) : `모두 받기 (ZIP · ${files.length}개)`,
+    ),
+  );
+  top.disabled = Boolean(job);
   bar.querySelector(".bd-zip-get").disabled = Boolean(job);
+  bar.querySelector(".bd-zip-clear").disabled = Boolean(job);
   rbZipSpace();
+}
+
+// The 선택 바's words: "N개 선택" + how it comes; while a ZIP is being made
+// (D84) "압축하는 중… n / N개" + "창을 닫지 말아 주세요" over a thin
+// progress bar — the numbers of the status above, the one read aloud (the
+// bar is no live region, so nothing is heard twice).
+function rbZipBarText() {
+  const { bar, picked, job } = rbZip;
+  const line = bar.querySelector(".bd-zip-bar-count");
+  const sub = bar.querySelector(".bd-zip-bar-sub");
+  bar.classList.toggle("is-working", Boolean(job));
+  if (job) {
+    line.textContent = RB_ZIP_MSG.count(job.done, job.total);
+    sub.textContent = RB_ZIP_MSG.wait;
+    bar.querySelector(".bd-zip-bar-fill").style.width =
+      `${Math.round((job.done / job.total) * 100)}%`;
+    return;
+  }
+  const count = picked.size;
+  const size = rbFormatSize(rbZipBytes(rbZipPicked()));
+  const tail = size ? ` · ${size}` : "";
+  line.textContent = `${count}개 선택`;
+  sub.textContent =
+    count === 1
+      ? `1개는 압축하지 않고 바로 받아요${tail}`
+      : `압축 파일(ZIP) 1개로 받아요${tail}`;
 }
 
 // A phone's 선택 바 is fixed at the bottom: the page gets that much room
@@ -1037,23 +1088,42 @@ function rbSaveBlob(blob, name) {
   window.setTimeout(() => window.URL.revokeObjectURL(url), 60000);
 }
 
+// The status in the box into view if it is not — below the sticky site
+// header, not behind it (D84: from the 선택 바 far down, D81's scroll left
+// it under the header). A ZIP's start and the 200MB refusal.
+function rbZipShowStatus(zip) {
+  const header = document.querySelector(".topbar");
+  const room = (header ? header.offsetHeight : 0) + 16;
+  zip.status.style.scrollMarginTop = `${room}px`;
+  zip.status.scrollIntoView({ block: "nearest" });
+}
+
 async function rbZipRun(atts, zipName) {
   const zip = rbZip;
   if (!sb || !zip || zip.job || !atts.length) return;
   boardDetailStatus.textContent = "";
   if (rbZipBytes(atts) > RB_ZIP_MAX_BYTES) {
     rbZipSay("error", [RB_ZIP_MSG.tooBig], { close: true });
+    rbZipShowStatus(zip);
     return;
   }
-  const job = { stop: false, done: 0, abort: new window.AbortController() };
+  const job = {
+    stop: false,
+    done: 0,
+    total: atts.length,
+    abort: new window.AbortController(),
+  };
   zip.job = job;
   rbZipSync();
-  const show = () =>
-    rbZipSay("working", [RB_ZIP_MSG.working(job.done, atts.length)], {
-      progress: job.done / atts.length,
+  // the status above and (D84) the 선택 바, with the same numbers
+  const show = () => {
+    rbZipSay("working", [RB_ZIP_MSG.working(job.done, job.total)], {
+      progress: job.done / job.total,
     });
+    if (rbZip === zip) rbZipBarText();
+  };
   show();
-  zip.status.scrollIntoView({ block: "nearest" });
+  rbZipShowStatus(zip);
   const names = rbZipNames(atts);
   const got = atts.map(() => null);
   try {
@@ -1112,7 +1182,8 @@ async function rbZipRun(atts, zipName) {
   }
 }
 
-// The 선택 바's button: one file = that row's own download (no ZIP).
+// The 선택 바's button (and, D84, the top one while something is picked):
+// one file = that row's own download (no ZIP).
 function rbZipGetPicked() {
   const picked = rbZipPicked();
   if (picked.length === 1) {
@@ -1214,11 +1285,7 @@ function rbRenderPost(data, query) {
 
   const body = rbEl("div", "bd-card-body");
   if (post.body) body.append(rbEl("div", "bd-card-text", post.body));
-  if (attachments.length) {
-    const { box, bar } = rbAttsBox(attachments, post.title);
-    body.append(box);
-    if (bar) body.append(bar);
-  }
+  if (attachments.length) body.append(rbAttsBox(attachments, post.title).box);
   boardPost.replaceChildren(head, body);
 
   const prev = rbNeighbor("prev", data.prev, query);
@@ -1408,7 +1475,9 @@ if (boardPost) {
     }
     if (!rbZip) return;
     if (event.target.closest("#boardZipAllBtn")) {
-      rbZipRun(rbZip.files, rbZipName(rbZip.title));
+      // D84: with picks it is [선택한 N개 받기] — the bar's button
+      if (rbZip.picked.size) rbZipGetPicked();
+      else rbZipRun(rbZip.files, rbZipName(rbZip.title));
     } else if (event.target.closest(".bd-zip-get")) {
       rbZipGetPicked();
     } else if (event.target.closest(".bd-zip-clear")) {
