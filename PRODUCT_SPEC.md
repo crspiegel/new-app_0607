@@ -265,7 +265,7 @@ Menu button requirements:
   button (file = our download, Drive = new tab), an empty month is a dim button that cannot be pressed;
   pressing again closes it. D63's single `monthly` slot is gone — its files are deleted in the admin
   screen before the change. Each slot keeps the D64 rule (a file OR a Drive link) and the file rules
-  (PDF / Excel, 10 MB, 30 a day, 15 s); big files or other formats go as Drive links. Admin: level
+  (PDF / Excel, 10 MB, the day's limit, 15 s); big files or other formats go as Drive links. Admin: level
   tabs, a foldable 월간교육안 group ("N/10 등록"), then the other slots.
 - D64 (2026-11-02): each slot holds EITHER an uploaded file OR a Google Drive file link (the admin's
   file shared "anyone with the link"; only its ID is stored). Registering one removes the other (a
@@ -334,8 +334,26 @@ Its name on every screen (teachers' and admin) is **교사자료실** (no space)
     address (`/d/e/2PACX-…`), Google Forms, any other Docs page. The editor's row says "구글 시트 / 엑셀로
     받기" (etc.). 레벨별 자료실 keeps the D64 rule (Docs addresses refused).
   - Phones: an icon-only [내려받기]; a long file name wraps after `_` `-` `.` or a space, 2 lines max (R1).
-- **Download limit:** the same 30 a day per LMS member (KST) as 레벨별 자료실 — one shared count (board
-  rows logged as `level='board'`). Admins unlimited. A missing file is not counted.
+  - **모두 받기 · 선택 받기 (D81, 2026-11-08):** a post with **two or more files** shows [전체 선택] and
+    [모두 받기 (ZIP · N개)] (N = the files that go in) in the box head, and a check on each file row (a link row
+    shows a dim "–"). Picking one or more shows the 선택 바 under the box: "N개 선택", "압축 파일(ZIP) 1개로 받아요 ·
+    크기" (one: "1개는 압축하지 않고 바로 받아요 · 크기"), [선택 해제], [선택한 N개 받기 (ZIP)] (one: "선택한 1개
+    받기"). On a phone [모두 받기] is the box's full width and the bar is fixed at the bottom ("해제" / "선택한 N개
+    받기"), the page keeping room below it. One picked = no ZIP: that row's own download. The rows' own
+    [내려받기] stay. The ZIP is made in the browser: each file's URL comes from the Edge Function as for its row
+    (one file = one of the day's downloads) and is fetched at once, 3 at a time; 200 MB at most per ZIP
+    (more is refused before it starts: "한 번에 200MB까지 받을 수 있어요. 파일을 골라서 나눠 받아 주세요.").
+    Google links never go in (Google refuses another site's fetch): "구글 링크 N개(종류)는 압축에 들어가지
+    않아요. 그 줄의 [내려받기]로 따로 받아 주세요." under the head, on posts that have them. Status in the box
+    (`role="status"`): "압축하는 중… n / N개 (창을 닫지 말아 주세요)" + a bar → "압축 파일을 받았어요 (N개 · 크기).
+    내려받기 폴더에서 '파일명.zip'을 확인해 주세요." + [닫기]; a file that fails is left out and named ("받지
+    못한 파일이 있어요: 이름 — 잠시 뒤 다시 시도해 주세요."); all failing = no ZIP, the refusal said as for one
+    file. Both buttons are locked while it runs; leaving the post stops it. Names: `글 제목.zip` /
+    `글 제목_선택 N개.zip` (`\ / : * ? " < > |` → `_`); the same name twice inside → `이름 (2).확장자`.
+- **Download limit (D82, 2026-11-08):** 1,000 a day per LMS member (KST) — was 30; a safety stop for a
+  leaked account or a loop that real teachers never reach. One shared count with 레벨별 자료실 (board rows
+  logged as `level='board'`); a ZIP of N files counts N. Admins unlimited. A missing file is not counted.
+  When reached, both screens say "오늘 내려받기가 너무 많아 잠시 막혔어요. 관리자에게 문의해 주세요."
 - **Editor (admin):** title (required, 100), body (optional, 5,000), level (공통 / one level), category,
   공개, 📌 고정. Files are dropped (many at once, name order "3월 < 10월") or picked, uploaded 3 at a
   time with a bar each; refused ones (type, size, empty) are listed in red; rows reorder by dragging

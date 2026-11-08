@@ -47,6 +47,9 @@ SQL Editor는 마지막 결과 표만 보여 준다. 여기 SQL 파일은 모두
   `31 / 31`·`true`, 31번 `info` = 설정 값. 운영에서는 SQL Editor가 긴 한 문장을 못 돌릴 때가 있어(D31) 반영 안내문의 verify DO 블록이
   이 점검을 블록 안에서 그대로 실행한다(17번). D79·D80(2026-11-07, 첨부 50개 · 구글 시트·문서·슬라이드 kind `gsheet`·`gdoc`·
   `gslides`)은 규칙 이름이 같아 이 점검은 그대로다 — 그 반영의 verify DO가 이 점검을 12번으로 실행한다.
+  D82(2026-11-08, 하루 내려받기 한도 30 → 1,000 — `teacher_resource_issue`·`board_attachment_issue`)도 두 점검
+  (`verify-teacher-resources.sql`·이 파일)은 그대로다(한도 숫자는 보지 않음) — 그 반영의 verify DO가 둘을 9·10번으로 실행하고,
+  한도는 시험 계정으로 31번째·1,000번째·그다음을 불러 확인한다.
 - `fix-create-member-overload.sql` — 운영에만 있던 `create_member` 5인자 오버로드(`p_profile jsonb` 기본값) 삭제.
   기본값 있는 인자가 붙은 오버로드는 기존 4인자 호출을 모호하게 만든다(SQL `42725`, 관리자 '회원 저장' REST `PGRST203`).
 - `00-precheck-3b.sql` — (3B) 읽기 전용 한 문장. 역할·지사별 회원 수, 테스트 계정 존재, 기본 키, members에 기대는 외래 키·뷰·

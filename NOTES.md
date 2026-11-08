@@ -1127,7 +1127,7 @@ level, book, slot)`)에서만.
   뒤 스크립트가 아직 실행 전일 수 있다).
 - **다운로드 = Edge Function `teacher-resource-download`(PM 결정 (나), 2026-10-29).** 브라우저는 `{level, slot}`만 보내고
   (`sb.functions.invoke`), 함수가 관리자(JWT → `/auth/v1/user`) 또는 LMS(`x-lms-token`을 DB로 전달)를 판정 → service role로
-  `teacher_resource_issue`(현재 파일·하루 30회) → service role로 **15초 고정** 서명 → `&download=<이름 1회 인코딩>`을 붙인
+  `teacher_resource_issue`(현재 파일·하루 한도 — D82부터 1,000회, 그 전 30회) → service role로 **15초 고정** 서명 → `&download=<이름 1회 인코딩>`을 붙인
   URL을 돌려준다. 페이지는 그 URL을 같은 탭의 숨은 `<a>`(target 없음)로 연다 — attachment 응답이라 페이지 그대로.
   ⚠ (가)(브라우저가 직접 서명)는 버렸다: 만료를 클라이언트가 정할 수 있어 오래가는 링크가 퍼지면 미캐시 이그레스가 샌다.
   ⚠ supabase-js `createSignedUrl(…, { download })`는 이름을 **두 번 인코딩**한다 — 함수에서도 옵션 대신 직접 붙인다.
@@ -1141,7 +1141,7 @@ level, book, slot)`)에서만.
   `globalThis.Deno`가 있을 때만.
 - 하루 한도: `teacher_resource_downloads`(RLS·정책 0·권한 회수, 함수 전용)에 성공한 발급만 기록, KST 자정 기준
   (`date_trunc('day', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul'`), 회원별 advisory lock으로 동시 요청도
-  30을 못 넘는다, 30일 지난 행은 발급 때 삭제. 관리자는 기록·제한 없음.
+  한도를 못 넘는다(D82, 2026-11-08: 30 → **1,000**), 30일 지난 행은 발급 때 삭제. 관리자는 기록·제한 없음.
 - ⚠ **supabase-js는 `File`/`Blob` 업로드를 multipart로 보내 `contentType` 옵션이 무시된다** — 버킷 MIME 제한은 파일 자체의
   type을 보는데 일부 PC는 xlsx type이 빈 값이다 → `await file.arrayBuffer()` + 확장자로 정한 `contentType`으로 올린다.
 - 교체 순서: 새 객체 업로드 → RPC `teacher_resource_set`(이전 경로 반환) → 이전 객체 삭제. set 실패면 새 객체를 지워 되돌림.
@@ -1218,7 +1218,7 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
   `fetch(keepalive)` + **떠나기 전에 받아 둔 토큰**(로그아웃이 세션을 먼저 지워도 지워지게). 강제 종료·정전은 남을 수 있음(사람이 버킷 확인).
 - 저장 = 첨부 목록 전체를 순서대로 보냄(기존은 `{id}`만). 빠진 기존 첨부의 경로를 서버가 돌려주면 **그때** Storage에서 지운다.
   이미 붙은 파일을 "새 파일"로 다시 보내면 거절(보안 검토 L1 — 지워질 객체를 새 행이 가리키는 사고).
-- 내려받기 30회는 레벨별 자료실과 같은 기록표·같은 잠금(7302): 게시판 행은 `level='board'`, `slot=<첨부 id>`. 객체가 없으면 세지 않음.
+- 내려받기 한도(D82부터 1,000회)는 레벨별 자료실과 같은 기록표·같은 잠금(7302): 게시판 행은 `level='board'`, `slot=<첨부 id>`. 객체가 없으면 세지 않음.
   `verify-teacher-resources.sql` 21번은 "레벨별 자료실 기록을 만지는 함수는 목록에 있어야" → `board_attachment_issue`를 25번으로 넣음.
 - `board_post_get`은 조회수를 쓰는 volatile 함수 → PostgREST **GET으로 부르면 읽기 전용 트랜잭션 오류**. supabase-js `rpc`(POST)만.
 - 분류 7개는 **표를 만들 때 한 번만** 채운다(DO 블록) → 운영 apply DO는 그 블록 안쪽만 잘라 넣는다(DO 안에 DO 불가).
@@ -1363,6 +1363,55 @@ noreferrer">`(클릭 처리는 계속 `button.bd-att-dl`만). 새 종류의 설�
   시트의 숨긴 탭·문서의 메모도 파일에 함께 들어갈 수 있다(구글 내보내기 동작 — 공유 전에 확인).
 - 테스트 함정: 휴대폰에서 숨긴 버튼 글자(`display: none`)는 크기 0 상자가 (0,0)에 잡혀 "줄 밖" 검사에 걸린다 → 폭 0은 뺀다.
   가짜 서버의 `samplePosts()`는 이미 저장 모양(`id`, `created_at`)이라 글을 더할 때도 그 모양으로.
+
+### 모두 받기(ZIP)·선택 받기 · 하루 한도 1,000 (`2026-11-08`, PM 지시서 D81·D82)
+
+- **D81 화면(`resource-board.js` "D81", 선생님 글 상세만):** 파일이 **2개 이상**인 글만 머리줄에 [전체 선택]·[모두 받기 (ZIP ·
+  N개)], 파일 줄마다 체크(`<label>` 안 `<input type=checkbox>`, 이름 = "파일명 선택"), 링크 줄은 흐린 "–". 1개 이상 고르면 상자
+  아래 선택 바(휴대폰은 `position: fixed` 아래 12px — `rbZipSpace`가 바 높이 + 24px를 `body`의 `--bd-zip-space`로 주고
+  `body[data-screen="board"][data-zip-bar]`가 그만큼 아래 여백 + 게시판 바탕색 → 목록으로·저작권 줄이 바에 안 가려짐).
+  1개만 고르면 ZIP 없이 그 줄의 `rbDownload`. 압축 중엔 두 받기 버튼 `disabled`. 글을 떠나면(`rbOpenList`·`rbOpenPost`·
+  `rbHome`·게시판 밖 hashchange) `rbZipCancel` — 진행 중 fetch abort, 늦게 온 답은 버림.
+- **받기:** 파일마다 지금 Edge 함수(`{attachment}`)로 주소를 받고 **바로** `fetch`(주소 15초) → 동시 3개(`RB_ZIP_PARALLEL`).
+  Storage 서명 주소는 다른 출처라 CORS가 필요하다(Supabase Storage가 허용 — 운영 확인 항목). 파일 1개 = 하루 1회(그대로).
+  200MB(`200×1024×1024`) 넘으면 시작 전에 막음(요청 0). 일부 실패 = 받은 것만 ZIP + 이름 안내, 전부 실패 = ZIP 없음 + 첫
+  거절의 문구(429 → 한도 문구).
+- **압축 = fflate 0.8.3(MIT)** `vendor/fflate-0.8.3.umd.js`(npm 원본 `umd/index.js` 그대로, 33,044 bytes, SHA-256
+  `462ef8041fc970e3615a20a9dd2b2e3047a073b2da729ef4f02b634bba8b7b83`) + `vendor/fflate-0.8.3.LICENSE`(SHA-256
+  `0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551`). npm 레지스트리에서 받음, package.json에 없음(D61).
+  **첫 ZIP 때만** `<script>`를 붙인다(`rbZipLib`, 첫 화면·다른 화면 요청 0). `zipSync` = 로컬 헤더에 크기가 들어가는 고전
+  모양(데이터 서술자 없음 — 스트리밍 `Zip` 클래스보다 어느 압축 풀기 도구에서나 안전). 압축 강도: 이미 압축된 형식(pdf·
+  xlsx·pptx·hwp·hwpx·jpg·png)은 **그대로(level 0)**, 옛 xls·ppt만 level 1(속도 우선). 한글 이름: fflate가 ASCII 밖 이름에
+  UTF-8 표시(general purpose bit 11)를 켠다 → 윈도 10+·맥이 바르게 읽음. 저장 = blob URL + `<a download>`(아이폰 사파리
+  13+ 포함, 60초 뒤 revoke). 이름: `글 제목.zip` / `글 제목_선택 N개.zip`, `\ / : * ? " < > |`·제어 문자 → `_`, 끝의 점·
+  공백 제거, CON 같은 장치 이름·`__proto__` 앞에 `_`, 보이지 않는 표시(C1 제어·폭 0·방향 표시 U+202E 등)는 지움(보안 검토 —
+  "안내‮fdp.hwp"가 다른 형식처럼 보이지 않게), 제목 80자; 안의 이름이 겹치면(대소문자 무시) `이름 (2).확장자`. 바꿀 때는
+  파일 이름의 버전·`RB_ZIP_LIB`·테스트(`fflateNode`)·이 줄을 함께.
+- **D82:** `teacher_resource_issue`·`board_attachment_issue`의 `>= 30` → `>= 1000`(한 계정 한 숫자, 기록 30일 보관·관리자
+  무제한 그대로). 보안 검토: 한 계정이 하루에 받을 수 있는 양이 약 30 × 10MB → 1,000 × 10MB로 커진다(유출 계정·반복 스크립트
+  기준) — 그래서 운영 SQL은 유료 플랜 전환 뒤에 실행(PM 결정), 더 막아야 하면 계정별 하루 용량 한도를 따로 둘 수 있다
+  (기록 행에 파일 크기를 넣어 합계로 거절 — 아직 안 함). 두 화면 한도 문구 = "오늘 내려받기가 너무 많아 잠시 막혔어요. 관리자에게
+  문의해 주세요." **Edge 함수
+  (`supabase/functions/teacher-resource-download/index.ts`)는 고치지 않았다** — 주석의 "LMS members: 30 URLs per KST day"
+  등 30은 D82 전 값(한도는 DB가 정함, 재배포 없음). 운영 SQL = 로컬 `docs/worker-briefs/2026-11-08-download-limit-1000-
+{precheck,apply,verify}-do.sql`(apply는 `*-sql-check.mjs`가 migration.sql 원문에서 잘라 만듦; 검사 = `git show 9777457` 운영
+  상태 + apply 두 번 = 새 설치, verify 10/10은 시험 지점·지사 계정을 잠깐 만들어 31번째·1,000번째·그다음을 불러 봄).
+- **순서:** SQL 먼저 → 푸시 = 그 사이 옛 화면은 한도만 늘어난 것(문구는 옛 "다운로드 횟수를 모두…"지만 1,000회라 거의 안
+  보임). 푸시 먼저 → SQL 전 = ZIP은 파일마다 1회라 7개 ZIP 몇 번이면 30에 닿아 "받지 못한 파일" + 새 한도 문구("관리자에게
+  문의")가 나올 수 있음 — 데이터 문제 없음. 그래서 SQL 먼저.
+- 테스트 함정: 선택 바 버튼엔 PC·휴대폰 문구가 둘 다 들어 있어(하나는 `display: none`) `toHaveText`가 둘을 이어 읽는다 →
+  `toHaveAccessibleName`. ZIP 내용은 테스트 안에서 같은 vendor 파일을 `new Function`으로 Node에 올려 `unzipSync`(npm 패키지
+  추가 없음), UTF-8 표시·압축 방식은 로컬 헤더를 직접 읽는다. 가짜 서버 `fileBody`·`refuse`·`getDelay`(+`maxGetInFlight`).
+  PGlite SQL 테스트가 남은 메모리가 적을 때 worker 비정상 종료(`code=2147483651`)로 한 번 떨어짐 — 단독 재실행 통과.
+
+### Supabase 라이브러리 버전 고정 (`2026-11-08`, PM 결정 D83)
+
+- `index.html`의 supabase-js 주소 `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2` → **`@2.119.0`**(그때 `@2`가 실제로
+  주던 버전, 2026-11-04 공개 — 동작 변화 없음). 저장소 안에서 supabase-js를 불러오는 곳은 이 한 줄뿐이다(다른 html·스크립트 없음).
+- **왜:** `@2`는 새 2.x가 나올 때마다 jsDelivr가 예고 없이 새 버전을 준다 → 우리가 배포하지 않아도 운영 화면의 로그인·내려받기
+  동작이 바뀔 수 있다. 고정하면 바뀌는 때 = 우리가 커밋한 때.
+- **올릴 때:** PM 결정 → 새 버전으로 `npm.cmd run qa`(테스트도 이 주소를 jsDelivr에서 그대로 받는다) → `index.html` 한 줄만 바꿔
+  커밋. 버전은 npm 레지스트리(`npm view @supabase/supabase-js dist-tags`)에서 확인.
 
 ## 요일 슬롯 게임 URL (`2026-10-22`, R1)
 

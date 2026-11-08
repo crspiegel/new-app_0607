@@ -58,6 +58,17 @@ For this project, use Duolingo ABC only as a style reference for color, spacing,
   PDF `#e5484d` · XLS `#2e8b1e` · HWP `#2f6fd6` · PPT `#d9620b` · JPG/PNG `#8b48c9` · LINK (Drive)
   `#1477b8` · **DOC `#2b579a`** (D80 2026-11-07, a Google Docs file → Word). A link row has the link glyph; a
   Google Sheets / Docs / Slides link wears the icon of the file the teacher gets (XLS · DOC · PPT).
+- **교사자료실 모두 받기 · 선택 받기** (D81 2026-11-08, PM canvas "교사자료실 내려받기 시안 — 한꺼번에·선택"; only
+  on a post with 2+ files; the board's font): [모두 받기 (ZIP · N개)] white, 2px `#1cb0f6` border, text
+  `#1477b8` 800 14px, 44px tall (phone 48px, the box's full width), radius 13px, `0 3px 0 #cfe9f8`, ZIP-box
+  icon · [전체 선택] 20px check (`accent-color: #1cb0f6`) + 14px 700, 44px press area · a row's check 20px in
+  a 44×44 press area (phone 40×44), the row's left padding cut; a picked row `#1cb0f6` border on `#f0f9ff`;
+  a link row has a dim "–" (`#c4c4c4`) there · Google note 13px `#666` after an (i) icon · 선택 바 `#1c5d96`,
+  radius 14px, "N개 선택" 16px 800 white, sub line 13px `#d6e9f8`, [선택 해제] clear with 2px `#6fa3cf`,
+  [받기] `#1cb0f6` + `0 3px 0 #1899d6`; phone: fixed 12px from the sides and the bottom (+ safe area) with
+  a soft shadow, the page padded by its height · status box (14px 700): working white + 2px `#d9ecfa`,
+  8px bar `#1cb0f6` on `#e6f0f8`; done `#effaf0` / `#bfe5c2` / text `#1d6b2a`; failed `#fff1f1` /
+  `#f2b8b8` / text `#a3262b`; [닫기] outlined in the text color.
 - Global hard rule: **no italics anywhere** (`font-style: normal !important` +
   `font-synthesis: none` on `*`, `html`, `body`, `button`).
 
