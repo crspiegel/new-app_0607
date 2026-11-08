@@ -1334,6 +1334,36 @@ grid }`가 `hidden` 속성을 이기므로 `.res-months[hidden] { display: none 
 - 환경 함정: 이 PC의 5173에 다른 프로젝트 Vite가 `::1`(IPv6)로 떠 있을 수 있다. 이 프로젝트는 `127.0.0.1:5173`이라 함께 돈다.
   `Get-NetTCPConnection`은 그 소켓의 상태 칸을 비우거나 FinWait로 보여 "비어 있음" 판단이 헷갈린다 → 주소까지 본다.
 
+### 첨부 50개 · 구글 시트·문서·슬라이드 (`2026-11-07`, PM 지시서 D79·D80)
+
+- **D79:** 글 하나 첨부 20 → **50개**(파일 + 링크 합계, 파일 하나 10MB 그대로). 화면 `RBA_MAX_FILES`, 서버 `board_post_save`의
+  `> 50`(`'board: too many attachments (50 at most)'`). 올리기는 그대로 **동시 3개**(`RBA_PARALLEL`) — 50개를 한 번에 놓아도
+  요청은 3개씩(테스트: 가짜 서버의 `maxInFlight ≤ 3`).
+- **D80 DB:** 새 열 없이 `kind`에 `gsheet`·`gdoc`·`gslides` 추가, ID는 드라이브와 같은 `drive_id`(같은 정규식), 이름은 `label`.
+  `create table if not exists`는 기존 표를 안 바꾸므로 표 정의 아래 **ALTER 한 문장**(종류·모양 규칙 drop + add)으로 다시 건다.
+  저장 함수: 새 종류 받기, `{id, label}` 이름 바꾸기는 링크 4종류 모두. 목록·상세·내려받기 함수는 그대로(`kind`를 그대로 돌려줌,
+  내려받기 함수는 저장 경로가 없으면 "empty"). 옛 레벨별 자료실(`teacher_resources`, `driveIdFromLink`)은 **안 바꿈** — docs 주소 계속 거절.
+- **링크 해석(`rbaLinkFromText`, 관리자 파일만):** drive.google.com = 예전 그대로(`driveIdFromLink`). docs.google.com
+  `/spreadsheets|document|presentation/d/<ID>/…`(앞뒤 `/u/<n>/`, `?usp=…&ouid=…`, `#gid=…`, `https://` 없음 모두 됨). 거절 문구 따로:
+  웹 게시(`/d/e/2PACX-…`) · 설문(`/forms/`) · 그 밖 docs 주소 · 나머지. **`rtpof=true`**(엑셀·워드·PPT 파일을 드라이브에 올려
+  구글 편집기로 연 주소 — 변환 안 된 원본)는 **드라이브 파일(`drive`)로** 받는다: 구글 내보내기 주소는 구글 자체 파일용이라 원본이
+  안 받아질 수 있음(실제 구글 확인 못 함 — 빅웨이브 운영 확인 항목).
+- **선생님 화면:** `RB_LINKS`(resource-board.js)가 종류별 아이콘·문구·내보내기 주소를 한곳에 — 시트 XLS(초록) "구글 시트 · 엑셀로
+  받기" → `…/spreadsheets/d/<ID>/export?format=xlsx`, 문서 DOC(새 색 `#2b579a`) "… 워드로 받기" → `…/document/d/<ID>/export?format=docx`,
+  슬라이드 PPT "… 파워포인트로 받기" → `…/presentation/d/<ID>/export?format=pptx`. 드라이브와 같은 `<a target=_blank rel="noopener
+noreferrer">`(클릭 처리는 계속 `button.bd-att-dl`만). 새 종류의 설명 줄만 `word-break: keep-all`(`.bd-att-meta-export`) — 파일·드라이브
+  줄은 예전 그대로. 관리자 첨부 줄의 크기 칸(72px)은 두 줄("구글 시트"/"엑셀로 받기", 슬라이드는 "PPT로 받기" — 칸이 좁아서).
+- **순서:** 운영 SQL 먼저 → 푸시. 그 사이 옛 화면은 file·drive만, 20개까지만 보내므로 영향 없음(로컬 DO 검사: 옛 화면 호출 결과 같음).
+  반대로 푸시 먼저면 새 종류 저장은 "첨부 목록을 저장하지 못했어요", 21개 이상은 "첨부는 50개까지예요"(서버는 20)로 막힘 — 데이터 손상 없음.
+  캐시된 옛 선생님 화면이 새 종류 줄을 만나면 파일 버튼으로 그려져 함수가 "empty"(준비 중)라고 답함.
+- 운영 SQL = 로컬 `docs/worker-briefs/2026-11-07-board-attach50-gdocs-{precheck,apply,verify}-do.sql`(apply는
+  `*-sql-check.mjs`가 migration.sql 원문에서 잘라 만듦, 검사 = 운영 사본 `tests/fixtures/migration-7869dec.sql` + apply 두 번 = 새 설치).
+  **`2026-11-08` 운영 반영**: precheck "반영 전" → apply 성공 → verify 통과 12/12 실패 0 → 그 뒤 푸시. 공유가 '링크가 있는 모든 사용자'가 아니면 구글이 로그인 화면을 보여 준다(드라이브와 같음). 권한은 **뷰어**로(안내 문구에 있음) —
+  선생님은 링크의 ID를 볼 수 있어 `/edit`로 열 수 있다. 편집자로 공유하면 원본이 바뀌고, 내보내기는 늘 최신본이라 모두에게 퍼진다.
+  시트의 숨긴 탭·문서의 메모도 파일에 함께 들어갈 수 있다(구글 내보내기 동작 — 공유 전에 확인).
+- 테스트 함정: 휴대폰에서 숨긴 버튼 글자(`display: none`)는 크기 0 상자가 (0,0)에 잡혀 "줄 밖" 검사에 걸린다 → 폭 0은 뺀다.
+  가짜 서버의 `samplePosts()`는 이미 저장 모양(`id`, `created_at`)이라 글을 더할 때도 그 모양으로.
+
 ## 요일 슬롯 게임 URL (`2026-10-22`, R1)
 
 - **비-Vimeo http(s) 호스트는 기본이 `kind:"page"`(출판사 페이지 iframe)이고, 게임은 `GAME_HOSTS`에 있는

@@ -314,7 +314,8 @@ Its name on every screen (teachers' and admin) is **교사자료실** (no space)
   레벨별 자료실 and all other admin screens keep their fonts (the admin's own Korean stays 나눔고딕).
 - **Background (#4):** the light-blue board background runs from the header to the footer however short
   the page.
-- **Attachments:** up to 20 per post, each a file OR a Google Drive file link.
+- **Attachments:** up to 50 per post (D79, 2026-11-07 — was 20; files and links together), each a file
+  OR a Google Drive file link OR (D80, this board only) a Google Sheets / Docs / Slides link.
   - File: PDF · Excel (xlsx/xls) · 한글 (hwp/hwpx) · PowerPoint (pptx/ppt) · JPG · PNG, 10 MB max, in the
     private bucket `resource-board`. [내려받기] = a 15-second signed URL from the Edge Function
     `teacher-resource-download` (`{attachment}`), saved in the same tab with the original name.
@@ -322,6 +323,16 @@ Its name on every screen (teachers' and admin) is **교사자료실** (no space)
     `https://drive.google.com/uc?export=download&id=<ID>` in a new tab (the D64 rule — not the preview
     page; no Storage traffic, not counted in the daily limit). The row says "구글 드라이브 · 바로 받기". A
     very big file (about 100 MB+) may show Google's one-time "can't scan for viruses" page first.
+  - Google Sheets / Docs / Slides (D80): [내려받기] opens Google's export address in a new tab, so the
+    teacher gets an Excel / Word / PowerPoint file —
+    `https://docs.google.com/spreadsheets/d/<ID>/export?format=xlsx`, `…/document/d/<ID>/export?format=docx`,
+    `…/presentation/d/<ID>/export?format=pptx` — always the latest version TPS saved (no Storage traffic, not
+    counted). Rows: XLS (green) "구글 시트 · 엑셀로 받기", DOC (blue) "구글 문서 · 워드로 받기", PPT (orange)
+    "구글 슬라이드 · 파워포인트로 받기". Sharing must be "링크가 있는 모든 사용자", as for Drive files.
+  - The admin's link box ("드라이브 링크 추가") takes a Drive file link or a Sheets / Docs / Slides share link
+    (also with `/u/<n>/`, `?usp=…&ouid=…`, `#gid=…`). Refused, each with what to paste instead: a "웹에 게시"
+    address (`/d/e/2PACX-…`), Google Forms, any other Docs page. The editor's row says "구글 시트 / 엑셀로
+    받기" (etc.). 레벨별 자료실 keeps the D64 rule (Docs addresses refused).
   - Phones: an icon-only [내려받기]; a long file name wraps after `_` `-` `.` or a space, 2 lines max (R1).
 - **Download limit:** the same 30 a day per LMS member (KST) as 레벨별 자료실 — one shared count (board
   rows logged as `level='board'`). Admins unlimited. A missing file is not counted.

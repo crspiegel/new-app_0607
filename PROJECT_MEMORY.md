@@ -17,17 +17,18 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`652c9f1`** (`2026-11-06`: 옛 기능 이름 '레벨별 자료실'). Older: archive.
+Live = **`7869dec`** (`2026-11-06`: D77 게시판 글꼴). Older: archive.
 
-- **교사자료실 게시판** (briefs `11-03`~`11-06`): live, 게시판 켬, 레벨별 자료실 켜짐. 2차-1 #1 · 2차-2(#2 Teacher 한 줄 ·
-  #3 이름 · #4 배경 · #5 글꼴 `board_font_ko/en` · 로그인 끝남 안내) live. **이름 변경 커밋·푸시 완료**(`2026-11-06`, 화면
-  글자만, SQL 없음): 옛 '교사 자료실' → '레벨별 자료실'. 끄는 시점은 따로 정함. NOTES "수정 2차", "이름 변경".
-  **D77**: 게시판 글꼴 나눔고딕 → 나눔스퀘어라운드(굵게 EB, 옛 값 = 프리텐다드, SQL 없음) — 미커밋·화면 확인 대기.
+- **교사자료실 게시판** (briefs `11-03`~`11-07`): live, 게시판 켬, 레벨별 자료실 켜짐(끄는 시점은 따로). 2차-1 · 2차-2
+  (글꼴 `board_font_ko/en`, 로그인 끝남 안내) · 이름 변경 '레벨별 자료실' · D77 나눔스퀘어라운드(굵게 EB) live. NOTES "수정 2차"~.
+  - **D79** 첨부 20 → 50개(파일 + 링크). **D80** 링크 칸에 구글 시트·문서·슬라이드(kind `gsheet`·`gdoc`·`gslides`, ID =
+    `drive_id`) → 선생님은 엑셀·워드·PPT로 받음(구글 내보내기). 운영 SQL **`11/08` 반영**(verify 12/12) → 푸시.
+    NOTES "첨부 50개".
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"
-  block — pk `member_id`, old admin RPCs dropped, scoped RPCs (D41–D56); `00-precheck-3b.sql`, `verify-3b.sql` (347);
-  3.3 admin screens (`lms-admin.js`), 3.4 Excel (`lms-bulk.js`, SheetJS in `vendor/`). Live account check done.
+  block (pk `member_id`, scoped RPCs D41–D56, `verify-3b.sql` 347); 3.3 admin screens (`lms-admin.js`), 3.4 Excel
+  (`lms-bulk.js`, SheetJS in `vendor/`); live account check done.
   3.5 next: levels CHECKs into `migration.sql` (D37), `members.profile`, sequence grants. Phase 4 (R4) **cancelled** → B.
 - **A levels + B teacher resources** — design `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`.
   - A **done**: levels rename live `2026-10-31` (55 rows, all new keys); CHECKs `content_pages_level_key`,
@@ -38,8 +39,8 @@ Live = **`652c9f1`** (`2026-11-06`: 옛 기능 이름 '레벨별 자료실'). Ol
     month panel, admin level tabs).
 - **User:** iPhone real-device check (2B); Naver QR 70 codes (`qr/qr-list.csv`); TPS songs to its own
   Vimeo (`vimeo.com/<id>` in admin).
-- **Home hero cast** stage 2 (AI video) awaits a PM brief; stage 1 lives only on the local branch
-  `hero-cast-v1` (not on origin) — don't delete it.
+- **Home hero cast** stage 2 (AI video) awaits a PM brief; stage 1 = local branch `hero-cast-v1` only (no
+  origin) — keep.
 
 ## PM decisions (`2026-10-31`, D36–D40)
 

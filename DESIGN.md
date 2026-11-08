@@ -54,6 +54,10 @@ For this project, use Duolingo ABC only as a style reference for color, spacing,
   ExtraBold (2026-11-06: its Bold looked thin next to Pretendard Bold — the Bold file is never loaded). Header, footer,
   레벨별 자료실 (옛 이름 '교사 자료실', 2026-11-06 변경) and admin keep their fonts (the admin's preview
   line wears the pair).
+- **교사자료실 attachment icons** (`.bd-att-icon.kind-*`, 44px teacher row / 34px admin row, white 9px label):
+  PDF `#e5484d` · XLS `#2e8b1e` · HWP `#2f6fd6` · PPT `#d9620b` · JPG/PNG `#8b48c9` · LINK (Drive)
+  `#1477b8` · **DOC `#2b579a`** (D80 2026-11-07, a Google Docs file → Word). A link row has the link glyph; a
+  Google Sheets / Docs / Slides link wears the icon of the file the teacher gets (XLS · DOC · PPT).
 - Global hard rule: **no italics anywhere** (`font-style: normal !important` +
   `font-synthesis: none` on `*`, `html`, `body`, `button`).
 
