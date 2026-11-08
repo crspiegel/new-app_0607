@@ -350,6 +350,15 @@ Its name on every screen (teachers' and admin) is **교사자료실** (no space)
     못한 파일이 있어요: 이름 — 잠시 뒤 다시 시도해 주세요."); all failing = no ZIP, the refusal said as for one
     file. Both buttons are locked while it runs; leaving the post stops it. Names: `글 제목.zip` /
     `글 제목_선택 N개.zip` (`\ / : * ? " < > |` → `_`); the same name twice inside → `이름 (2).확장자`.
+  - **선택 바 따라다니기 · 맨 위 버튼 · 바 진행 표시 (D84, 2026-11-09):** the 선택 바 is the 첨부파일 box's last
+    part. On a PC it sticks 16px over the window's bottom while the list goes on below and rests at the box's end
+    (이전·다음 글 and [목록으로] never covered); it rises briefly as it appears (not with reduced motion). A phone
+    keeps the D81 bar fixed at the bottom. While something is picked the top button is [선택한 1개 받기] /
+    [선택한 N개 받기 (ZIP)] (phone: the same words) and does what the bar's button does; no pick = [모두 받기 (ZIP ·
+    N개)] again. While a ZIP is made the bar also says "압축하는 중… n / N개" + "창을 닫지 말아 주세요" over a thin
+    progress bar (the status above stays the one read aloud), [선택 해제] and both 받기 buttons locked (the checks
+    and [전체 선택] are not); after it (done or failed) the bar says "N개 선택" again, the picks kept. A ZIP
+    started from far down (or the 200MB refusal) scrolls the status into view below the site header.
 - **Download limit (D82, 2026-11-08):** 1,000 a day per LMS member (KST) — was 30; a safety stop for a
   leaked account or a loop that real teachers never reach. One shared count with 레벨별 자료실 (board rows
   logged as `level='board'`); a ZIP of N files counts N. Admins unlimited. A missing file is not counted.

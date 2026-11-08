@@ -1404,6 +1404,29 @@ noreferrer">`(클릭 처리는 계속 `button.bd-att-dl`만). 새 종류의 설�
   추가 없음), UTF-8 표시·압축 방식은 로컬 헤더를 직접 읽는다. 가짜 서버 `fileBody`·`refuse`·`getDelay`(+`maxGetInFlight`).
   PGlite SQL 테스트가 남은 메모리가 적을 때 worker 비정상 종료(`code=2147483651`)로 한 번 떨어짐 — 단독 재실행 통과.
 
+### 선택 바 따라다니기 · 맨 위 버튼 · 바 진행 표시 (`2026-11-09`, PM 지시서 D84)
+
+- **sticky를 막던 것:** `.bd-card`의 `overflow: hidden`. hidden(auto·scroll도)은 그 요소를 "스크롤 상자"로 만들어, 안의
+  `position: sticky`가 창이 아니라 카드에 붙는다(카드는 스크롤되지 않으니 그냥 제자리). → `overflow: clip`(둥근 모서리 자르기는
+  같고 스크롤 상자가 아님). 앞 줄에 `overflow: hidden`을 남겨 clip을 모르는 브라우저(사파리 15)는 예전처럼 바가 상자 끝에 머묾.
+  카드 안에 sticky를 또 넣을 때 위쪽 조상의 overflow부터 볼 것(관리자 `.rb-ed-bar`는 그런 조상이 없어 처음부터 됨).
+- **바 자리:** 상자 **안 맨 끝**(`box.append(status, list, bar)`). sticky는 부모 안에서만 움직이므로 부모 = 첨부 상자여야 상자
+  끝에서 멈추고 [목록으로]·이웃 글을 안 가린다. 휴대폰 `position: fixed`는 그대로 — `overflow: clip`은 fixed 자식을 자르지
+  않는다(카드가 그 기준 상자가 아님). 카드에 transform·filter를 넣으면 휴대폰 고정 바가 깨진다.
+- **맨 위 버튼:** `#boardZipAllBtn` 하나를 `rbZipSync`가 바꾼다(`is-pick` + 아이콘·글자 교체) — 같은 요소라 키보드 포커스가
+  남는다. 누르면 고른 게 있을 때 `rbZipGetPicked`(바 버튼과 같음). 그래서 선택 중엔 이름이 같은 버튼이 2개 → 테스트에서
+  `page.getByRole("button", { name: "선택한 N개 받기 (ZIP)" })`는 둘에 걸린다(strict 오류) → `#boardZipBar` 안으로 좁힐 것.
+- **바 진행 표시:** `job.total`·`job.done`을 `rbZipBarText`가 바에 쓴다(맨 위 status와 같은 숫자). 바는 live 영역이 아니라 두 번
+  읽히지 않는다. 받는 중 [선택 해제]도 잠금(D84), 체크·[전체 선택]은 D81대로 안 잠김 → 받는 중 다 풀면 바가 숨고, 다시 고르면
+  진행 중 문구로 나온다. 끝나면 고른 것은 남는다(D81).
+- **D81부터 있던 함정(고침):** 압축 시작 때 `status.scrollIntoView({block: "nearest"})`가 상태 안내를 창 맨 위(y=0)로 올리는데
+  사이트 머리줄(`.topbar` sticky, PC 80px·휴대폰 98px)이 그 위를 덮어 안내·완료·실패 문구가 안 보였다(바에서 누를 때). → 그
+  순간 머리줄 높이 + 16px을 `scroll-margin-top`으로 준다(`rbZipShowStatus`).
+- **200MB 초과 안내도 같은 스크롤(PM 결정, D84 추가):** 시작 전에 막는 안내가 바에서 누르면 화면 밖에 떴다 → 압축 시작과 같은
+  `rbZipShowStatus`로 머리줄 아래에 보이게. 문구·막는 동작(요청 0, 잠금 없음, 선택 그대로)은 그대로.
+- 테스트 함정: 바가 나타날 때 0.15초 올라오기(transform) 중엔 `boundingBox`가 12px 어긋난다 → `getAnimations()`의 `finished`를
+  기다리거나 계산된 `animationName`으로 확인. 사진 도구 `docs/worker-briefs/2026-11-09-board-pickbar-sticky-screenshots.mjs`.
+
 ### Supabase 라이브러리 버전 고정 (`2026-11-08`, PM 결정 D83)
 
 - `index.html`의 supabase-js 주소 `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2` → **`@2.119.0`**(그때 `@2`가 실제로

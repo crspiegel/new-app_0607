@@ -5,6 +5,14 @@
 > updated to the current `D:\_TPS` root). The live, short status now lives in `PROJECT_MEMORY.md`.
 > Read this only when you need past history, rationale, or old session logs.
 
+## Entries moved out of PROJECT_MEMORY.md (`2026-11-09`, verbatim)
+
+> Moved to keep PROJECT_MEMORY.md under 6,000 (D84 line added). Live state then: `c056fd4`.
+
+- (under **A levels + B teacher resources**)
+  - A **done**: levels rename live `2026-10-31` (55 rows, all new keys); CHECKs `content_pages_level_key`,
+    `page_backgrounds_level_key`; admin saves allowed again.
+
 ## Entries moved out of PROJECT_MEMORY.md (`2026-11-03`, verbatim)
 
 > Moved to keep PROJECT_MEMORY.md under 6,000. Live state then: `a4da52b`.

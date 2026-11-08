@@ -17,15 +17,17 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`9777457`** (`2026-11-08`: D79·D80 첨부 50개·구글 시트·문서·슬라이드). Older: archive.
+Live = **`c056fd4`** (`2026-11-09`: D81·D82·D83, below). Older: archive.
 
-- **교사자료실 게시판** (briefs `11-03`~`11-07`): live, 게시판 켬, 레벨별 자료실 켜짐(끄는 시점은 따로). 2차-1 · 2차-2
+- **교사자료실 게시판** (briefs `11-03`~`11-07`): live, 게시판 켬, 레벨별 자료실 켜짐. 2차-1 · 2차-2
   (글꼴 `board_font_ko/en`, 로그인 끝남 안내) · 이름 변경 '레벨별 자료실' · D77 나눔스퀘어라운드(굵게 EB) live. NOTES "수정 2차"~.
   - **D79** 첨부 50개 · **D80** 구글 시트·문서·슬라이드 링크 → 엑셀·워드·PPT로 받기 — live `11/08`. NOTES "첨부 50개".
-  - **D81** (푸시 전) 글 상세: 파일 2개 이상이면 [전체 선택]·[모두 받기 (ZIP)]·줄마다 체크·선택 바(휴대폰 아래 고정). ZIP은
-    브라우저에서(fflate `vendor/`, 동시 3개, 200MB까지, 구글 링크 제외). **D82** 하루 한도 30 → 1,000(두 함수, Edge 함수 그대로).
-    운영 SQL = 로컬 DO 3개(`2026-11-08-download-limit-1000-*`), 유료 플랜 전환 뒤. NOTES "모두 받기".
+  - **D81** (live `11/09`) 글 상세: 파일 2개+ → [전체 선택]·[모두 받기 (ZIP)]·줄마다 체크·선택 바(휴대폰 아래 고정). ZIP은
+    브라우저(fflate `vendor/`, 동시 3, 200MB, 구글 링크 제외). **D82** 하루 한도 30 → 1,000(두 함수, Edge 함수 그대로).
+    운영 SQL `2026-11-08-download-limit-1000-*` `11/09` 반영(verify 10/10). NOTES "모두 받기".
   - **D83** supabase-js `@2` → `@2.119.0` 고정(`index.html`; 올릴 때 PM 결정). NOTES "버전 고정".
+  - **D84** (푸시 전) PC 선택 바 sticky(창 아래 16px, 상자 끝에서 멈춤) · 선택 중 맨 위 버튼 [선택한 N개 받기] · 바 진행
+    표시. NOTES "따라다니기".
 
 - **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
   plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"
@@ -33,8 +35,7 @@ Live = **`9777457`** (`2026-11-08`: D79·D80 첨부 50개·구글 시트·문서
   (`lms-bulk.js`, SheetJS in `vendor/`); live account check done.
   3.5 next: levels CHECKs into `migration.sql` (D37), `members.profile`, sequence grants. Phase 4 (R4) **cancelled** → B.
 - **A levels + B teacher resources** — design `docs/superpowers/specs/2026-10-29-levels-teacher-resources-design.md`.
-  - A **done**: levels rename live `2026-10-31` (55 rows, all new keys); CHECKs `content_pages_level_key`,
-    `page_backgrounds_level_key`; admin saves allowed again.
+  A done (Snapshot; archive).
   - B live: '레벨별 자료실' (옛 '교사 자료실'; admin + LMS role 1/2) → private bucket; download via Edge Function
     `teacher-resource-download` (15 s, 1,000/day D82; `supabase/functions/README.md`). D58 cards, D63, **D64·D65 live
     `2026-11-02`** (a slot = a file OR a Google Drive file ID; 월간 3~12월 + 3 new kinds = 62 slots, 2-column cards,

@@ -69,6 +69,14 @@ For this project, use Duolingo ABC only as a style reference for color, spacing,
   a soft shadow, the page padded by its height · status box (14px 700): working white + 2px `#d9ecfa`,
   8px bar `#1cb0f6` on `#e6f0f8`; done `#effaf0` / `#bfe5c2` / text `#1d6b2a`; failed `#fff1f1` /
   `#f2b8b8` / text `#a3262b`; [닫기] outlined in the text color.
+- **D84 (2026-11-09, same canvas, D84 row):** PC 선택 바 = the D81 bar + `position: sticky; bottom: 16px`,
+  shadow `0 6px 18px rgba(28,93,150,.32)`, z-index 5 (over the rows, under the site header's 20), the box's
+  last part; rises 0.15 s (12px, fade) as it appears, not with reduced motion, not on a phone (phone bar = D81)
+  · top button while picked: `#1cb0f6` fill and 2px border, white 800 14px (phone 15px), 44px (phone 48px),
+  radius 13px, `0 3px 0 #1899d6`, a row's down-arrow icon; hover `#1899d6`; nothing picked = D81 · bar while
+  zipping: "압축하는 중… n / N개" in the count's place (800), "창을 닫지 말아 주세요" `#d6e9f8` 13px, a 6px bar
+  (radius 99px) `#8fd4fb` on `#3f7db3`, 260px on a PC / the words' line on a phone; [선택 해제] dims (0.55)
+  like the 받기 buttons.
 - Global hard rule: **no italics anywhere** (`font-style: normal !important` +
   `font-synthesis: none` on `*`, `html`, `body`, `button`).
 
