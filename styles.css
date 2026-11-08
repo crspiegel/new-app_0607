@@ -7754,6 +7754,10 @@ a.bd-crumb:hover {
 .kind-ppt {
   background: #d9620b;
 }
+/* D80 (2026-11-07): a Google Docs file comes as Word (.docx) */
+.kind-word {
+  background: #2b579a;
+}
 .kind-image {
   background: #8b48c9;
 }
@@ -7779,6 +7783,11 @@ a.bd-crumb:hover {
 .bd-att-meta {
   color: #666;
   font-size: 13px;
+}
+/* D80: a Google Sheets / Docs / Slides line ("구글 슬라이드 · 파워포인트로
+   받기") wraps between words on a phone (file and Drive lines as before) */
+.bd-att-meta-export {
+  word-break: keep-all;
 }
 .bd-att-btn {
   display: inline-flex;
@@ -8462,6 +8471,11 @@ body[data-admin-view="board"]:not([data-board-mode="edit"]) .rb-new-btn {
 .rb-file-size {
   color: var(--adm-muted);
   font-size: 12px;
+}
+/* a link: "구글 시트" / "엑셀로 받기" — one short line each (D80) */
+.rb-file-size-line {
+  display: block;
+  white-space: nowrap;
 }
 .rb-file-status {
   display: flex;

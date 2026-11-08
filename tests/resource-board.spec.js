@@ -4,6 +4,8 @@ import path from "node:path";
 import {
   CATEGORIES,
   DRIVE_A,
+  drive,
+  link,
   pid,
   samplePosts,
   stubBoard,
@@ -842,34 +844,54 @@ test("board admin editor: cancel or leave without saving deletes every new uploa
   ).toHaveClass(/active/);
 });
 
-test("board admin editor: 20 at most; Drive links need a file link and a name; Docs pages are refused (B6)", async ({
+test("board admin editor: 50 at most (D79); Drive links need a file link and a name; a published Docs page is refused (B6, D80)", async ({
   page,
 }, info) => {
   desktopOnly(info);
   const sent = await stubBoard(page, { role: "admin" });
   await openAdminBoard(page);
   await page.locator("#boardNewBtn").click();
+  await expect(page.locator("#rbEdFilesLabel")).toHaveText(
+    "첨부파일 최대 50개",
+  );
   await page.locator("#rbFileInput").setInputFiles(
-    Array.from({ length: 22 }, (_, i) => ({
+    Array.from({ length: 52 }, (_, i) => ({
       name: `자료${String(i + 1).padStart(2, "0")}.pdf`,
       mimeType: "application/pdf",
       buffer: Buffer.from("%PDF-1.4"),
     })),
   );
   await expect(page.locator("#rbEdError")).toHaveText(
-    "첨부는 20개까지예요. 2개는 받지 않았어요.",
+    "첨부는 50개까지예요. 2개는 받지 않았어요.",
   );
-  await expect(page.locator("#rbFilesCount")).toHaveText("첨부 20개");
-  await page.getByRole("button", { name: "자료20.pdf 빼기" }).click();
+  await expect(page.locator("#rbDropSub")).toHaveText(
+    "놓은 파일 52개 중 50개를 올립니다 (2개는 50개 초과)",
+  );
+  await expect(page.locator("#rbFilesCount")).toHaveText("첨부 50개");
+  expect(sent.uploads).toHaveLength(50);
+  // still 3 at a time (D79: 50 at once must not mean 50 requests at once)
+  expect(sent.maxInFlight).toBeLessThanOrEqual(3);
+  // a 51st by link is refused too
+  await page.locator("#rbAddDrive").click();
+  await page
+    .locator("#rbDriveLink")
+    .fill(`https://drive.google.com/file/d/${DRIVE_A}/view`);
+  await page.locator("#rbDriveName").fill("51번째");
+  await page.locator("#rbDriveAdd").click();
+  await expect(page.locator("#rbDriveError")).toHaveText(
+    "첨부는 50개까지예요.",
+  );
+  await page.locator("#rbDriveCancel").click();
+  await page.getByRole("button", { name: "자료50.pdf 빼기" }).click();
   await page.locator("#rbAddDrive").click();
   await page
     .locator("#rbDriveLink")
     .fill(
-      "https://docs.google.com/document/d/1AbC-dEf_GhIjKlMnOpQrStUvWxYz012/edit",
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0aBcDeFgHiJkLmNoPqRsTuVwXyZ0123456789/pubhtml",
     );
   await page.locator("#rbDriveAdd").click();
   await expect(page.locator("#rbDriveError")).toHaveText(
-    "PDF나 엑셀 파일로 드라이브에 올린 뒤 그 파일 링크를 넣어 주세요",
+    "'웹에 게시' 주소는 넣을 수 없어요. 공유 → 링크 복사로 받은 주소를 넣어 주세요.",
   );
   // F2: big files — Google's one-time "can't scan for viruses" page
   await expect(page.locator("#rbDriveBigNote")).toHaveText(
@@ -884,7 +906,7 @@ test("board admin editor: 20 at most; Drive links need a file link and a name; D
   );
   await page.locator("#rbDriveName").fill("활동 사진 모음");
   await page.locator("#rbDriveAdd").click();
-  await expect(page.locator("#rbFilesCount")).toHaveText("첨부 20개");
+  await expect(page.locator("#rbFilesCount")).toHaveText("첨부 50개");
   await page.locator("#rbEdTitle").fill("드라이브 포함 글");
   await expect(page.locator("#rbFileList .rb-file-status").last()).toHaveText(
     "✓ 링크 · 등록 전",
@@ -898,6 +920,307 @@ test("board admin editor: 20 at most; Drive links need a file link and a name; D
     label: "활동 사진 모음",
   });
   expect(sent.google).toEqual([]);
+});
+
+/* ---- D79 · D80 (PM brief 2026-11-07): Google Sheets / Docs / Slides ------ */
+
+const SHEET = "1sHeEtAbCdEfGhIjKlMnOpQrStUvWxYz0123456789ab";
+const DOC = "1dOcAbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-cd";
+const SLIDES = "1sLiDeSaBcDeFgHiJkLmNoPqRsTuVwXyZ012345678";
+const UPLOADED_XLSX = "1uPlOaDeDxLsXaBcDeFgHiJkLmNoPqRsT";
+// Google's export addresses (D80): teachers get .xlsx / .docx / .pptx.
+const EXPORT = {
+  gsheet: (id) =>
+    `https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`,
+  gdoc: (id) => `https://docs.google.com/document/d/${id}/export?format=docx`,
+  gslides: (id) =>
+    `https://docs.google.com/presentation/d/${id}/export?format=pptx`,
+};
+const LINK_HELP =
+  "구글 드라이브 파일·구글 시트·문서·슬라이드 링크를 넣을 수 있어요. 공유 → '링크가 있는 모든 사용자'(뷰어) → 링크 복사";
+
+test("board admin editor (D80): Google Sheets / Docs / Slides links — the address shapes taken, the ones refused with their own message, saved with their kinds and kept by id", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  const sent = await stubBoard(page, { role: "admin" });
+  await openAdminBoard(page);
+  await page.locator("#boardNewBtn").click();
+  await page.locator("#rbAddDrive").click();
+  await expect(page.locator("#rbDriveHelp")).toHaveText(LINK_HELP);
+  await expect(page.locator("#rbDriveExportNote")).toHaveText(
+    "구글 시트·문서·슬라이드는 선생님이 엑셀·워드·파워포인트 파일로 받아요(늘 최신 내용).",
+  );
+  const link = page.locator("#rbDriveLink");
+  const name = page.locator("#rbDriveName");
+  const error = page.locator("#rbDriveError");
+  // refused, each with what to put in instead (nothing is added)
+  for (const [text, message] of [
+    [
+      `https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0aBcDeFgHiJkLmNoPqRsTuVwXyZ/pub?output=xlsx`,
+      "'웹에 게시' 주소는 넣을 수 없어요. 공유 → 링크 복사로 받은 주소를 넣어 주세요.",
+    ],
+    [
+      "https://docs.google.com/document/d/e/2PACX-1vT0aBcDeFgHiJkLmNoPqRsTuVwXyZ/pub",
+      "'웹에 게시' 주소는 넣을 수 없어요. 공유 → 링크 복사로 받은 주소를 넣어 주세요.",
+    ],
+    [
+      "https://docs.google.com/forms/d/e/1FAIpQLSdAbCdEfGhIjKlMnOpQrStUvWxYz012345/viewform?usp=sf_link",
+      "구글 설문지는 넣을 수 없어요. 드라이브 파일이나 시트·문서·슬라이드 링크를 넣어 주세요.",
+    ],
+    [
+      `https://docs.google.com/forms/d/${DOC}/edit`,
+      "구글 설문지는 넣을 수 없어요. 드라이브 파일이나 시트·문서·슬라이드 링크를 넣어 주세요.",
+    ],
+    [
+      `https://docs.google.com/drawings/d/${DOC}/edit`,
+      "구글 시트·문서·슬라이드만 넣을 수 있어요. 공유 → 링크 복사로 받은 주소를 넣어 주세요.",
+    ],
+    [
+      "https://docs.google.com/spreadsheets/u/0/",
+      "구글 시트·문서·슬라이드만 넣을 수 있어요. 공유 → 링크 복사로 받은 주소를 넣어 주세요.",
+    ],
+    [
+      "https://docs.google.com/spreadsheets/d/short/edit",
+      "구글 드라이브 파일이나 구글 시트·문서·슬라이드 링크만 넣을 수 있어요.",
+    ],
+    [
+      `https://docs.google.com.evil.example/spreadsheets/d/${SHEET}/edit`,
+      "구글 드라이브 파일이나 구글 시트·문서·슬라이드 링크만 넣을 수 있어요.",
+    ],
+    [
+      `https://sheets.google.com/spreadsheets/d/${SHEET}/edit`,
+      "구글 드라이브 파일이나 구글 시트·문서·슬라이드 링크만 넣을 수 있어요.",
+    ],
+    [
+      `javascript:alert(1)//docs.google.com/spreadsheets/d/${SHEET}/edit`,
+      "구글 드라이브 파일이나 구글 시트·문서·슬라이드 링크만 넣을 수 있어요.",
+    ],
+  ]) {
+    await link.fill(text);
+    await name.fill("x");
+    await page.locator("#rbDriveAdd").click();
+    await expect(error).toHaveText(message);
+  }
+  await expect(page.locator("#rbFileList .rb-file")).toHaveCount(0);
+  // taken: the share link with its extras (ouid, #gid, /u/<n>/, no https)
+  const add = async (text, label) => {
+    if (await page.locator("#rbDriveForm").isHidden())
+      await page.locator("#rbAddDrive").click();
+    await link.fill(text);
+    await name.fill(label);
+    await page.locator("#rbDriveAdd").click();
+    await expect(page.locator("#rbDriveForm")).toBeHidden();
+  };
+  await add(
+    `https://docs.google.com/spreadsheets/d/${SHEET}/edit?usp=sharing&ouid=101234567890123456789`,
+    "11월 월간교육안",
+  );
+  await add(
+    `https://docs.google.com/spreadsheets/u/1/d/${SHEET}/edit#gid=1234567`,
+    "11월 월간교육안 (둘째 계정)",
+  );
+  await add(
+    `https://docs.google.com/document/u/0/d/${DOC}/edit?usp=drive_link`,
+    "가정통신문",
+  );
+  await add(
+    `docs.google.com/presentation/d/${SLIDES}/edit#slide=id.p1`,
+    "수업 슬라이드",
+  );
+  await add(
+    `https://drive.google.com/file/d/${DRIVE_A}/view?usp=sharing`,
+    "활동 사진 모음",
+  );
+  // an Excel file uploaded to Drive and opened in Sheets (rtpof=true, not
+  // converted) is a Drive file: its original downloads from Drive
+  await add(
+    `https://docs.google.com/spreadsheets/d/${UPLOADED_XLSX}/edit?usp=sharing&ouid=101234567890123456789&rtpof=true&sd=true`,
+    "업로드한 엑셀 원본",
+  );
+  const rows = page.locator("#rbFileList .rb-file");
+  await expect(rows.locator(".rb-file-name")).toHaveText([
+    "11월 월간교육안",
+    "11월 월간교육안 (둘째 계정)",
+    "가정통신문",
+    "수업 슬라이드",
+    "활동 사진 모음",
+    "업로드한 엑셀 원본",
+  ]);
+  await expect(rows.locator(".bd-att-icon-text")).toHaveText([
+    "XLS",
+    "XLS",
+    "DOC",
+    "PPT",
+    "LINK",
+    "LINK",
+  ]);
+  await expect(rows.locator(".rb-file-size")).toHaveText([
+    "구글 시트엑셀로 받기",
+    "구글 시트엑셀로 받기",
+    "구글 문서워드로 받기",
+    "구글 슬라이드PPT로 받기",
+    "구글 드라이브",
+    "구글 드라이브",
+  ]);
+  await expect(rows.locator(".rb-file-status")).toHaveText(
+    Array(6).fill("✓ 링크 · 등록 전"),
+  );
+  await expect(page.locator("#rbFilesCount")).toHaveText("첨부 6개");
+  await page.locator("#rbEdTitle").fill("11월 월간교육안 (구글 시트)");
+  await page.locator("#rbEdSave").click();
+  await expect(page.locator("#rbAdminStatus")).toHaveText("등록했어요.");
+  const save = sent.rpc.filter((r) => r.name === "board_post_save").at(-1).args;
+  expect(save.p_attachments).toEqual([
+    { kind: "gsheet", drive_id: SHEET, label: "11월 월간교육안" },
+    { kind: "gsheet", drive_id: SHEET, label: "11월 월간교육안 (둘째 계정)" },
+    { kind: "gdoc", drive_id: DOC, label: "가정통신문" },
+    { kind: "gslides", drive_id: SLIDES, label: "수업 슬라이드" },
+    { kind: "drive", drive_id: DRIVE_A, label: "활동 사진 모음" },
+    { kind: "drive", drive_id: UPLOADED_XLSX, label: "업로드한 엑셀 원본" },
+  ]);
+  // opened again: the same rows, 등록됨; a re-save sends each by id with its
+  // name (as a Drive link does); one taken out has no Storage path
+  await page
+    .locator("#rbAdminList tbody tr", {
+      hasText: "11월 월간교육안 (구글 시트)",
+    })
+    .getByRole("button", { name: /수정/ })
+    .click();
+  await expect(rows.locator(".bd-att-icon-text")).toHaveText([
+    "XLS",
+    "XLS",
+    "DOC",
+    "PPT",
+    "LINK",
+    "LINK",
+  ]);
+  await expect(rows.locator(".rb-file-status")).toHaveText(
+    Array(6).fill("등록됨"),
+  );
+  const saved = sent.db.posts.find(
+    (p) => p.title === "11월 월간교육안 (구글 시트)",
+  ).attachments;
+  await page
+    .getByRole("button", { name: "11월 월간교육안 (둘째 계정) 빼기" })
+    .click();
+  await page.locator("#rbEdSave").click();
+  await expect(page.locator("#rbAdminStatus")).toHaveText("수정했어요.");
+  expect(
+    sent.rpc.filter((r) => r.name === "board_post_save").at(-1).args
+      .p_attachments,
+  ).toEqual([
+    { id: saved[0].id, label: "11월 월간교육안" },
+    { id: saved[2].id, label: "가정통신문" },
+    { id: saved[3].id, label: "수업 슬라이드" },
+    { id: saved[4].id, label: "활동 사진 모음" },
+    { id: saved[5].id, label: "업로드한 엑셀 원본" },
+  ]);
+  expect(sent.removed).toEqual([]);
+  expect(sent.google).toEqual([]);
+});
+
+test("board post (D80): a Google Sheets / Docs / Slides file downloads as Excel / Word / PowerPoint from Google's export address in a new tab; phones keep each row inside the screen", async ({
+  page,
+  context,
+}, info) => {
+  desktopOnly(info);
+  const posts = samplePosts();
+  posts.push({
+    id: pid(30),
+    title: "11월 월간교육안 (구글 시트)",
+    body: "TPS가 고치면 늘 최신본을 받습니다.",
+    level: "level-1",
+    category: 1,
+    pinned: false,
+    published: true,
+    views: 3,
+    created_at: new Date().toISOString(),
+    attachments: [
+      link("gsheet", "11월 월간교육안", SHEET),
+      link("gdoc", "11월 가정통신문", DOC),
+      link("gslides", "11월 수업 슬라이드 — 그림책 함께 읽기", SLIDES),
+      drive("수료 상장 배경 이미지 (고화질)"),
+    ],
+  });
+  const sent = await stubBoard(page, { posts });
+  await openBoard(page, `#board/${pid(30)}`);
+  await expect(page.locator(".bd-card-title")).toHaveText(
+    "11월 월간교육안 (구글 시트)",
+  );
+  await expect(page.locator(".bd-att-icon-text")).toHaveText([
+    "XLS",
+    "DOC",
+    "PPT",
+    "LINK",
+  ]);
+  await expect(page.locator(".bd-att-icon")).toHaveClass([
+    /kind-excel/,
+    /kind-word/,
+    /kind-ppt/,
+    /kind-drive/,
+  ]);
+  await expect(page.locator(".bd-att-meta")).toHaveText([
+    "구글 시트 · 엑셀로 받기",
+    "구글 문서 · 워드로 받기",
+    "구글 슬라이드 · 파워포인트로 받기",
+    "구글 드라이브 · 바로 받기",
+  ]);
+  for (const [kind, label, id] of [
+    ["gsheet", "11월 월간교육안", SHEET],
+    ["gdoc", "11월 가정통신문", DOC],
+    ["gslides", "11월 수업 슬라이드 — 그림책 함께 읽기", SLIDES],
+  ]) {
+    const open = page.getByRole("link", { name: `${label} 내려받기 (새 탭)` });
+    await expect(open).toHaveAttribute("href", EXPORT[kind](id));
+    await expect(open).toHaveAttribute("target", "_blank");
+    await expect(open).toHaveAttribute("rel", "noopener noreferrer");
+  }
+  // a click opens Google's export address in a new tab (answered by the
+  // test's Google stub) — no function call, not counted in the 30 a day
+  const [tab] = await Promise.all([
+    context.waitForEvent("page"),
+    page
+      .getByRole("link", { name: "11월 월간교육안 내려받기 (새 탭)" })
+      .click(),
+  ]);
+  await expect(tab).toHaveURL(EXPORT.gsheet(SHEET));
+  await tab.close();
+  expect(sent.fn).toEqual([]);
+  expect(sent.google[0]).toBe(EXPORT.gsheet(SHEET));
+  // phones: every row, its text and its button stay inside the screen
+  for (const width of [375, 320]) {
+    await page.setViewportSize({ width, height: 812 });
+    const boxes = await page.locator(".bd-att").evaluateAll((els) =>
+      els.map((el) => {
+        const row = el.getBoundingClientRect();
+        const out = [...el.querySelectorAll("*")]
+          .filter((c) => {
+            const r = c.getBoundingClientRect();
+            return (
+              r.width > 0 &&
+              (r.left < row.left - 0.5 || r.right > row.right + 0.5)
+            );
+          })
+          .map((c) => `${c.className.baseVal ?? c.className}`);
+        return {
+          right: row.right,
+          out,
+          scroll: el.scrollWidth <= el.clientWidth,
+        };
+      }),
+    );
+    for (const b of boxes) {
+      expect(b.right).toBeLessThanOrEqual(width);
+      expect(b.out).toEqual([]);
+      expect(b.scroll).toBe(true);
+    }
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+  }
 });
 
 test("board admin editor: editing a post keeps its attachments by id; one taken out goes from Storage after the save (B8)", async ({

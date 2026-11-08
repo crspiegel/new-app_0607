@@ -81,6 +81,42 @@ const RB_KINDS = {
   jpeg: { kind: "image", icon: "JPG", text: "JPG 이미지" },
   png: { kind: "image", icon: "PNG", text: "PNG 이미지" },
 };
+// Link kinds (F2 Drive; D80 2026-11-07 Google Sheets / Docs / Slides): the
+// icon says what file arrives, `text` is the teacher's line, `admin` the
+// editor's (two short lines). A Google file comes as Excel / Word /
+// PowerPoint from Google's export address — always the latest version.
+const RB_LINKS = {
+  drive: {
+    kind: "drive",
+    icon: "LINK",
+    text: "구글 드라이브 · 바로 받기",
+    admin: ["구글 드라이브"],
+  },
+  gsheet: {
+    kind: "excel",
+    icon: "XLS",
+    text: "구글 시트 · 엑셀로 받기",
+    admin: ["구글 시트", "엑셀로 받기"],
+    path: "spreadsheets",
+    format: "xlsx",
+  },
+  gdoc: {
+    kind: "word",
+    icon: "DOC",
+    text: "구글 문서 · 워드로 받기",
+    admin: ["구글 문서", "워드로 받기"],
+    path: "document",
+    format: "docx",
+  },
+  gslides: {
+    kind: "ppt",
+    icon: "PPT",
+    text: "구글 슬라이드 · 파워포인트로 받기",
+    admin: ["구글 슬라이드", "PPT로 받기"],
+    path: "presentation",
+    format: "pptx",
+  },
+};
 const RB_SVG_NS = "http://www.w3.org/2000/svg";
 const RB_ICONS = {
   page: [
@@ -229,6 +265,23 @@ function rbFileKind(ext) {
       text: "파일",
     }
   );
+}
+
+// A link attachment's kind → its RB_LINKS entry; a file (or anything
+// unknown) → null.
+function rbLinkInfo(kind) {
+  return Object.prototype.hasOwnProperty.call(RB_LINKS, kind)
+    ? RB_LINKS[kind]
+    : null;
+}
+
+// Where a link's [내려받기] goes: Google's direct download (Drive, the D64
+// address) or its export as .xlsx / .docx / .pptx (D80).
+function rbLinkUrl(kind, id) {
+  const link = rbLinkInfo(kind);
+  if (!link) return "";
+  if (!link.path) return driveDownloadUrl(id);
+  return `https://docs.google.com/${link.path}/d/${encodeURIComponent(id)}/export?format=${link.format}`;
 }
 
 // R1: a long file name may wrap only after _ - . (or a space) — never in
@@ -608,14 +661,12 @@ async function rbOpenList(query, { scroll = false } = {}) {
 
 function rbAttachmentRow(att) {
   const li = rbEl("li", "bd-att");
-  const drive = att.kind === "drive";
-  const info = drive
-    ? { kind: "drive", icon: "LINK", text: "" }
-    : rbFileKind(att.ext);
+  const link = rbLinkInfo(att.kind);
+  const info = link || rbFileKind(att.ext);
   const icon = rbEl("span", `bd-att-icon kind-${info.kind}`);
   icon.setAttribute("aria-hidden", "true");
   icon.append(
-    rbSvg("", drive ? "link" : "page"),
+    rbSvg("", link ? "link" : "page"),
     rbEl("span", "bd-att-icon-text", info.icon),
   );
   const text = rbEl("span", "bd-att-text");
@@ -623,19 +674,20 @@ function rbAttachmentRow(att) {
   name.append(rbBreakable(att.name));
   const meta = rbEl(
     "span",
-    "bd-att-meta",
-    drive
-      ? "구글 드라이브 · 바로 받기"
+    link && link.path ? "bd-att-meta bd-att-meta-export" : "bd-att-meta",
+    link
+      ? link.text
       : [info.text, rbFormatSize(att.size)].filter(Boolean).join(" · "),
   );
   text.append(name, meta);
-  // The same [내려받기] for both (an icon on phones). A Drive file is
-  // Google's direct download in a new tab (F2 = D64 teacher resources): no
-  // preview page, not counted in the 30 a day.
+  // The same [내려받기] for all (an icon on phones). A link opens Google in
+  // a new tab: a Drive file's direct download (F2 = D64 teacher resources),
+  // a Sheets / Docs / Slides file's export (D80) — no preview page, not
+  // counted in the 30 a day.
   let action;
-  if (drive) {
+  if (link) {
     action = rbEl("a", "bd-att-btn bd-att-dl bd-att-drive");
-    action.href = driveDownloadUrl(att.drive_id);
+    action.href = rbLinkUrl(att.kind, att.drive_id);
     action.target = "_blank";
     action.rel = "noopener noreferrer";
     action.setAttribute("aria-label", `${att.name} 내려받기 (새 탭)`);

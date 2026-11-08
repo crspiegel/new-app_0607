@@ -66,10 +66,16 @@ export function file(name, size = 820000, extra = {}) {
   };
 }
 export function drive(name, id = DRIVE_A) {
+  return link("drive", name, id);
+}
+// D80 (2026-11-07): a link row of any kind — drive, or a Google Sheets /
+// Docs / Slides file (gsheet / gdoc / gslides): an ID and a name, no file.
+export const LINK_KINDS = ["drive", "gsheet", "gdoc", "gslides"];
+export function link(kind, name, id = DRIVE_A) {
   attachmentSeq += 1;
   return {
     id: aid(attachmentSeq),
-    kind: "drive",
+    kind,
     name,
     ext: null,
     size: null,
@@ -536,16 +542,9 @@ export async function stubBoard(page, options = {}) {
           const old = before.find((b) => b.id === x.id);
           return x.label ? { ...old, name: x.label } : old;
         }
+        if (LINK_KINDS.includes(x.kind))
+          return link(x.kind, x.label, x.drive_id);
         attachmentSeq += 1;
-        if (x.kind === "drive")
-          return {
-            id: aid(attachmentSeq),
-            kind: "drive",
-            name: x.label,
-            ext: null,
-            size: null,
-            drive_id: x.drive_id,
-          };
         return {
           id: aid(attachmentSeq),
           kind: "file",

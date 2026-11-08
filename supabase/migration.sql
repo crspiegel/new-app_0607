@@ -2540,10 +2540,13 @@ notify pgrst, 'reload schema';
 -- teacher accounts get {"status":"off"}; the admin keeps managing.
 -- A post: title (1-100), body (plain text up to 5,000, line breaks kept, never
 -- HTML on the page), ONE level (common = every level, beginner, level-1..3),
--- ONE category, public / hidden, pinned ("📌 공지" on the page) (B4); up to 20
--- attachments in a set order, each an uploaded file OR a Google Drive file ID
--- (D64 rule: the ID only, 25-64 characters; teachers open it from Google — no
--- Storage traffic, no daily limit) (B6). Files live in the PRIVATE bucket
+-- ONE category, public / hidden, pinned ("📌 공지" on the page) (B4); up to 50
+-- attachments (D79, 2026-11-07 — was 20) in a set order, each an uploaded file
+-- OR a Google Drive file ID (D64 rule: the ID only, 25-64 characters; teachers
+-- open it from Google — no Storage traffic, no daily limit) (B6) OR — D80,
+-- this board only — a Google Sheets / Docs / Slides file ID (the same shape;
+-- teachers get .xlsx / .docx / .pptx from Google's export address, always the
+-- latest version). Files live in the PRIVATE bucket
 -- "resource-board" (10 MB; PDF, Excel, 한글, PowerPoint, JPG, PNG) at the ASCII
 -- path <post id>/<epoch ms>-<6 random>.<ext>; the original (Korean) name is in
 -- the table and becomes the download name. Downloads go through the Edge
@@ -2628,7 +2631,11 @@ create index if not exists board_posts_category_idx
 
 -- Attachments, in `position` order. A file row: storage_path (ASCII, in its
 -- post's folder), file_name (the original name), file_type, file_size. A
--- Drive row: drive_id + label (the name the admin typed). Never both.
+-- link row: drive_id + label (the name the admin typed) — kind 'drive' (a
+-- Google Drive file) or, D80 (2026-11-07), 'gsheet' / 'gdoc' / 'gslides' (a
+-- Google Sheets / Docs / Slides file the teachers get as .xlsx / .docx /
+-- .pptx through Google's export address; the ID has the Drive shape). Never
+-- both.
 create table if not exists public.board_attachments (
   id           uuid primary key default gen_random_uuid(),
   post_id      uuid not null references public.board_posts (id) on delete cascade,
@@ -2641,12 +2648,12 @@ create table if not exists public.board_attachments (
   drive_id     text,
   label        text,
   created_at   timestamptz not null default now(),
-  constraint board_attachments_kind_ok check (kind in ('file', 'drive')),
+  constraint board_attachments_kind_ok check (kind in ('file', 'drive', 'gsheet', 'gdoc', 'gslides')),
   constraint board_attachments_source_ok check (
     (kind = 'file' and storage_path is not null and file_name is not null and file_type is not null
        and file_size is not null and drive_id is null and label is null)
-    or (kind = 'drive' and drive_id is not null and label is not null and storage_path is null
-       and file_name is null and file_type is null and file_size is null)),
+    or (kind in ('drive', 'gsheet', 'gdoc', 'gslides') and drive_id is not null and label is not null
+       and storage_path is null and file_name is null and file_type is null and file_size is null)),
   constraint board_attachments_path_ok check (
     storage_path ~ ('^' || post_id::text
                     || '/[0-9]{13}-[a-z0-9]{6}\.(pdf|xlsx|xls|hwp|hwpx|pptx|ppt|jpg|jpeg|png)$')),
@@ -2667,6 +2674,19 @@ create table if not exists public.board_attachments (
 );
 create index if not exists board_attachments_post_idx
   on public.board_attachments (post_id, position);
+-- D80 on a table made before (`create table if not exists` leaves it as it
+-- is): the two kind rules again. Drop + add in ONE statement (atomic with any
+-- tool) = the same definition on every run; existing rows (file / drive)
+-- pass.
+alter table public.board_attachments
+  drop constraint if exists board_attachments_kind_ok,
+  add constraint board_attachments_kind_ok check (kind in ('file', 'drive', 'gsheet', 'gdoc', 'gslides')),
+  drop constraint if exists board_attachments_source_ok,
+  add constraint board_attachments_source_ok check (
+    (kind = 'file' and storage_path is not null and file_name is not null and file_type is not null
+       and file_size is not null and drive_id is null and label is null)
+    or (kind in ('drive', 'gsheet', 'gdoc', 'gslides') and drive_id is not null and label is not null
+       and storage_path is null and file_name is null and file_type is null and file_size is null));
 
 -- Views (B11): one row per member, post and KST day — a post's view_count
 -- goes up once a day per branch / teacher account; the admin never counts.
@@ -2980,10 +3000,12 @@ end;
 $$;
 
 -- Admin: create or update a post with its whole attachment list, in order
--- (B4, B6, B7). p_attachments = up to 20 of
---   {"id": <an attachment of this post>}               keep (Drive: may add "label")
+-- (B4, B6, B7). p_attachments = up to 50 (D79, 2026-11-07 — was 20) of
+--   {"id": <an attachment of this post>}               keep (a link: may add "label")
 --   {"kind":"file","path","name","size","type"}        a file just uploaded
 --   {"kind":"drive","drive_id","label"}                a Google Drive file
+--   {"kind":"gsheet"|"gdoc"|"gslides","drive_id","label"}  a Google Sheets /
+--                                                      Docs / Slides file (D80)
 -- An attachment of the post that is not in the list is deleted (B8). Answers
 -- {"status":"ok","id","removed":[Storage paths the page deletes next]}.
 -- Bad input raises 22023 ("board: …") and changes nothing. A file already
@@ -3041,8 +3063,8 @@ begin
   if jsonb_typeof(v_list) <> 'array' then
     raise exception 'board: attachments must be a list' using errcode = '22023';
   end if;
-  if jsonb_array_length(v_list) > 20 then
-    raise exception 'board: too many attachments (20 at most)' using errcode = '22023';
+  if jsonb_array_length(v_list) > 50 then
+    raise exception 'board: too many attachments (50 at most)' using errcode = '22023';
   end if;
 
   perform 1 from public.board_posts p where p.id = p_id for update;
@@ -3108,7 +3130,8 @@ begin
       end if;
       update public.board_attachments a
          set position = v_pos,
-             label = case when a.kind = 'drive' and v_label is not null then v_label else a.label end
+             label = case when a.kind in ('drive', 'gsheet', 'gdoc', 'gslides') and v_label is not null
+                          then v_label else a.label end
        where a.id = (v_item ->> 'id')::uuid;
     elsif v_item ->> 'kind' = 'file' then
       if v_item ?| array['drive_id', 'label'] then
@@ -3154,7 +3177,7 @@ begin
       insert into public.board_attachments
         (post_id, position, kind, storage_path, file_name, file_type, file_size)
       values (p_id, v_pos, 'file', v_path, v_name, v_type, v_size);
-    elsif v_item ->> 'kind' = 'drive' then
+    elsif v_item ->> 'kind' in ('drive', 'gsheet', 'gdoc', 'gslides') then
       if v_item ?| array['path', 'name', 'size', 'type'] then
         raise exception 'board: attachment (a Drive link has no file)' using errcode = '22023';
       end if;
@@ -3166,7 +3189,7 @@ begin
         raise exception 'board: attachment name (1-100 characters)' using errcode = '22023';
       end if;
       insert into public.board_attachments (post_id, position, kind, drive_id, label)
-      values (p_id, v_pos, 'drive', v_item ->> 'drive_id', v_label);
+      values (p_id, v_pos, v_item ->> 'kind', v_item ->> 'drive_id', v_label);
     else
       raise exception 'board: attachment kind' using errcode = '22023';
     end if;

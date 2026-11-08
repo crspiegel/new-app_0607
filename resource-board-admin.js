@@ -2,10 +2,10 @@
    Classic script after app.js, teacher-resources.js and resource-board.js
    (one shared scope: sb, isAdmin, siteFlags, updateAdminUI, refreshSignupUI,
    adminViewOpeners, adminTitle, SUPABASE_BASE, resourceExt, driveIdFromLink,
-   DRIVE_MSG, setTeacherResStatus, rbLevelTag, rbFormatSize, rbFileKind,
-   rbSvg …; lms-admin.js's table helpers are used at run time). The top
-   admin only (ADMIN_VIEWS); every write is an RPC that checks is_admin()
-   again (supabase/migration.sql "Resource board").
+   DRIVE_ID_RE, setTeacherResStatus, rbLevelTag, rbFormatSize, rbFileKind,
+   rbLinkInfo, rbSvg …; lms-admin.js's table helpers are used at run time).
+   The top admin only (ADMIN_VIEWS); every write is an RPC that checks
+   is_admin() again (supabase/migration.sql "Resource board").
 
    - The list (그림 05): pinned first, filters (level · category · status),
      title search, 20 a page; 수정 · 보기 (the teachers' page, new tab) ·
@@ -14,10 +14,11 @@
      resource_board_enabled) and the categories (B5: rename, ↑ ↓, add, delete
      when empty). The 배너 tab's 레벨별 자료실 switch (T1) lives here too.
    - The editor (B4, B6-B8): title, body, level, category, public, pinned;
-     up to 20 attachments — files dropped (many at once, name order "3월 <
+     up to 50 attachments (D79) — files dropped (many at once, name order "3월 <
      10월") or picked, uploaded 3 at a time with a bar each straight to the
      private bucket (<post id>/<ms>-<6>.<ext>, the type set from the
-     extension), refused ones in red; Google Drive links (D64 rule). Drag a
+     extension), refused ones in red; links — a Google Drive file (D64 rule)
+     or a Google Sheets / Docs / Slides file (D80, rbaLinkFromText). Drag a
      row's handle (or ↑ ↓ on it, or the phone buttons) to reorder;
      [등록하기] (a new post) / [수정 완료] (F4 2026-11-04 — in the 게시 box
      and on the 등록 bar that stays at the bottom of the window) sends the
@@ -29,7 +30,7 @@
 
 const RBA_BUCKET = "resource-board";
 const RBA_MAX_BYTES = 10 * 1024 * 1024; // = the bucket's file_size_limit
-const RBA_MAX_FILES = 20;
+const RBA_MAX_FILES = 50; // D79 (2026-11-07, was 20) = board_post_save's check
 const RBA_PARALLEL = 3;
 // The type each upload is sent with — from the extension, never the
 // browser's guess (한글 files often come as "" or octet-stream).
@@ -77,8 +78,26 @@ const RBA_MSG = {
   title: "제목을 1~100자로 적어 주세요.",
   body: "내용은 5,000자까지 적을 수 있어요.",
   category: "분류를 골라 주세요.",
-  tooMany: (n) => `첨부는 20개까지예요. ${n}개는 받지 않았어요.`,
+  full: `첨부는 ${RBA_MAX_FILES}개까지예요.`,
+  tooMany: (n) => `첨부는 ${RBA_MAX_FILES}개까지예요. ${n}개는 받지 않았어요.`,
   missing: "이 글은 이미 지워졌어요.",
+};
+// D80 (2026-11-07): the link box takes a Google Drive file and — this board
+// only — a Google Sheets / Docs / Slides file. Its help and its refusals (a
+// "publish to the web" address, Google Forms, any other Docs page, the rest).
+const RBA_LINK_MSG = {
+  help: "구글 드라이브 파일·구글 시트·문서·슬라이드 링크를 넣을 수 있어요. 공유 → '링크가 있는 모든 사용자'(뷰어) → 링크 복사",
+  bad: "구글 드라이브 파일이나 구글 시트·문서·슬라이드 링크만 넣을 수 있어요.",
+  published:
+    "'웹에 게시' 주소는 넣을 수 없어요. 공유 → 링크 복사로 받은 주소를 넣어 주세요.",
+  forms:
+    "구글 설문지는 넣을 수 없어요. 드라이브 파일이나 시트·문서·슬라이드 링크를 넣어 주세요.",
+  docs: "구글 시트·문서·슬라이드만 넣을 수 있어요. 공유 → 링크 복사로 받은 주소를 넣어 주세요.",
+};
+const RBA_DOCS_KINDS = {
+  spreadsheets: "gsheet",
+  document: "gdoc",
+  presentation: "gslides",
 };
 // Our window when the editor would be left with something unregistered
 // (F3: this edit's uploads — uploading, waiting, done or failed; F4: other
@@ -104,8 +123,8 @@ const RBA_SERVER_MSG = [
   [/board: title/, RBA_MSG.title],
   [/board: body/, RBA_MSG.body],
   [/board: category/, RBA_MSG.category],
-  [/board: too many/, "첨부는 20개까지예요."],
-  [/not a Google Drive file id/, "구글 드라이브 파일 링크만 넣을 수 있어요."],
+  [/board: too many/, RBA_MSG.full],
+  [/not a Google Drive file id/, RBA_LINK_MSG.bad],
   [
     /is not in storage|already attached/,
     "올린 파일을 찾지 못했어요. 그 파일을 빼고 다시 올려 주세요.",
@@ -761,7 +780,8 @@ if (rbaCatAddForm) {
 
 /* ---- The editor (B4, B6-B8) ----------------------------------------------- */
 /* rbaEd = { id, isNew, items: [item], refused: [item], seq, busy }
-   item  = { key, kind: "file" | "drive", id (a saved attachment) | null,
+   item  = { key, kind: "file" | a link kind (drive · gsheet · gdoc ·
+             gslides — RB_LINKS), id (a saved attachment) | null,
              name, size, type, ext, path, drive_id, label, file,
              state: "saved" | "waiting" | "uploading" | "done" | "error",
              progress, xhr, sent (a request went out), note, el } */
@@ -982,7 +1002,7 @@ async function rbaOpenEditor(postId) {
       type: a.type,
       ext: a.ext,
       drive_id: a.drive_id,
-      label: a.kind === "drive" ? a.name : null,
+      label: rbLinkInfo(a.kind) ? a.name : null,
       state: "saved",
       progress: 1,
     }));
@@ -1092,7 +1112,7 @@ function rbaAddFiles(fileList) {
     refused || over
       ? ` (${[
           refused ? `${refused}개는 올릴 수 없는 파일` : "",
-          over ? `${over}개는 20개 초과` : "",
+          over ? `${over}개는 ${RBA_MAX_FILES}개 초과` : "",
         ]
           .filter(Boolean)
           .join(", ")})`
@@ -1111,12 +1131,43 @@ function rbaCloseDriveForm() {
   rbaDriveError.textContent = "";
 }
 
+// D80: a pasted link → { kind, id } or { error }. drive.google.com = the
+// D64 rule (driveIdFromLink, unchanged — 레벨별 자료실 keeps refusing Docs
+// pages); docs.google.com/spreadsheets|document|presentation/d/<ID>/… (also
+// with /u/<n>/, ?usp=…&ouid=…, #gid=…) = a Google Sheets / Docs / Slides
+// file. Refused with their own words: a "publish to the web" address
+// (/d/e/2PACX-…), Google Forms, any other Docs page; anything else = bad.
+// `rtpof=true` = an Excel / Word / PowerPoint file uploaded to Drive and
+// opened in Google's editor (not converted): it is a Drive file — its
+// original downloads straight from Drive (Google's export address is for
+// Google's own files).
+function rbaLinkFromText(text) {
+  const drive = driveIdFromLink(text);
+  if (drive.id) return { kind: "drive", id: drive.id };
+  if (drive.error !== "docs") return { error: "bad" };
+  // a docs.google.com address over http(s) — driveIdFromLink read it so
+  let raw = String(text || "").trim();
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) raw = `https://${raw}`;
+  const url = new window.URL(raw);
+  const path = url.pathname.replace(/^\/u\/\d+(?=\/)/, "");
+  if (/^\/forms(\/|$)/.test(path)) return { error: "forms" };
+  const page = path.match(
+    /^\/(spreadsheets|document|presentation)\/(?:u\/\d+\/)?d\/([^/]+)/,
+  );
+  if (!page) return { error: "docs" };
+  if (page[2] === "e") return { error: "published" };
+  if (!DRIVE_ID_RE.test(page[2])) return { error: "bad" };
+  if (url.searchParams.get("rtpof") === "true") {
+    return { kind: "drive", id: page[2] };
+  }
+  return { kind: RBA_DOCS_KINDS[page[1]], id: page[2] };
+}
+
 function rbaAddDriveItem() {
   if (!rbaEd) return;
-  const parsed = driveIdFromLink(rbaDriveLink.value);
+  const parsed = rbaLinkFromText(rbaDriveLink.value);
   if (!parsed.id) {
-    rbaDriveError.textContent =
-      parsed.error === "docs" ? DRIVE_MSG.docs : DRIVE_MSG.bad;
+    rbaDriveError.textContent = RBA_LINK_MSG[parsed.error];
     rbaDriveLink.focus();
     return;
   }
@@ -1127,12 +1178,12 @@ function rbaAddDriveItem() {
     return;
   }
   if (rbaEd.items.length >= RBA_MAX_FILES) {
-    rbaDriveError.textContent = "첨부는 20개까지예요.";
+    rbaDriveError.textContent = RBA_MSG.full;
     return;
   }
   rbaEd.items.push({
     key: (rbaEd.seq += 1),
-    kind: "drive",
+    kind: parsed.kind,
     id: null,
     name: label,
     label,
@@ -1274,7 +1325,7 @@ function rbaStatusContent(item) {
     rbaEl(
       "span",
       "rb-st-pending",
-      item.kind === "drive" ? "✓ 링크 · 등록 전" : "✓ 올림 · 등록 전",
+      rbLinkInfo(item.kind) ? "✓ 링크 · 등록 전" : "✓ 올림 · 등록 전",
     ),
   ];
 }
@@ -1306,22 +1357,25 @@ function rbaBuildRow(item, refused) {
     li.append(rbaEl("span", "rb-handle rb-handle-none"));
   }
   const no = rbaEl("span", "rb-file-no");
-  const info =
-    item.kind === "drive"
-      ? { kind: "drive", icon: "LINK" }
-      : rbFileKind(item.ext);
+  const link = rbLinkInfo(item.kind);
+  const info = link || rbFileKind(item.ext);
   const icon = rbaEl("span", `bd-att-icon rb-file-icon kind-${info.kind}`);
   icon.setAttribute("aria-hidden", "true");
   icon.append(
-    rbSvg("", item.kind === "drive" ? "link" : "page"),
+    rbSvg("", link ? "link" : "page"),
     rbaEl("span", "bd-att-icon-text", info.icon),
   );
   const name = rbaEl("span", "rb-file-name", item.name);
-  const size = rbaEl(
-    "span",
-    "rb-file-size",
-    item.kind === "drive" ? "구글 드라이브" : rbFormatSize(item.size),
-  );
+  // a link: where it comes from (+ D80: what the teachers get), one short
+  // line each
+  const size = rbaEl("span", "rb-file-size");
+  if (link) {
+    size.append(
+      ...link.admin.map((t) => rbaEl("span", "rb-file-size-line", t)),
+    );
+  } else {
+    size.textContent = rbFormatSize(item.size);
+  }
   const status = rbaEl("span", "rb-file-status");
   status.setAttribute("aria-live", "polite");
   li.append(no, icon, name, size, status);
@@ -1601,7 +1655,7 @@ if (rbaAddDrive) {
     }
     rbaDriveForm.hidden = false;
     rbaAddDrive.setAttribute("aria-expanded", "true");
-    rbaDriveHelp.textContent = DRIVE_MSG.help;
+    rbaDriveHelp.textContent = RBA_LINK_MSG.help;
     rbaDriveLink.focus();
   });
 }
@@ -1670,10 +1724,9 @@ async function rbaSave(event) {
     return;
   }
   const attachments = items.map((i) => {
-    if (i.id)
-      return i.kind === "drive" ? { id: i.id, label: i.label } : { id: i.id };
-    if (i.kind === "drive")
-      return { kind: "drive", drive_id: i.drive_id, label: i.label };
+    const link = rbLinkInfo(i.kind);
+    if (i.id) return link ? { id: i.id, label: i.label } : { id: i.id };
+    if (link) return { kind: i.kind, drive_id: i.drive_id, label: i.label };
     return {
       kind: "file",
       path: i.path,

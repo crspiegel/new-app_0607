@@ -757,7 +757,7 @@ test("resource board sql: detail — attachments without paths, prev / next in l
   }
 });
 
-test("resource board sql: admin writes — save, 20 attachments, one kind each, reorder, delete (B3, B4, B6, B7, B8)", async ({}, testInfo) => {
+test("resource board sql: admin writes — save, 50 attachments (D79), one kind each, reorder, delete (B3, B4, B6, B7, B8)", async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
   test.setTimeout(180000);
   const db = await fresh();
@@ -818,7 +818,8 @@ test("resource board sql: admin writes — save, 20 attachments, one kind each, 
     ).rows[0];
     expect(row).toEqual({ title: "가".repeat(100), body: 5000 });
 
-    // --- B6: up to 20 attachments, files must be in Storage under this post
+    // --- B6: up to 50 attachments (D79, 2026-11-07 — was 20), files must be
+    // in Storage under this post
     const twenty = Array.from({ length: 19 }, (_, i) =>
       fileItem(
         post,
@@ -830,15 +831,16 @@ test("resource board sql: admin writes — save, 20 attachments, one kind each, 
     ).concat(driveItem(DRIVE_B, "드라이브 묶음"));
     let saved = await savePost(db, who.admin, { ...base, attachments: twenty });
     expect(saved).toEqual({ status: "ok", id: post, removed: [] });
-    const extra = fileItem(post, 21);
+    // the 20 + 31 more = 51 → refused (D79: 50 at most)
+    const extra = Array.from({ length: 31 }, (_, i) => fileItem(post, 60 + i));
     await bad(
       {
         attachments: [
           ...twenty.map((a) => ({ ...a, skipUpload: true })),
-          extra,
+          ...extra,
         ],
       },
-      /board: too many attachments/,
+      /board: too many attachments \(50 at most\)/,
     );
     // not in Storage / another post's folder / wrong type / too big / no name
     const other = pid(51);
@@ -969,6 +971,272 @@ test("resource board sql: admin writes — save, 20 attachments, one kind each, 
         )
       ).rows[0].n,
     ).toBe(0);
+  } finally {
+    await db.close();
+  }
+});
+
+// D79 / D80 (2026-11-07): a Google Sheets / Docs / Slides file is a link row
+// like a Drive file — its ID in drive_id, the admin's name in label, no file
+// columns — with its own kind (gsheet / gdoc / gslides); teachers get it as
+// .xlsx / .docx / .pptx from Google, never from Storage. 50 attachments in all.
+const SHEET_ID = "1sHeEtAbCdEfGhIjKlMnOpQrStUvWxYz0123456789ab"; // 44 chars
+const DOC_ID = "1dOcAbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-cd"; // 44
+const SLIDES_ID = "1sLiDeSaBcDeFgHiJkLmNoPqRsTuVwXyZ012345678"; // 42
+const linkItem = (kind, id, label) => ({ kind, drive_id: id, label });
+
+test("resource board sql: D79 50 attachments · D80 Google Sheets / Docs / Slides links — save, rename, reorder, take out, the teacher's answer; 51 and unknown kinds refused", async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  test.setTimeout(180000);
+  const db = await fresh();
+  try {
+    const who = await people(db);
+    const c = await categoryIds(db);
+    await setFlag(db, "resource_board_enabled", true);
+    const post = pid(60);
+    const base = {
+      id: post,
+      title: "11월 월간교육안 (구글 시트)",
+      level: "level-1",
+      category: c["월간교육안"],
+    };
+    const bad = async (patch, re) =>
+      expect(savePost(db, who.admin, { ...base, ...patch })).rejects.toThrow(
+        re,
+      );
+    const links = [
+      driveItem(DRIVE_A, "활동 사진 모음"),
+      linkItem("gsheet", SHEET_ID, "11월 월간교육안"),
+      linkItem("gdoc", DOC_ID, "가정통신문"),
+      linkItem("gslides", SLIDES_ID, "수업 슬라이드"),
+    ];
+    const files = Array.from({ length: 46 }, (_, i) => fileItem(post, i + 1));
+
+    // --- 51 (46 files + 4 links + 1) → refused, nothing saved
+    await bad(
+      { attachments: [...links, ...files, fileItem(post, 47)] },
+      /board: too many attachments \(50 at most\)/,
+    );
+    const posts = () =>
+      db
+        .query(
+          `select count(*)::int as n from public.board_posts where id = '${post}'`,
+        )
+        .then((r) => r.rows[0].n);
+    expect(await posts()).toBe(0);
+    // --- 50 → saved, in order (the files are in Storage from the try above)
+    let saved = await savePost(db, who.admin, {
+      ...base,
+      attachments: [
+        ...links,
+        ...files.map((f) => ({ ...f, skipUpload: true })),
+      ],
+    });
+    expect(saved).toEqual({ status: "ok", id: post, removed: [] });
+    let got = await call(db, who.admin, "board_admin_get", { p_id: post });
+    expect(got.attachments.length).toBe(50);
+    const linkAnswer = (kind, name, driveId) => ({
+      id: expect.any(String),
+      kind,
+      name,
+      ext: null,
+      size: null,
+      type: null,
+      drive_id: driveId,
+    });
+    expect(got.attachments.slice(0, 5)).toEqual([
+      linkAnswer("drive", "활동 사진 모음", DRIVE_A),
+      linkAnswer("gsheet", "11월 월간교육안", SHEET_ID),
+      linkAnswer("gdoc", "가정통신문", DOC_ID),
+      linkAnswer("gslides", "수업 슬라이드", SLIDES_ID),
+      {
+        id: expect.any(String),
+        kind: "file",
+        name: "파일 1.pdf",
+        ext: "pdf",
+        size: 1001,
+        type: TYPES.pdf,
+        drive_id: null,
+      },
+    ]);
+    // a link row: the ID and the name only
+    expect(
+      (
+        await db.query(
+          `select kind, drive_id, label, storage_path, file_name, file_type, file_size
+             from public.board_attachments
+            where post_id = '${post}' and kind <> 'file' order by position`,
+        )
+      ).rows,
+    ).toEqual(
+      links.map((l) => ({
+        kind: l.kind,
+        drive_id: l.drive_id,
+        label: l.label,
+        storage_path: null,
+        file_name: null,
+        file_type: null,
+        file_size: null,
+      })),
+    );
+
+    // --- the teacher's post: kind + ID, never a path; 50 files
+    const detail = await call(db, who.teacher, "board_post_get", {
+      p_id: post,
+    });
+    expect(detail.status).toBe("ok");
+    expect(detail.post.files).toBe(50);
+    expect(
+      detail.attachments
+        .slice(0, 4)
+        .map((a) => [a.kind, a.name, a.ext, a.size, a.drive_id]),
+    ).toEqual([
+      ["drive", "활동 사진 모음", null, null, DRIVE_A],
+      ["gsheet", "11월 월간교육안", null, null, SHEET_ID],
+      ["gdoc", "가정통신문", null, null, DOC_ID],
+      ["gslides", "수업 슬라이드", null, null, SLIDES_ID],
+    ]);
+    expect(JSON.stringify(detail)).not.toContain(`${post}/`);
+    // the download function: a link is not a file — "empty", not counted
+    for (const a of detail.attachments.slice(0, 4)) {
+      expect(
+        await call(
+          db,
+          { role: "service_role", ...who.teacher },
+          "board_attachment_issue",
+          { p_attachment_id: a.id, p_admin_uid: null },
+        ),
+      ).toEqual({ status: "empty" });
+    }
+    expect(
+      (
+        await db.query(
+          "select count(*)::int as n from public.teacher_resource_downloads",
+        )
+      ).rows[0].n,
+    ).toBe(0);
+
+    // --- kept by id: each link kind takes a new name; a file's stays; new
+    // order; the files left out come back as paths (links have none)
+    const ids = got.attachments.map((a) => a.id);
+    saved = await call(db, who.admin, "board_post_save", {
+      p_id: post,
+      p_title: base.title,
+      p_body: "",
+      p_level: "level-1",
+      p_category: c["월간교육안"],
+      p_published: true,
+      p_pinned: false,
+      p_attachments: [
+        { id: ids[3], label: "수업 슬라이드 (새 이름)" },
+        { id: ids[1], label: "  11월 월간교육안 (수정)  " },
+        { id: ids[2], label: "가정통신문 2" },
+        { id: ids[0] },
+        { id: ids[4], label: "파일 이름은 그대로" },
+      ],
+    });
+    expect(saved.status).toBe("ok");
+    expect(saved.removed.sort()).toEqual(
+      files
+        .slice(1)
+        .map((f) => f.path)
+        .sort(),
+    );
+    got = await call(db, who.admin, "board_admin_get", { p_id: post });
+    expect(got.attachments.map((a) => [a.kind, a.name])).toEqual([
+      ["gslides", "수업 슬라이드 (새 이름)"],
+      ["gsheet", "11월 월간교육안 (수정)"],
+      ["gdoc", "가정통신문 2"],
+      ["drive", "활동 사진 모음"],
+      ["file", "파일 1.pdf"],
+    ]);
+    expect(got.attachments.map((a) => a.id)).toEqual([
+      ids[3],
+      ids[1],
+      ids[2],
+      ids[0],
+      ids[4],
+    ]);
+    const kept = got.attachments.map((a) => a.id);
+
+    // --- a link needs an ID (25-64) and a name, and no file fields; any
+    // other kind is refused
+    await bad(
+      { attachments: [linkItem("gsheet", "short", "x")] },
+      /not a Google Drive file id/,
+    );
+    await bad(
+      {
+        attachments: [
+          linkItem(
+            "gdoc",
+            `https://docs.google.com/document/d/${DOC_ID}/edit`,
+            "x",
+          ),
+        ],
+      },
+      /not a Google Drive file id/,
+    );
+    await bad(
+      { attachments: [linkItem("gdoc", DOC_ID, "  ")] },
+      /board: attachment name/,
+    );
+    await bad(
+      {
+        attachments: [
+          {
+            ...linkItem("gslides", SLIDES_ID, "x"),
+            path: fpath(post, 99, "pptx"),
+            name: "x.pptx",
+            size: 10,
+            type: TYPES.pptx,
+          },
+        ],
+      },
+      /a Drive link has no file/,
+    );
+    for (const kind of ["gform", "GSHEET", "sheet", "", null]) {
+      await bad(
+        { attachments: [{ kind, drive_id: SHEET_ID, label: "x" }] },
+        /board: attachment kind/,
+      );
+    }
+    // the failed saves changed nothing
+    expect(
+      (
+        await call(db, who.admin, "board_admin_get", { p_id: post })
+      ).attachments.map((a) => a.id),
+    ).toEqual(kept);
+    // the table's own rules, without the function
+    for (const [sql, rule] of [
+      [
+        `insert into public.board_attachments (post_id, position, kind, drive_id, label)
+         values ('${post}', 99, 'gform', '${SHEET_ID}', 'x')`,
+        /board_attachments_kind_ok/,
+      ],
+      [
+        `insert into public.board_attachments (post_id, position, kind, drive_id, label, file_name)
+         values ('${post}', 99, 'gsheet', '${SHEET_ID}', 'x', 'x.xlsx')`,
+        /board_attachments_source_ok/,
+      ],
+      [
+        `insert into public.board_attachments (post_id, position, kind, drive_id, label)
+         values ('${post}', 99, 'gdoc', 'short', 'x')`,
+        /board_attachments_drive_ok/,
+      ],
+      [
+        `insert into public.board_attachments (post_id, position, kind, label)
+         values ('${post}', 99, 'gslides', 'x')`,
+        /board_attachments_source_ok/,
+      ],
+    ]) {
+      await expect(db.exec(sql)).rejects.toThrow(rule);
+    }
+
+    // --- delete: only the file's path comes back
+    expect(
+      await call(db, who.admin, "board_post_delete", { p_id: post }),
+    ).toEqual({ status: "ok", removed: [files[0].path] });
   } finally {
     await db.close();
   }
@@ -1448,6 +1716,116 @@ test("resource board sql: upgrade — live (a4da52b) + migration.sql twice = fre
     expect(once.map((r) => r.x)).toEqual(
       (await fresh2.query(CATALOG)).rows.map((r) => r.x),
     );
+  } finally {
+    await live.close();
+    await fresh2.close();
+  }
+});
+
+// D79 / D80 upgrade: the live database before them (commit 7869dec = the
+// board as it runs since 2026-11-04, 수정 금지) with file and Drive rows.
+const LIVE_BOARD = readFileSync(
+  path.resolve("tests/fixtures/migration-7869dec.sql"),
+  "utf8",
+);
+
+test("resource board sql: D79/D80 upgrade — live (7869dec) with file and Drive rows + migration.sql twice = fresh install; rows kept; the live page's saves answer as before", async ({}, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
+  test.setTimeout(240000);
+  const live = new PGlite({ extensions: { pgcrypto } });
+  const fresh2 = new PGlite({ extensions: { pgcrypto } });
+  try {
+    await live.exec(SUPABASE_SHIM);
+    await live.exec(LIVE_BOARD);
+    expect(LIVE_BOARD).toContain("check (kind in ('file', 'drive'))");
+    const who = await people(live);
+    await setFlag(live, "resource_board_enabled", true);
+    const c = await categoryIds(live);
+    const post = pid(70);
+    const base = {
+      id: post,
+      title: "운영 글",
+      level: "common",
+      category: c["상장"],
+    };
+    // the live page's save today: a file + a Drive link
+    const first = await savePost(live, who.admin, {
+      ...base,
+      attachments: [fileItem(post, 1), driveItem(DRIVE_A, "상장 배경")],
+    });
+    expect(first.status).toBe("ok");
+    // before: 21 and a Google Sheets link are refused
+    const many = Array.from({ length: 21 }, (_, i) => fileItem(post, 10 + i));
+    await expect(
+      savePost(live, who.admin, { ...base, attachments: many }),
+    ).rejects.toThrow(/too many attachments \(20 at most\)/);
+    await expect(
+      savePost(live, who.admin, {
+        ...base,
+        attachments: [linkItem("gsheet", SHEET_ID, "시트")],
+      }),
+    ).rejects.toThrow(/board: attachment kind/);
+
+    const rows =
+      "select post_id, position, kind, storage_path, file_name, file_type, file_size, drive_id, label from public.board_attachments order by post_id, position";
+    const rowsBefore = (await live.query(rows)).rows;
+    expect(rowsBefore.map((r) => r.kind)).toEqual(["file", "drive"]);
+    const ids = (
+      await call(live, who.admin, "board_admin_get", { p_id: post })
+    ).attachments.map((a) => a.id);
+    // (the first open counts today's view; the second is the steady answer)
+    await call(live, who.teacher, "board_post_get", { p_id: post });
+    const teacherBefore = await call(live, who.teacher, "board_post_get", {
+      p_id: post,
+    });
+
+    await live.exec(MIGRATION);
+    const once = (await live.query(CATALOG)).rows;
+    await live.exec(MIGRATION); // re-run safe
+    expect((await live.query(CATALOG)).rows).toEqual(once);
+    expect((await live.query(rows)).rows).toEqual(rowsBefore);
+    await fresh2.exec(SUPABASE_SHIM);
+    await fresh2.exec(MIGRATION);
+    await setFlag(fresh2, "resource_board_enabled", true); // as on `live`
+    expect(once.map((r) => r.x)).toEqual(
+      (await fresh2.query(CATALOG)).rows.map((r) => r.x),
+    );
+
+    // after: the teacher's answer is the same (the same KST day — no new
+    // view); the live page's save (file + Drive, by id with a Drive label)
+    // answers as before
+    const teacherAfter = await call(live, who.teacher, "board_post_get", {
+      p_id: post,
+    });
+    expect(teacherAfter).toEqual(teacherBefore);
+    const again = await call(live, who.admin, "board_post_save", {
+      p_id: post,
+      p_title: base.title,
+      p_body: "",
+      p_level: "common",
+      p_category: c["상장"],
+      p_published: true,
+      p_pinned: false,
+      p_attachments: [
+        { id: ids[1], label: "상장 배경 (고화질)" },
+        { id: ids[0] },
+      ],
+    });
+    expect(again).toEqual({ status: "ok", id: post, removed: [] });
+    // and the new ones: 21 attachments, a Sheets / Docs / Slides link
+    expect(
+      (
+        await savePost(live, who.admin, {
+          ...base,
+          attachments: [
+            ...many.map((f) => ({ ...f, skipUpload: true })),
+            linkItem("gsheet", SHEET_ID, "시트"),
+            linkItem("gdoc", DOC_ID, "문서"),
+            linkItem("gslides", SLIDES_ID, "슬라이드"),
+          ],
+        })
+      ).status,
+    ).toBe("ok");
   } finally {
     await live.close();
     await fresh2.close();

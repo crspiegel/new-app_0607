@@ -1619,7 +1619,7 @@
                       ></textarea>
                       <p class="rb-ed-count" id="rbEdBodyCount"></p>
                       <p class="rb-ed-label" id="rbEdFilesLabel">
-                        첨부파일 <span class="rb-ed-optional">최대 20개</span>
+                        첨부파일 <span class="rb-ed-optional">최대 50개</span>
                       </p>
                       <div class="rb-drop" id="rbDrop">
                         <p class="rb-drop-text" id="rbDropText">
@@ -1657,13 +1657,13 @@
                       </div>
                       <div class="rb-drive-form" id="rbDriveForm" hidden>
                         <label class="rb-ed-label" for="rbDriveLink"
-                          >구글 드라이브 파일 링크</label
+                          >구글 드라이브·시트·문서·슬라이드 링크</label
                         >
                         <input
                           class="admin-member-input"
                           id="rbDriveLink"
                           autocomplete="off"
-                          placeholder="https://drive.google.com/file/d/…"
+                          placeholder="https://drive.google.com/… 또는 https://docs.google.com/…"
                         />
                         <label class="rb-ed-label" for="rbDriveName"
                           >선생님에게 보일 이름</label
@@ -1676,6 +1676,13 @@
                           placeholder="예: 11월 수업 활동 사진 모음"
                         />
                         <p class="admin-hint" id="rbDriveHelp"></p>
+                        <!-- D80 (2026-11-07): Google Sheets / Docs / Slides
+                             links come to teachers as Excel / Word /
+                             PowerPoint files (Google's export address). -->
+                        <p class="admin-hint" id="rbDriveExportNote">
+                          구글 시트·문서·슬라이드는 선생님이
+                          엑셀·워드·파워포인트 파일로 받아요(늘 최신 내용).
+                        </p>
                         <p class="admin-hint" id="rbDriveBigNote">
                           아주 큰 파일(약 100MB 이상)은 구글이 '바이러스 검사를
                           할 수 없음' 확인 화면을 한 번 보여 줄 수 있어요.

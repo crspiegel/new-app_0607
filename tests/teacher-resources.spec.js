@@ -1755,9 +1755,13 @@ test("resources admin: Docs links and anything else are refused before saving (D
   });
   const save = editor.getByRole("button", { name: "저장" });
   const message = editor.locator(".res-drive-msg");
+  // D80 (2026-11-07) takes these on the 교사자료실 board only — 레벨별 자료실
+  // keeps refusing every Google Docs address
   for (const text of [
     `https://docs.google.com/document/d/${DRIVE_A}/edit`,
     `https://docs.google.com/spreadsheets/d/${DRIVE_A}/edit#gid=0`,
+    `https://docs.google.com/spreadsheets/u/1/d/${DRIVE_A}/edit?usp=sharing&ouid=101234567890123456789`,
+    `https://docs.google.com/presentation/d/${DRIVE_A}/edit#slide=id.p1`,
   ]) {
     await input.fill(text);
     await save.click();
