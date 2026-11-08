@@ -348,12 +348,23 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
       { id: "t-branch", level: "level-2", slot: "test" },
     ]); // ok issues of LMS members only (not admins, not refusals)
 
-    // --- daily limit: 30 per LMS member per KST day; admins unlimited
-    for (let i = 2; i <= 30; i += 1) {
+    // --- daily limit (D82, 2026-11-08): 1,000 per LMS member per KST day
+    // (was 30); admins unlimited. The 30th and the 31st pass now.
+    for (let i = 2; i <= 31; i += 1) {
       expect((await issue({ token: teacher }, "beginner", "plan")).status).toBe(
         "ok",
       );
     }
+    // 31 issued + 968 written = 999 today: the 1,000th passes, the next not
+    const today = (n, who = "t-teacher") =>
+      db.exec(`
+        insert into public.teacher_resource_downloads (member_id, level, slot)
+        select m.member_id, 'beginner', 'plan'
+          from public.members m, generate_series(1, ${n}) where m.id = '${who}';`);
+    await today(968);
+    expect((await issue({ token: teacher }, "beginner", "plan")).status).toBe(
+      "ok",
+    );
     expect(await issue({ token: teacher }, "beginner", "plan")).toEqual({
       status: "limit",
     });
@@ -374,17 +385,17 @@ test("teacher resources sql: bucket, RPCs, storage policies", async ({}, testInf
        where m.member_id = d.member_id and m.id = 't-teacher';
       insert into public.teacher_resource_downloads (member_id, level, slot, issued_at)
       select m.member_id, 'beginner', 'plan', ${kstMidnight} - interval '1 minute'
-        from public.members m, generate_series(1, 30) where m.id = 't-teacher';`);
+        from public.members m, generate_series(1, 1000) where m.id = 't-teacher';`);
     expect((await issue({ token: teacher }, "beginner", "plan")).status).toBe(
       "ok",
-    ); // 30 yesterday + 1 today
+    ); // 1,000 yesterday + 1 today
     await db.exec(`
       insert into public.teacher_resource_downloads (member_id, level, slot, issued_at)
       select m.member_id, 'beginner', 'plan', ${kstMidnight} + interval '1 minute'
-        from public.members m, generate_series(1, 29) where m.id = 't-teacher';`);
+        from public.members m, generate_series(1, 999) where m.id = 't-teacher';`);
     expect(await issue({ token: teacher }, "beginner", "plan")).toEqual({
       status: "limit",
-    }); // 1 + 29 today
+    }); // 1 + 999 today
     // Rows older than 30 days are cleared on the next issue.
     await db.exec(`
       insert into public.teacher_resource_downloads (member_id, level, slot, issued_at)

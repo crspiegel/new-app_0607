@@ -1401,7 +1401,7 @@ test("resource board sql: admin list and categories (B5, 그림 05)", async ({},
   }
 });
 
-test("resource board sql: downloads — Edge Function only, the teacher-resources 30/day counter shared (B6)", async ({}, testInfo) => {
+test("resource board sql: downloads — Edge Function only, the teacher-resources counter shared (B6), 1,000 a day (D82)", async ({}, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "Node-only, run once");
   test.setTimeout(180000);
   const db = await fresh();
@@ -1481,7 +1481,8 @@ test("resource board sql: downloads — Edge Function only, the teacher-resource
       { id: "b-branch", level: "board", slot: att[2].id },
     ]);
 
-    // one counter: 19 teacher-resource files + this one = 20 … up to 30 in all
+    // one counter: 19 teacher-resource files + this one = 20 … up to 1,000 in
+    // all (D82, 2026-11-08; was 30)
     await as(
       db,
       who.admin,
@@ -1508,7 +1509,17 @@ test("resource board sql: downloads — Edge Function only, the teacher-resource
     for (let i = 0; i < 19; i += 1) expect((await tr()).status).toBe("ok");
     for (let i = 0; i < 10; i += 1)
       expect((await issue(who.teacher, att[0].id)).status).toBe("ok");
-    // 1 + 19 + 10 = 30 today: both kinds stop
+    // 1 + 19 + 10 = 30 today: both kinds go on (the old limit is gone)
+    expect((await issue(who.teacher, att[0].id)).status).toBe("ok");
+    expect((await tr()).status).toBe("ok");
+    // 32 + 966 written = 998: the 999th (board) and the 1,000th (teacher
+    // resources) pass, then both kinds stop
+    await db.exec(`
+      insert into public.teacher_resource_downloads (member_id, level, slot)
+      select m.member_id, 'board', 'x'
+        from public.members m, generate_series(1, 966) where m.id = 'b-teacher';`);
+    expect((await issue(who.teacher, att[0].id)).status).toBe("ok");
+    expect((await tr()).status).toBe("ok");
     expect(await issue(who.teacher, att[0].id)).toEqual({ status: "limit" });
     expect(await tr()).toEqual({ status: "limit" });
     // others keep their own count; the admin is never limited or logged

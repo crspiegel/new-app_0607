@@ -13,7 +13,7 @@
 -- policy tied to exactly one bucket, RLS on storage.objects / buckets, no
 -- browser policy that can change a bucket), and that the (가) objects are gone.
 -- 2026-11-03: board_attachment_issue (자료실 downloads) is the one more function
--- that touches the download log (the shared 30-a-day counter) — row 25.
+-- that touches the download log (the shared daily counter — 1,000 a day since D82) — row 25.
 -- Expected result: one table, every row pass = true (SUMMARY row first); the
 -- "info" row only lists the Storage policies (pass is empty).
 -- Locally: tests/teacher-resources-sql.spec.js runs it on a fresh migration

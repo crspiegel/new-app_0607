@@ -20,7 +20,8 @@
    the Edge Function teacher-resource-download (supabase/functions/) with just
    {level, slot} — lmsFetch adds the LMS token, supabase-js the admin's JWT.
    The function decides who may, picks the slot's current file, counts the
-   daily limit (30 per LMS member per KST day) and returns a URL that expires
+   daily limit (1,000 per LMS member per KST day — D82, was 30; shared with
+   the 교사자료실 board) and returns a URL that expires
    after 15 seconds (fixed on the server) with the original name already in
    it as `download=`. This page follows it in THIS tab: the Storage API
    answers with Content-Disposition: attachment, so the browser saves the file
@@ -63,7 +64,8 @@ const RES_FUNCTION = "teacher-resource-download";
 const RES_MSG = {
   needLogin: "다시 로그인해 주세요.",
   failed: "내려받지 못했어요. 잠시 후 다시 시도해 주세요.",
-  limit: "오늘 다운로드 횟수를 모두 사용했습니다. 내일 다시 시도해 주세요.",
+  // D82 (2026-11-08): the day's limit is 1,000 now — a safety stop only.
+  limit: "오늘 내려받기가 너무 많아 잠시 막혔어요. 관리자에게 문의해 주세요.",
   notReady: "아직 준비 중이에요.",
   listFailed: "자료 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
 };

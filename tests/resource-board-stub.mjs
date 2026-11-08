@@ -295,7 +295,11 @@ function ranked(posts, { p_level, p_category, p_q, p_sort }) {
  * switch save answered with this failure: { status, json } — e.g. 401 +
  * PostgREST's {code: "42501", message} — and nothing is saved), fontKo /
  * fontEn (the stored board_font_ko / board_font_en, any value; undefined =
- * no row).
+ * no row). D81 (ZIP): fileBody (attachment → the bytes its signed URL
+ * answers; default "%PDF-1.4 test"), refuse (attachment → an HTTP status the
+ * function answers for that one, or 0 = it answers), getDelay (ms before a
+ * signed URL answers, or attachment → ms — sent.maxGetInFlight then shows
+ * how many ran at once).
  */
 export async function stubBoard(page, options = {}) {
   const {
@@ -310,6 +314,9 @@ export async function stubBoard(page, options = {}) {
     flagError = null,
     fontKo = undefined,
     fontEn = undefined,
+    fileBody = () => "%PDF-1.4 test",
+    refuse = () => 0,
+    getDelay = 0,
   } = options;
   const db = {
     posts,
@@ -327,6 +334,8 @@ export async function stubBoard(page, options = {}) {
     upserts: [],
     inFlight: 0,
     maxInFlight: 0,
+    getInFlight: 0,
+    maxGetInFlight: 0,
     db,
     waiting: [],
     release() {
@@ -677,24 +686,40 @@ export async function stubBoard(page, options = {}) {
       const att = db.posts
         .flatMap((p) => p.attachments)
         .find((x) => x.id === body.attachment);
+      const refused = att ? refuse(att) : 0;
+      if (refused)
+        return route.fulfill({ status: refused, json: { error: "x" } });
       const name = att ? att.name : "file.pdf";
+      // signed-1 = no such attachment; otherwise the attachment's id
+      const token = att ? `signed-${att.id}` : "signed-1";
       return route.fulfill({
         json: {
-          url: `${url.origin}/storage/v1/object/sign/resource-board/x.pdf?token=signed-1&download=${encodeURIComponent(name)}`,
+          url: `${url.origin}/storage/v1/object/sign/resource-board/x.pdf?token=${token}&download=${encodeURIComponent(name)}`,
         },
       });
     }
     if (pathname.startsWith("/storage/v1/object/sign/resource-board/")) {
       const name = url.searchParams.get("download") || "file.pdf";
       sent.downloads.push(name);
-      return route.fulfill({
-        status: 200,
-        headers: {
-          "Content-Type": "application/pdf",
-          "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
-        },
-        body: "%PDF-1.4 test",
-      });
+      const id = (url.searchParams.get("token") || "").replace(/^signed-/, "");
+      const att = db.posts
+        .flatMap((p) => p.attachments)
+        .find((x) => x.id === id);
+      sent.getInFlight += 1;
+      sent.maxGetInFlight = Math.max(sent.maxGetInFlight, sent.getInFlight);
+      const wait = typeof getDelay === "function" ? getDelay(att) : getDelay;
+      if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+      sent.getInFlight -= 1;
+      return route
+        .fulfill({
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}`,
+          },
+          body: att ? fileBody(att) : "%PDF-1.4 test",
+        })
+        .catch(() => {});
     }
     if (
       pathname === "/storage/v1/object/resource-board" &&

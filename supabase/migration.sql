@@ -2129,7 +2129,7 @@ notify pgrst, 'reload schema';
 -- D64 (2026-11-02): a slot holds an uploaded file OR a Google Drive file
 -- ("anyone with the link"; only its ID is stored). Teachers download a Drive
 -- file from Google directly — no Storage egress, no Edge Function, no daily
--- limit; files keep every rule below (30/day, 15 s URL, 10 MB, PDF/xlsx/xls).
+-- limit; files keep every rule below (the day's limit, 15 s URL, 10 MB, PDF/xlsx/xls).
 -- Slots, in card order (D65, 2026-11-02): monthly-03 … monthly-12 (월간교육안
 -- 3월~12월, one per month) · plan (연간교육안 — the old '월간.연간교육안'
 -- slot key, kept so live files and Storage paths <level>/plan/… stay where
@@ -2143,7 +2143,9 @@ notify pgrst, 'reload schema';
 -- it calls teacher_resource_issue() with the service role (the caller's
 -- x-lms-token forwarded, or an admin uid it verified), then signs a URL that
 -- expires after 15 seconds — fixed on the server, so no long-lived link can be
--- made from the browser. LMS members are limited to 30 issues per KST day.
+-- made from the browser. LMS members are limited to 1,000 issues per KST day
+-- (D82, 2026-11-08 — was 30: a safety stop only, for a leaked account or a
+-- loop; one ZIP of N files = N issues).
 -- Browsers never read Storage objects of this bucket, nor the tables
 -- directly — RPCs only.
 -- ============================================================================
@@ -2333,7 +2335,7 @@ revoke all on public.teacher_resource_downloads from anon, authenticated;
 -- member and branch are active) with role 1 / 2, or p_admin_uid — an admin
 -- the function verified with Auth. What: the slot's CURRENT file only.
 -- Answers {"status":"ok","path","name"} | {"status":"denied"} |
--- {"status":"empty"} | {"status":"limit"} (30 per member per KST day).
+-- {"status":"empty"} | {"status":"limit"} (1,000 per member per KST day, D82).
 create or replace function public.teacher_resource_issue(
   p_level text, p_slot text, p_admin_uid uuid default null
 )
@@ -2376,7 +2378,7 @@ begin
     -- One member at a time, so parallel requests cannot pass the limit.
     perform pg_advisory_xact_lock(7302, hashtext(v_member::text));
     if (select count(*) from public.teacher_resource_downloads d
-         where d.member_id = v_member and d.issued_at >= v_today) >= 30 then
+         where d.member_id = v_member and d.issued_at >= v_today) >= 1000 then
       return jsonb_build_object('status', 'limit');
     end if;
     insert into public.teacher_resource_downloads (member_id, level, slot)
@@ -2531,7 +2533,8 @@ notify pgrst, 'reload schema';
 -- ----------------------------------------------------------------------------
 -- ADD-ONLY and safe to re-run. Needs the "LMS (Phase 3A)" block (lms_member)
 -- and the "Teacher resources" block above (site_flag, and its download log
--- teacher_resource_downloads — one 30-a-day counter for both, PM B6).
+-- teacher_resource_downloads — one daily counter for both, PM B6; 1,000 a
+-- day since D82).
 -- The header's "Teacher / 교사자료실" button opens it (the page). Who reads:
 -- the top admin and LMS branch (1) / teacher (2) accounts — students (3),
 -- visitors and other signed-in users get nothing (B2). Who writes: the top
@@ -3333,7 +3336,7 @@ $$;
 -- teacher_resource_issue. Who: the forwarded x-lms-token (role 1 / 2, board
 -- on) or p_admin_uid (an admin the function checked with Auth). What: a FILE
 -- attachment of a public post (the admin: any post). The daily limit is the
--- teacher-resources one — the same log, the same lock, 30 in all per KST day
+-- teacher-resources one — the same log, the same lock, 1,000 in all per KST day (D82)
 -- (rows: level 'board', slot = the attachment id). Answers like
 -- teacher_resource_issue: ok {path, name} | denied | off | empty | limit.
 create or replace function public.board_attachment_issue(
@@ -3387,7 +3390,7 @@ begin
      where issued_at < now() - interval '30 days';
     perform pg_advisory_xact_lock(7302, hashtext(v_member::text));
     if (select count(*) from public.teacher_resource_downloads d
-         where d.member_id = v_member and d.issued_at >= v_today) >= 30 then
+         where d.member_id = v_member and d.issued_at >= v_today) >= 1000 then
       return jsonb_build_object('status', 'limit');
     end if;
     insert into public.teacher_resource_downloads (member_id, level, slot)

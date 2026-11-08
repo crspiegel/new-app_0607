@@ -14,7 +14,7 @@ const BUTTON = "레벨별 자료실"; // 옛 이름 '교사 자료실' (2026-11-
 const NEED_LOGIN = "다시 로그인해 주세요.";
 const FAILED = "내려받지 못했어요. 잠시 후 다시 시도해 주세요.";
 const LIMIT =
-  "오늘 다운로드 횟수를 모두 사용했습니다. 내일 다시 시도해 주세요.";
+  "오늘 내려받기가 너무 많아 잠시 막혔어요. 관리자에게 문의해 주세요."; // D82
 const NOT_READY = "아직 준비 중이에요.";
 const FN_PATH = "/functions/v1/teacher-resource-download";
 const PLAN_NAME = "2026 Beginner 연간 교육안.pdf";

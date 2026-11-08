@@ -5,6 +5,7 @@ import {
   CATEGORIES,
   DRIVE_A,
   drive,
+  file,
   link,
   pid,
   samplePosts,
@@ -442,7 +443,7 @@ test("board post: files download here through the function with their Korean nam
   ]);
   expect(context.pages()).toHaveLength(1);
   // a Drive file: Google's direct download (D64's address, not the preview
-  // page), a new tab, no function call (not counted in the 30 a day)
+  // page), a new tab, no function call (not counted in the day's downloads)
   const open = page.getByRole("link", {
     name: "수료 상장 배경 이미지 (고화질) 내려받기 (새 탭)",
   });
@@ -503,7 +504,8 @@ test("board post: the function's refusals are explained and the page stays (B6, 
 }, info) => {
   desktopOnly(info);
   for (const [status, text] of [
-    [429, "오늘 다운로드 횟수를 모두 사용했습니다. 내일 다시 시도해 주세요."],
+    // D82 (2026-11-08): the limit is 1,000 a day now — a safety stop
+    [429, "오늘 내려받기가 너무 많아 잠시 막혔어요. 관리자에게 문의해 주세요."],
     [403, "교사자료실이 지금은 닫혀 있어요."],
     [404, "이 파일은 지금 받을 수 없어요."],
     [401, "다시 로그인해 주세요."],
@@ -1177,7 +1179,7 @@ test("board post (D80): a Google Sheets / Docs / Slides file downloads as Excel 
     await expect(open).toHaveAttribute("rel", "noopener noreferrer");
   }
   // a click opens Google's export address in a new tab (answered by the
-  // test's Google stub) — no function call, not counted in the 30 a day
+  // test's Google stub) — no function call, not counted in the day's downloads
   const [tab] = await Promise.all([
     context.waitForEvent("page"),
     page
@@ -1221,6 +1223,504 @@ test("board post (D80): a Google Sheets / Docs / Slides file downloads as Excel 
       ),
     ).toBe(true);
   }
+});
+
+/* ---- D81 모두 받기 (ZIP) · 선택 받기 (2026-11-08) ---------------------------- */
+
+// fflate's own browser build (vendor/, the file the page loads), run in Node
+// to open the ZIP the page made — no npm package for the tests.
+function fflateNode() {
+  const module = { exports: {} };
+  new Function(
+    "module",
+    "exports",
+    readFileSync(path.resolve("vendor/fflate-0.8.3.umd.js"), "utf8"),
+  )(module, module.exports);
+  return module.exports;
+}
+// The ZIP's entries in their order, each with its method (0 = stored,
+// 8 = deflated) and whether the name is marked UTF-8 (general purpose bit
+// 11), read from the local file headers.
+function zipEntries(bytes) {
+  const list = [];
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let at = 0;
+  while (view.getUint32(at, true) === 0x04034b50) {
+    const flags = view.getUint16(at + 6, true);
+    const method = view.getUint16(at + 8, true);
+    const packed = view.getUint32(at + 18, true);
+    const nameLength = view.getUint16(at + 26, true);
+    const extra = view.getUint16(at + 28, true);
+    const name = new TextDecoder().decode(
+      bytes.subarray(at + 30, at + 30 + nameLength),
+    );
+    list.push({ name, method, utf8: Boolean(flags & 0x800) });
+    at += 30 + nameLength + extra + packed;
+  }
+  return list;
+}
+async function zipOf(download) {
+  const bytes = new Uint8Array(readFileSync(await download.path()));
+  const files = fflateNode().unzipSync(bytes);
+  const text = Object.fromEntries(
+    Object.entries(files).map(([name, data]) => [
+      name,
+      new TextDecoder().decode(data),
+    ]),
+  );
+  return { bytes, entries: zipEntries(bytes), text };
+}
+
+const ZIP_TITLE = "11월 월간교육안 자료 모음 — Level 1";
+const ZIP_FILES = [
+  ["L1_11월_활동지.pdf", 1240000],
+  ["L1_11월_단어카드.hwp", 352000],
+  ["L1_11월_평가표.xlsx", 86000],
+  ["11월 수업 슬라이드 — 그림책 함께 읽기.pptx", 4820000],
+  ["11월_교실_꾸미기_도안.pdf", 2310000],
+  ["11월_출석부.xls", 64000],
+  ["11월_스티커_도안.png", 940000],
+];
+function zipPost(attachments, title = ZIP_TITLE) {
+  const posts = samplePosts();
+  posts.push({
+    id: pid(31),
+    title,
+    body: "11월 자료입니다.",
+    level: "level-1",
+    category: 1,
+    pinned: false,
+    published: true,
+    views: 4,
+    created_at: new Date().toISOString(),
+    attachments,
+  });
+  return posts;
+}
+const zipFiles = () => ZIP_FILES.map(([name, size]) => file(name, size));
+const bodyOf = (att) => `내용:${att.name}`;
+const fflateAsks = (page) => {
+  const seen = [];
+  page.on("request", (req) => {
+    if (/\/vendor\/fflate-[\d.]+\.umd\.js/.test(req.url()))
+      seen.push(req.url());
+  });
+  return seen;
+};
+
+test("board post (D81): 모두 받기 = one ZIP of every file — names, contents and order kept, Korean names marked UTF-8, links left out with a note, 3 at a time", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  const attachments = [
+    link("gsheet", "L1_11월_월간교육안", SHEET),
+    ...zipFiles(),
+    drive("11월 활동 사진 (고화질)"),
+  ];
+  const sent = await stubBoard(page, {
+    posts: zipPost(attachments),
+    fileBody: bodyOf,
+    getDelay: 150,
+  });
+  const lib = fflateAsks(page);
+  await openBoard(page, `#board/${pid(31)}`);
+  await expect(page.locator(".bd-card-title")).toHaveText(ZIP_TITLE);
+  // the head: [전체 선택] + [모두 받기 (ZIP · 7개)]; a check on each file row,
+  // a dim "–" (no check) on the two link rows; the Google note
+  const all = page.getByRole("button", { name: "모두 받기 (ZIP · 7개)" });
+  await expect(all).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "전체 선택" })).toBeVisible();
+  await expect(page.locator(".bd-att input[data-pick]")).toHaveCount(7);
+  await expect(
+    page.getByRole("checkbox", { name: "L1_11월_활동지.pdf 선택" }),
+  ).toBeVisible();
+  await expect(page.locator(".bd-att-check.is-off")).toHaveText(["–", "–"]);
+  await expect(page.locator(".bd-zip-note")).toHaveText(
+    "구글 링크 2개(구글 시트·구글 드라이브)는 압축에 들어가지 않아요. 그 줄의 [내려받기]로 따로 받아 주세요.",
+  );
+  // the rows' own [내려받기] are all still there
+  await expect(page.locator(".bd-att-btn-text")).toHaveCount(9);
+  await expect(page.locator("#boardZipBar")).toBeHidden();
+  expect(lib).toEqual([]); // fflate only when a ZIP is made
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    all.click(),
+  ]);
+  expect(download.suggestedFilename()).toBe(`${ZIP_TITLE}.zip`);
+  const zip = await zipOf(download);
+  expect(zip.entries.map((e) => e.name)).toEqual(ZIP_FILES.map(([n]) => n));
+  for (const [name] of ZIP_FILES) {
+    expect(zip.text[name]).toBe(`내용:${name}`);
+  }
+  // Korean names are marked UTF-8; xls is deflated, the rest stored as is
+  expect(zip.entries.every((e) => e.utf8)).toBe(true);
+  expect(zip.entries.map((e) => e.method)).toEqual([0, 0, 0, 0, 0, 8, 0]);
+  await expect(page.locator(".bd-zip-status")).toHaveClass(/is-done/);
+  await expect(page.locator(".bd-zip-status .bd-zip-line")).toHaveText(
+    `압축 파일을 받았어요 (7개 · ${
+      zip.bytes.length >= 1000 * 1024
+        ? `${(zip.bytes.length / 1024 / 1024).toFixed(1)}MB`
+        : `${Math.max(1, Math.round(zip.bytes.length / 1024))}KB`
+    }). 내려받기 폴더에서 ‘${ZIP_TITLE}.zip’을 확인해 주세요.`,
+  );
+  // one function call per FILE (7 = 7 of the day's downloads), none for
+  // links; three at a time; no Google request
+  const ids = attachments.filter((a) => a.kind === "file").map((a) => a.id);
+  expect(sent.fn.map((f) => f.body.attachment).sort()).toEqual([...ids].sort());
+  expect(sent.maxGetInFlight).toBeLessThanOrEqual(3);
+  expect(sent.maxGetInFlight).toBeGreaterThan(1);
+  expect(sent.google).toEqual([]);
+  expect(lib).toHaveLength(1);
+  await page.getByRole("button", { name: "닫기" }).click();
+  await expect(page.locator(".bd-zip-status")).toBeEmpty();
+  await expect(all).toBeEnabled();
+});
+
+test("board post (D81): 모두 받기 locks both buttons while it runs; the progress counts the files", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  await stubBoard(page, {
+    posts: zipPost(zipFiles()),
+    fileBody: bodyOf,
+    getDelay: 700,
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  await page.getByRole("checkbox", { name: "L1_11월_활동지.pdf 선택" }).check();
+  await page
+    .getByRole("checkbox", { name: "L1_11월_평가표.xlsx 선택" })
+    .check();
+  const downloaded = page.waitForEvent("download");
+  await page.getByRole("button", { name: "모두 받기 (ZIP · 7개)" }).click();
+  const status = page.locator(".bd-zip-status");
+  await expect(status).toHaveClass(/is-working/);
+  await expect(status.locator(".bd-zip-line")).toHaveText(
+    /^압축하는 중… [0-6] \/ 7개 \(창을 닫지 말아 주세요\)$/,
+  );
+  await expect(status.locator(".bd-zip-track")).toBeVisible();
+  await expect(page.locator("#boardZipAllBtn")).toBeDisabled();
+  await expect(page.locator(".bd-zip-get")).toBeDisabled();
+  await expect(status.locator(".bd-zip-line")).toHaveText(/3 \/ 7개/);
+  await downloaded;
+  await expect(status).toHaveClass(/is-done/);
+  await expect(page.locator("#boardZipAllBtn")).toBeEnabled();
+  await expect(page.locator(".bd-zip-get")).toBeEnabled();
+});
+
+test("board post (D81): picks — two = a ZIP of those two, one = no ZIP (the row's own download), 전체 선택 and 선택 해제", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  const attachments = zipFiles();
+  const sent = await stubBoard(page, {
+    posts: zipPost(attachments),
+    fileBody: bodyOf,
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  const bar = page.locator("#boardZipBar");
+  const allBox = page.getByRole("checkbox", { name: "전체 선택" });
+  // 전체 선택: all seven; one off = "some" (indeterminate)
+  await allBox.check();
+  await expect(page.locator(".bd-att.is-picked")).toHaveCount(7);
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText("7개 선택");
+  await page
+    .getByRole("checkbox", { name: "L1_11월_활동지.pdf 선택" })
+    .uncheck();
+  await expect(allBox).not.toBeChecked();
+  expect(await allBox.evaluate((el) => el.indeterminate)).toBe(true);
+  await page.getByRole("button", { name: "선택 해제" }).click();
+  await expect(bar).toBeHidden();
+  await expect(page.locator(".bd-att.is-picked")).toHaveCount(0);
+  expect(await allBox.evaluate((el) => el.indeterminate)).toBe(false);
+  // two picked: the bar under the box, the picked rows framed
+  await page
+    .getByRole("checkbox", { name: "L1_11월_평가표.xlsx 선택" })
+    .check();
+  await page
+    .getByRole("checkbox", { name: "11월_스티커_도안.png 선택" })
+    .check();
+  await expect(bar).toBeVisible();
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText("2개 선택");
+  await expect(bar.locator(".bd-zip-bar-sub")).toHaveText(
+    "압축 파일(ZIP) 1개로 받아요 · 1.0MB",
+  );
+  // (the phone's shorter label is in the button too, hidden on a PC)
+  await expect(bar.locator(".bd-zip-get")).toHaveAccessibleName(
+    "선택한 2개 받기 (ZIP)",
+  );
+  const picked = page.locator(".bd-att.is-picked");
+  await expect(picked).toHaveCount(2);
+  expect(
+    await picked.first().evaluate((el) => {
+      const s = getComputedStyle(el);
+      return [s.borderTopColor, s.backgroundColor];
+    }),
+  ).toEqual(["rgb(28, 176, 246)", "rgb(240, 249, 255)"]);
+  const boxBottom = (await page.locator(".bd-atts").boundingBox()).y;
+  expect((await bar.boundingBox()).y).toBeGreaterThan(boxBottom);
+  const [two] = await Promise.all([
+    page.waitForEvent("download"),
+    bar.getByRole("button", { name: "선택한 2개 받기 (ZIP)" }).click(),
+  ]);
+  expect(two.suggestedFilename()).toBe(`${ZIP_TITLE}_선택 2개.zip`);
+  const zip = await zipOf(two);
+  expect(zip.entries.map((e) => e.name)).toEqual([
+    "L1_11월_평가표.xlsx",
+    "11월_스티커_도안.png",
+  ]);
+  expect(sent.fn).toHaveLength(2);
+  // one picked: no ZIP — the file itself, the same way as its row
+  await page.getByRole("button", { name: "선택 해제" }).click();
+  await page
+    .getByRole("checkbox", { name: "L1_11월_단어카드.hwp 선택" })
+    .check();
+  await expect(bar.locator(".bd-zip-bar-count")).toHaveText("1개 선택");
+  await expect(bar.locator(".bd-zip-bar-sub")).toHaveText(
+    "1개는 압축하지 않고 바로 받아요 · 344KB",
+  );
+  await expect(bar.locator(".bd-zip-get")).toHaveAccessibleName(
+    "선택한 1개 받기",
+  );
+  const [one] = await Promise.all([
+    page.waitForEvent("download"),
+    bar.getByRole("button", { name: "선택한 1개 받기" }).click(),
+  ]);
+  expect(one.suggestedFilename()).toBe("L1_11월_단어카드.hwp");
+  expect(sent.fn.at(-1).body).toEqual({ attachment: attachments[1].id });
+  expect(sent.fn).toHaveLength(3);
+});
+
+test("board post (D81): one file (or only links) = no ZIP tools; a ZIP over 200MB is stopped before it starts", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  // one file + a link: no [전체 선택] / [모두 받기], no checks, no note
+  let context = await browser.newContext();
+  let page = await context.newPage();
+  await stubBoard(page, {
+    posts: zipPost([file("하나.pdf"), drive("사진")]),
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  await expect(page.locator(".bd-att")).toHaveCount(2);
+  await expect(page.locator(".bd-atts-tools")).toHaveCount(0);
+  await expect(page.locator(".bd-att-check")).toHaveCount(0);
+  await expect(page.locator(".bd-zip-note")).toHaveCount(0);
+  await expect(page.locator("#boardZipBar")).toHaveCount(0);
+  await context.close();
+  // 21 files of 10,000,000 bytes = 210,000,000 > 200MB (209,715,200)
+  context = await browser.newContext();
+  page = await context.newPage();
+  const big = Array.from({ length: 21 }, (_, i) =>
+    file(`큰자료_${String(i + 1).padStart(2, "0")}.pdf`, 10000000),
+  );
+  const sent = await stubBoard(page, { posts: zipPost(big) });
+  const lib = fflateAsks(page);
+  await openBoard(page, `#board/${pid(31)}`);
+  await page.getByRole("button", { name: "모두 받기 (ZIP · 21개)" }).click();
+  await expect(page.locator(".bd-zip-status")).toHaveClass(/is-error/);
+  await expect(page.locator(".bd-zip-status .bd-zip-line")).toHaveText(
+    "한 번에 200MB까지 받을 수 있어요. 파일을 골라서 나눠 받아 주세요.",
+  );
+  expect(sent.fn).toEqual([]);
+  expect(lib).toEqual([]);
+  // 20 of them (200,000,000 bytes) may go
+  await page.getByRole("checkbox", { name: "전체 선택" }).check();
+  await page.getByRole("checkbox", { name: "큰자료_21.pdf 선택" }).uncheck();
+  await expect(page.locator(".bd-zip-bar-count")).toHaveText("20개 선택");
+  await page.getByRole("button", { name: "선택한 20개 받기 (ZIP)" }).click();
+  await expect(page.locator(".bd-zip-status")).toHaveClass(
+    /is-working|is-done/,
+  );
+  await expect.poll(() => sent.fn.length).toBeGreaterThan(0);
+  await context.close();
+});
+
+test("board post (D81): one file fails = the others zipped and the missed one named; all fail = no ZIP and the refusal said; the same name twice = (2)", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  // one refused by the function: a ZIP of six + the missed name
+  let context = await browser.newContext();
+  let page = await context.newPage();
+  await stubBoard(page, {
+    posts: zipPost(zipFiles()),
+    fileBody: bodyOf,
+    refuse: (att) => (att.name === "L1_11월_단어카드.hwp" ? 500 : 0),
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  const [partial] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "모두 받기 (ZIP · 7개)" }).click(),
+  ]);
+  const zip = await zipOf(partial);
+  expect(zip.entries.map((e) => e.name)).toEqual(
+    ZIP_FILES.map(([n]) => n).filter((n) => n !== "L1_11월_단어카드.hwp"),
+  );
+  const status = page.locator(".bd-zip-status");
+  await expect(status).toHaveClass(/is-error/);
+  await expect(status.locator(".bd-zip-line")).toHaveText([
+    /^압축 파일을 받았어요 \(6개 · \d+KB\)\. 내려받기 폴더에서 ‘11월 월간교육안 자료 모음 — Level 1\.zip’을 확인해 주세요\.$/,
+    "받지 못한 파일이 있어요: L1_11월_단어카드.hwp — 잠시 뒤 다시 시도해 주세요.",
+  ]);
+  await context.close();
+  // every file refused (the day's limit): no ZIP at all, the limit said
+  context = await browser.newContext();
+  page = await context.newPage();
+  await stubBoard(page, { posts: zipPost(zipFiles()), downloadStatus: 429 });
+  let downloads = 0;
+  page.on("download", () => {
+    downloads += 1;
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  await page.getByRole("button", { name: "모두 받기 (ZIP · 7개)" }).click();
+  await expect(page.locator(".bd-zip-status .bd-zip-line")).toHaveText(
+    "오늘 내려받기가 너무 많아 잠시 막혔어요. 관리자에게 문의해 주세요.",
+  );
+  await expect(page.locator(".bd-zip-status")).toHaveClass(/is-error/);
+  expect(downloads).toBe(0);
+  await context.close();
+  // the same name twice (Windows ignores case) → "이름 (2)", "(3)"; a name
+  // or title with \ / : * ? " < > | gets _ instead
+  context = await browser.newContext();
+  page = await context.newPage();
+  await stubBoard(page, {
+    posts: zipPost(
+      [
+        file("활동지.pdf", 1000),
+        file("활동지.pdf", 2000),
+        file("활동지.PDF", 3000),
+        file("단어:카드?.hwp", 4000),
+        file("안내‮fdp.hwp", 5000),
+      ],
+      "11/12월 자료: 모음?",
+    ),
+    fileBody: (att) => `${att.name}:${att.size}`,
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  const [same] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "모두 받기 (ZIP · 5개)" }).click(),
+  ]);
+  expect(same.suggestedFilename()).toBe("11_12월 자료_ 모음_.zip");
+  const named = await zipOf(same);
+  expect(named.entries.map((e) => e.name)).toEqual([
+    "활동지.pdf",
+    "활동지 (2).pdf",
+    "활동지 (3).PDF",
+    "단어_카드_.hwp",
+    "안내fdp.hwp", // the direction mark (U+202E) is gone
+  ]);
+  expect(named.text["활동지 (2).pdf"]).toBe("활동지.pdf:2000");
+  expect(named.text["활동지 (3).PDF"]).toBe("활동지.PDF:3000");
+  await context.close();
+});
+
+test("board post (D81): leaving the post stops a running ZIP — no file arrives, the post opens fresh", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  await stubBoard(page, {
+    posts: zipPost(zipFiles()),
+    fileBody: bodyOf,
+    getDelay: 1200,
+  });
+  let downloads = 0;
+  page.on("download", () => {
+    downloads += 1;
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  await page.getByRole("button", { name: "모두 받기 (ZIP · 7개)" }).click();
+  await expect(page.locator(".bd-zip-status")).toHaveClass(/is-working/);
+  await page.locator("#boardBack").click();
+  await expect(page.locator("#boardListView")).toBeVisible();
+  // the answers that were on the way come and are dropped
+  await page.waitForTimeout(3000);
+  expect(downloads).toBe(0);
+  await page.goBack();
+  await expect(page.locator(".bd-card-title")).toHaveText(ZIP_TITLE);
+  await expect(page.locator(".bd-zip-status")).toBeEmpty();
+  await expect(page.locator("#boardZipAllBtn")).toBeEnabled();
+  await page.waitForTimeout(1500);
+  expect(downloads).toBe(0);
+});
+
+test("board post on a phone (D81): [모두 받기] the box's full width, the bar fixed at the bottom without hiding the page's end; 해제 / 선택한 N개 받기", async ({
+  browser,
+}, info) => {
+  desktopOnly(info);
+  const context = await browser.newContext({
+    viewport: { width: 375, height: 812 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  await stubBoard(page, {
+    posts: zipPost([
+      link("gsheet", "L1_11월_월간교육안", SHEET),
+      ...zipFiles(),
+    ]),
+    fileBody: bodyOf,
+  });
+  await openBoard(page, `#board/${pid(31)}`);
+  const all = page.locator("#boardZipAllBtn");
+  const box = await page.locator(".bd-atts").evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const s = getComputedStyle(el);
+    return {
+      left: r.left + parseFloat(s.paddingLeft) + parseFloat(s.borderLeftWidth),
+      right:
+        r.right - parseFloat(s.paddingRight) - parseFloat(s.borderRightWidth),
+    };
+  });
+  const button = await all.boundingBox();
+  expect(Math.abs(button.x - box.left)).toBeLessThanOrEqual(1);
+  expect(Math.abs(button.x + button.width - box.right)).toBeLessThanOrEqual(1);
+  expect(button.height).toBeGreaterThanOrEqual(48);
+  // a check's press area: 40 × 44
+  const check = await page.locator(".bd-att-check").nth(1).boundingBox();
+  expect(Math.round(check.width)).toBe(40);
+  expect(Math.round(check.height)).toBe(44);
+  await page.getByRole("checkbox", { name: "L1_11월_활동지.pdf 선택" }).check();
+  await page
+    .getByRole("checkbox", { name: "L1_11월_단어카드.hwp 선택" })
+    .check();
+  const bar = page.locator("#boardZipBar");
+  await expect(bar.getByRole("button", { name: "해제" })).toBeVisible();
+  await expect(
+    bar.getByRole("button", { name: "선택한 2개 받기", exact: true }),
+  ).toBeVisible();
+  // fixed at the bottom wherever the page is
+  for (const y of [0, 400]) {
+    await page.evaluate((top) => window.scrollTo(0, top), y);
+    const r = await bar.boundingBox();
+    expect(Math.round(812 - (r.y + r.height))).toBe(12);
+    expect(r.x).toBeCloseTo(12, 0);
+  }
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  // at the very end, 목록으로 and the footer's text sit above the bar
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const barTop = (await bar.boundingBox()).y;
+  const back = await page.locator("#boardBack").boundingBox();
+  expect(back.y + back.height).toBeLessThanOrEqual(barTop);
+  const footer = await page.locator(".site-footer p").first().boundingBox();
+  expect(footer.y + footer.height).toBeLessThanOrEqual(barTop);
+  // the ZIP from the phone's bar
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    bar.getByRole("button", { name: "선택한 2개 받기", exact: true }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe(`${ZIP_TITLE}_선택 2개.zip`);
+  // leaving the post: the bar and its room go
+  await page.locator("#boardBack").click();
+  await expect(page.locator("#boardListView")).toBeVisible();
+  expect(await page.evaluate(() => document.body.dataset.zipBar)).toBe(
+    undefined,
+  );
+  await context.close();
 });
 
 test("board admin editor: editing a post keeps its attachments by id; one taken out goes from Storage after the save (B8)", async ({
