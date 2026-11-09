@@ -27,7 +27,10 @@
      when the editor is cancelled or left (B8) — after our own window asks
      first (F3: "업로드를 중단하시겠습니까?"; F4: unsaved changes); closing
      the tab or reloading gets the browser's own question while this edit
-     has uploads, and pagehide deletes them. */
+     has uploads or any change (D87; F3 had uploads only), and pagehide
+     deletes the uploads. The editor has its own address (D87:
+     #admin/board/new, #admin/board/edit/<id>) and history entry: Back =
+     the admin list (our window first when something would be lost). */
 
 const RBA_BUCKET = "resource-board";
 const RBA_MAX_BYTES = 10 * 1024 * 1024; // = the bucket's file_size_limit
@@ -202,7 +205,8 @@ let rbaEd = null; // the open editor (see rbaOpenEditor)
 let rbaToken = null; // the admin's access token, for deletes while leaving
 let rbaDragKey = null;
 let rbaJustSaved = null; // the post to light up once the list is back (F4)
-let rbaUrl = ""; // the address while the editor is open (put back on "stay")
+let rbaUrl = ""; // the editor's own address (D87), "" when none is open
+let rbaListBelow = false; // the history entry under the editor's = the list
 let rbaUnloadOn = false; // the beforeunload question is armed (F3)
 let rbaPassing = false; // a leave click sent again after "중단하기"
 let rbaAnswer = null; // resolves the open leave window (true = leave)
@@ -1062,7 +1066,9 @@ function rbaSnapshot() {
 }
 
 function rbaChanged() {
-  return Boolean(rbaEd) && rbaSnapshot() !== rbaEd.start;
+  return (
+    Boolean(rbaEd) && rbaEd.start !== undefined && rbaSnapshot() !== rbaEd.start
+  );
 }
 
 // What leaving now would lose → the window's words, or null (just go).
@@ -1089,6 +1095,18 @@ function rbaAsk({ title, text, go, stay }) {
   return new Promise((resolve) => {
     rbaAnswer = resolve;
   });
+}
+
+// The login ended (app.js [로그인 화면으로], D87): an open leave window
+// closes without an answer (null) and lets go of the focus.
+function rbaCancelAsk() {
+  const resolve = rbaAnswer;
+  if (!resolve) return;
+  rbaAnswer = null;
+  rbaLeaveModal.hidden = true;
+  document.body.classList.remove("admin-modal-open");
+  rbaReturnFocus = null;
+  resolve(null);
 }
 
 function rbaAnswerLeave(go) {
@@ -1137,7 +1155,8 @@ if (rbaLeaveModal) {
   });
 }
 
-/* -- the browser's own question while this edit has uploads (F3) -- */
+/* -- the browser's own question while this edit has uploads or any change
+   (F3; D87: any change too) -- */
 
 function rbaWarnUnload(event) {
   event.preventDefault();
@@ -1145,7 +1164,7 @@ function rbaWarnUnload(event) {
 }
 
 function rbaSyncUnload() {
-  const on = rbaPendingUploads().length > 0;
+  const on = rbaPendingUploads().length > 0 || rbaChanged();
   if (on === rbaUnloadOn) return;
   rbaUnloadOn = on;
   if (on) window.addEventListener("beforeunload", rbaWarnUnload);
@@ -1178,8 +1197,11 @@ function rbaUpdateBodyCount() {
   }
 }
 
-async function rbaOpenEditor(postId) {
+// `route`: the address already says this editor (a load, Back / Forward —
+// D87); otherwise opening it adds its own history entry.
+async function rbaOpenEditor(postId, { route = false } = {}) {
   if (!sb || !isAdmin) return;
+  const switching = Boolean(rbaEd);
   if (rbaEd) {
     // another post while this one is open (F3): ask first
     if (!(await rbaConfirmLeave())) return;
@@ -1213,6 +1235,10 @@ async function rbaOpenEditor(postId) {
           ? RBA_MSG.missing
           : RBA_MSG.listFailed,
       );
+      // opened from its address: the address becomes the list's (D87)
+      if (route || switching) rbaSetAddress("#admin/board", { replace: true });
+      rbaUrl = "";
+      rbaShowMode("list");
       rbaLoad();
       return;
     }
@@ -1245,13 +1271,49 @@ async function rbaOpenEditor(postId) {
     post.category,
   );
   ed.start = rbaSnapshot();
-  rbaUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  // its own address (D87): a new history entry from the list, the same one
+  // when the address already says it or another post's editor was open
+  const hash = postId ? `#admin/board/edit/${postId}` : "#admin/board/new";
+  if (route || switching) {
+    if (route) rbaListBelow = false; // what is under it is not known
+    rbaSetAddress(hash, { replace: true });
+  } else {
+    rbaListBelow = window.location.hash === "#admin/board";
+    rbaSetAddress(hash);
+  }
   rbaCloseDriveForm();
   rbaDropDefault();
   rbaRenderFiles();
   rbaShowMode("edit");
   window.scrollTo({ top: 0 });
   rbaTitle.focus();
+}
+
+// The editor's address (D87): pushed (a new entry) or put in place.
+function rbaSetAddress(hash, { replace = false } = {}) {
+  const url = `${window.location.pathname}${window.location.search}${hash}`;
+  if (replace) window.history.replaceState(null, "", url);
+  else if (window.location.hash !== hash) {
+    window.history.pushState(null, "", url);
+  }
+  rbaUrl = url;
+}
+
+function rbaHere() {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+// [등록하기] / [수정 완료] / [취소] closed the editor (D87): its history entry
+// goes — back onto the list's entry when that is the one under it (so Back
+// then leaves the list, never reopens the editor or shows the list twice),
+// else the entry becomes the list's (the editor opened from its address).
+function rbaLeaveEntry() {
+  const url = rbaUrl;
+  rbaUrl = "";
+  if (!url || rbaHere() !== url) return;
+  if (rbaListBelow) window.history.back();
+  else rbaSetAddress("#admin/board", { replace: true });
+  rbaUrl = "";
 }
 
 function rbaBackToList(message) {
@@ -1262,6 +1324,7 @@ function rbaBackToList(message) {
   window.scrollTo({ top: 0 });
   rbaSay(message || "");
   rbaLoad();
+  rbaLeaveEntry();
 }
 
 // Cancel / leave: stop the uploads and delete every file this editor put in
@@ -2038,6 +2101,7 @@ document.addEventListener(
     if (!target) return;
     const ask = rbaLeaveCase();
     if (!ask) {
+      rbaUrl = "";
       rbaDiscard({ keepalive: true });
       return;
     }
@@ -2045,6 +2109,7 @@ document.addEventListener(
     event.stopImmediatePropagation();
     rbaAsk(ask).then(async (go) => {
       if (!go) return;
+      rbaUrl = "";
       await rbaLeaveNow();
       rbaPassing = true;
       try {
@@ -2057,19 +2122,31 @@ document.addEventListener(
   true,
 );
 // Closing the tab / reloading / another address: the browser asked first
-// (rbaSyncUnload, uploads only); if it goes, its uploads go too.
+// (rbaSyncUnload: uploads or, D87, any change); if it goes, its uploads go
+// too.
 window.addEventListener("pagehide", () => {
   if (rbaEd) rbaDiscard({ keepalive: true });
 });
 
 // Back / Forward / an edited # while the editor is open (F3; called first
-// by resource-board.js's hashchange). "Stay" puts the address back; leaving
-// closes the editor and follows the address.
+// by resource-board.js's hashchange). Nothing to lose: close and follow the
+// address (Back = the admin list, D87). Otherwise our window: leaving
+// closes the editor and follows the address as it is then; "stay" adds the
+// editor's address again as a new entry (D87 — the entry Back landed on is
+// left as it was, so the next Back asks again instead of leaving the site).
+// While the window is up, more moves wait for its answer.
 function rbaHashChanged() {
   if (!rbaEd) return false;
+  if (rbaAnswer) return true;
+  if (rbaHere() === rbaUrl) return true; // back on its own address
   const leave = async () => {
+    rbaUrl = "";
     await rbaLeaveNow();
     rbaShowMode("list");
+    if (window.location.hash === "#admin/board") {
+      rbaSay("");
+      rbaLoad();
+    }
     rbFollowHash();
   };
   const ask = rbaLeaveCase();
@@ -2078,8 +2155,13 @@ function rbaHashChanged() {
     return true;
   }
   rbaAsk(ask).then((go) => {
-    if (go) leave();
-    else window.history.replaceState(null, "", rbaUrl);
+    if (go === null || !rbaEd) return; // closed by the login-ended window
+    if (go) {
+      leave();
+      return;
+    }
+    rbaListBelow = window.location.hash === "#admin/board";
+    window.history.pushState(null, "", rbaUrl);
   });
   return true;
 }
@@ -2104,10 +2186,25 @@ window.craBoardAdmin = {
     return rbaEd;
   },
   hashChanged: rbaHashChanged,
+  // app.js adminFollowRoute (D87): the board view's address says "the list"
+  // (null), "new" or a post id — open that editor unless it is already up.
+  follow(editor) {
+    if (!editor) {
+      if (!rbaEd && document.body.dataset.boardMode === "edit") {
+        rbaShowMode("list");
+      }
+      return;
+    }
+    if (rbaEd && rbaHere() === rbaUrl) return;
+    rbaOpenEditor(editor === "new" ? null : editor, { route: true });
+  },
   // The login ended (app.js, [로그인 화면으로]): close the editor without
-  // asking. Its unregistered uploads are deleted only if the last token
-  // still works — otherwise they stay (the monthly orphan check finds them).
+  // asking — and an open leave window too (D87). Its unregistered uploads
+  // are deleted only if the last token still works — otherwise they stay
+  // (the monthly orphan check finds them).
   drop() {
+    rbaCancelAsk();
+    rbaUrl = "";
     if (!rbaEd) return;
     rbaDiscard({ keepalive: true });
     rbaShowMode("list");

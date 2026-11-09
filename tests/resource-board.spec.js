@@ -3165,7 +3165,7 @@ test("board admin editor: leaving with this edit's uploads asks first — 중단
   expect(sent.rpc.map((r) => r.name)).not.toContain("board_post_save");
 });
 
-test("board admin editor: Back or an edited # asks too — stay puts the address back, 중단하기 follows it; log out deletes first (F3)", async ({
+test("board admin editor: Back or an edited # asks too — stay keeps the editor and its address (D87), 중단하기 follows it; log out deletes first (F3)", async ({
   page,
 }, info) => {
   desktopOnly(info);
@@ -3173,15 +3173,19 @@ test("board admin editor: Back or an edited # asks too — stay puts the address
   await page.goto("/");
   await page.waitForFunction(() => window.craBoard && window.craBoard.ready);
   await page.locator("#adminNavBtn").click();
-  await expect(page).toHaveURL(/#admin$/);
+  // D87: one address per admin view (the old #admin is gone)
+  await expect(page).toHaveURL(/#admin\/content$/);
   await editorWithFiles(page, ["가.pdf", "나.pdf"], { goto: false });
+  await expect(page).toHaveURL(/#admin\/board\/new$/);
   await expect(page.locator("#rbFilesCount")).toHaveText("첨부 2개");
   const modal = page.locator("#rbLeaveModal");
-  // Back → our window; stay → the address is #admin again
+  // Back (to the list's address) → our window; stay → the editor's address
+  // again (D87: a new entry — the list's entry is kept)
   await page.goBack();
+  await expect(page).toHaveURL(/#admin\/board$/);
   await expect(modal).toBeVisible();
   await page.locator("#rbLeaveStay").click();
-  await expect(page).toHaveURL(/#admin$/);
+  await expect(page).toHaveURL(/#admin\/board\/new$/);
   await expect(page.locator("#rbEditMode")).toBeVisible();
   expect(sent.removed).toEqual([]);
   // an edited address → 중단하기 → the board opens, the two files go
@@ -3204,7 +3208,7 @@ test("board admin editor: Back or an edited # asks too — stay puts the address
   await expect.poll(() => sent.removed.at(-1)).toBe(last);
 });
 
-test("board admin editor: the browser asks on close / reload only while this edit has uploads; nothing to lose = no window at all (F3)", async ({
+test("board admin editor: the browser asks on close / reload while this edit has uploads or any change (D87 — F3 had uploads only); nothing to lose = no window at all", async ({
   page,
 }, info) => {
   desktopOnly(info);
@@ -3222,10 +3226,15 @@ test("board admin editor: the browser asks on close / reload only while this edi
   await page.locator("#rbEdCancel").click();
   await expect(modal).toBeHidden();
   await expect(page.locator("#rbListMode")).toBeVisible();
-  // a title only: our "unsaved changes" window, never the browser's
+  // a title only (D87): the browser's question is armed too — and taken
+  // back when the change is undone; leaving inside the site = our window
   await page.locator("#boardNewBtn").click();
   await page.locator("#rbEdTitle").fill("쓰다 만 글");
+  expect(await armed()).toBe(true);
+  await page.locator("#rbEdTitle").fill("");
   expect(await armed()).toBe(false);
+  await page.locator("#rbEdTitle").fill("쓰다 만 글");
+  expect(await armed()).toBe(true);
   await page.locator('.admin-menu-btn[data-admin-view="banner"]').click();
   await expect(page.locator("#rbLeaveTitle")).toHaveText(
     "수정한 내용을 저장하지 않고 나갈까요?",

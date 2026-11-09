@@ -2416,11 +2416,121 @@ function populateAdminSelectors() {
   if (adminMonthSelect) adminMonthSelect.value = adminState.month;
 }
 
+/* ---- Admin addresses (D87, 2026-11-09) ----------------------------------
+   One address per admin view — #admin/<view> (the adminViewTitles keys) —
+   and for the 교사자료실 editor #admin/board/new and #admin/board/edit/<id>.
+   Entering the admin ([Admin] / [My Branch] / [My Class], or an admin
+   login) and choosing another menu each leave a history entry
+   (pushState: no hashchange, so this page does not react to its own moves).
+   Back / Forward / a typed address reach adminFollowRoute through the one
+   hashchange listener (resource-board.js), after the open editor has had
+   its say (F3). The old #admin, an unknown view or a view outside the
+   account's list is rewritten (no new entry) to the account's default
+   view; no sign-in → the login page (a student → home) and nothing of the
+   admin is drawn. Nothing moves before the load-time sign-in check is done,
+   nor while the login-ended window (§5) is up. */
+const ADMIN_POST_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+let adminRoutesReady = false; // set once the load-time sign-in is known
+
+function adminDefaultView() {
+  return adminRole() === "admin" ? "content" : "members";
+}
+
+// "#admin/board/edit/<id>" → { view: "board", editor: "<id>" }; "#admin" →
+// { view: null, editor: null }; not an admin address → null.
+function adminRouteOf(hash) {
+  const match = /^#admin(?:\/(.*))?$/.exec(hash || "");
+  if (!match) return null;
+  const parts = (match[1] || "").split("/");
+  const view = Object.keys(adminViewTitles).includes(parts[0])
+    ? parts[0]
+    : null;
+  let editor = null;
+  if (view === "board" && parts.length === 2 && parts[1] === "new") {
+    editor = "new";
+  } else if (
+    view === "board" &&
+    parts.length === 3 &&
+    parts[1] === "edit" &&
+    ADMIN_POST_ID_RE.test(parts[2])
+  ) {
+    editor = parts[2].toLowerCase();
+  }
+  return { view, editor };
+}
+
+function adminHash(view, editor = null) {
+  if (editor === "new") return `#admin/${view}/new`;
+  if (editor) return `#admin/${view}/edit/${editor}`;
+  return `#admin/${view}`;
+}
+
+function adminAddress(hash) {
+  return `${window.location.pathname}${window.location.search}${hash}`;
+}
+
+// A new history entry for an admin address (none when it is already there).
+function adminPush(hash) {
+  if (window.location.hash === hash) return;
+  window.history.pushState(null, "", adminAddress(hash));
+}
+
+// The login-ended window (§5) is up: addresses move nothing.
+function adminFrozen() {
+  return Boolean(loginEndedModal) && !loginEndedModal.hidden;
+}
+
+// Show what the current admin address says. `reopen` (the load) draws the
+// whole admin screen again even if it is already up.
+function adminFollowRoute({ reopen = false } = {}) {
+  if (!adminRoutesReady || adminFrozen()) return;
+  const role = adminRole();
+  if (!role) {
+    // no admin rights: the login page (a signed-in student: home), the
+    // address rewritten — the admin screen is never drawn
+    window.history.replaceState(
+      null,
+      "",
+      adminAddress(state.lms ? "" : "#login"),
+    );
+    showScreen(state.lms ? "home" : "login");
+    return;
+  }
+  const route = adminRouteOf(window.location.hash) || {
+    view: null,
+    editor: null,
+  };
+  let { view, editor } = route;
+  if (!view || !adminViewsAllowed().includes(view)) {
+    view = adminDefaultView();
+    editor = null;
+  }
+  const target = adminHash(view, editor);
+  if (window.location.hash !== target) {
+    window.history.replaceState(null, "", adminAddress(target));
+  }
+  const opening = reopen || document.body.dataset.screen !== "admin";
+  if (opening) {
+    applyAdminMenu();
+    if (role === "admin") {
+      populateAdminSelectors();
+      renderAdminBoard();
+      refreshSignupUI();
+    }
+  }
+  if (opening || adminCurrentView !== view) setAdminView(view);
+  if (opening) showScreen("admin");
+  if (view === "board" && window.craBoardAdmin) {
+    window.craBoardAdmin.follow(editor);
+  }
+}
+
 // The admin screen for the top admin, a branch account or a teacher (each
 // sees only its views — ADMIN_VIEWS). A visitor goes to the login page, a
-// signed-in student to the home page. The same gate runs on a load or reload
-// of #admin (the boot code below calls this), and setAdminView refuses any
-// view outside the caller's list.
+// signed-in student to the home page. Entering = a new history entry for
+// the account's default view (D87); setAdminView refuses any view outside
+// the caller's list.
 function openAdmin() {
   const role = adminRole();
   if (!role) {
@@ -2433,15 +2543,8 @@ function openAdmin() {
     }
     return;
   }
-  applyAdminMenu();
-  if (role === "admin") {
-    populateAdminSelectors();
-    renderAdminBoard();
-    refreshSignupUI();
-  }
-  setAdminView(role === "admin" ? "content" : "members");
-  setHash("admin");
-  showScreen("admin");
+  adminPush(adminHash(adminDefaultView()));
+  adminFollowRoute();
 }
 
 if (adminNavBtn) adminNavBtn.addEventListener("click", openAdmin);
@@ -2515,9 +2618,12 @@ function setAdminView(view) {
   return true;
 }
 
+// A menu choice = a new history entry #admin/<view> (D87; the same menu
+// again opens it again without one).
 adminMenuButtons.forEach((btn) => {
   btn.addEventListener("click", () => {
-    setAdminView(btn.dataset.adminView);
+    const view = btn.dataset.adminView;
+    if (setAdminView(view)) adminPush(adminHash(view));
     setAdminMenuOpen(false);
   });
 });
@@ -3032,72 +3138,106 @@ const LEVEL_VIEWS = [
   "content-v2",
   "content-v3",
 ];
-const hashParts = window.location.hash.slice(1).split("/");
-const [view, , hashMonth] = hashParts;
-let hashLevel = null;
-if (LEVEL_VIEWS.includes(view)) {
-  let raw = "";
-  try {
-    raw = decodeURIComponent(hashParts[1] || "");
-  } catch {
-    raw = "";
+
+// The user screen the address stands for: on a load (`load`), and when Back
+// / Forward / a typed address leaves the admin screen (D87 — the same
+// opening, so the address and the screen agree). #board… is the board's
+// own (resource-board.js); on a load #admin… waits for the sign-in below.
+// Anything else (or nothing) = the home page — on a load it is already up.
+function openHashScreen({ load = false } = {}) {
+  const hashParts = window.location.hash.slice(1).split("/");
+  const [view, , hashMonth] = hashParts;
+  let hashLevel = null;
+  if (LEVEL_VIEWS.includes(view)) {
+    let raw = "";
+    try {
+      raw = decodeURIComponent(hashParts[1] || "");
+    } catch {
+      raw = "";
+    }
+    hashLevel = levelFromAny(raw);
+    const base = window.location.pathname + window.location.search;
+    if (!hashLevel) {
+      history.replaceState(null, "", base);
+    } else if (hashLevel !== raw) {
+      hashParts[1] = hashLevel;
+      history.replaceState(null, "", `${base}#${hashParts.join("/")}`);
+    }
   }
-  hashLevel = levelFromAny(raw);
-  const base = window.location.pathname + window.location.search;
-  if (!hashLevel) {
-    history.replaceState(null, "", base);
-  } else if (hashLevel !== raw) {
-    hashParts[1] = hashLevel;
-    history.replaceState(null, "", `${base}#${hashParts.join("/")}`);
+
+  // #resources/<level> opens on the month page; teacher-resources.js moves
+  // on to the resource page once the sign-in is known (craAuthReady) — or
+  // puts #months/<level> in the address for anyone not allowed. No
+  // forbidden screen shows even for a moment. Later (D87) the sign-in is
+  // known: the same check right here.
+  if ((view === "months" || view === "resources") && hashLevel) {
+    state.level = hashLevel;
+    monthLevelTag.textContent = levelLabel(state.level);
+    applyLevelTheme();
+    showScreen("months");
+    if (!load && view === "resources") {
+      if (canSeeTeacherResources() && window.craTeacherRes) {
+        window.craTeacherRes.open(hashLevel);
+      } else {
+        history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${window.location.search}#months/${hashLevel}`,
+        );
+      }
+    }
+    return;
+  }
+
+  if (view === "overview") {
+    showScreen("overview");
+    return;
+  }
+
+  if (view === "login") {
+    showScreen("login");
+    return;
+  }
+
+  if (view === "content" && hashLevel && hashMonth) {
+    state.level = hashLevel;
+    state.month = decodeURIComponent(hashMonth);
+    monthLevelTag.textContent = levelLabel(state.level);
+    updateContentMonthNumber();
+    applyLevelTheme();
+    showScreen("content");
+    return;
+  }
+
+  if (view === "content-v2" && hashLevel && hashMonth) {
+    state.level = hashLevel;
+    state.month = decodeURIComponent(hashMonth);
+    monthLevelTag.textContent = levelLabel(state.level);
+    updateContentV2Header();
+    applyLevelTheme();
+    showScreen("contentV2");
+    return;
+  }
+
+  if (view === "content-v3" && hashLevel && hashMonth) {
+    state.level = hashLevel;
+    state.month = decodeURIComponent(hashMonth);
+    monthLevelTag.textContent = levelLabel(state.level);
+    updateContentV3Header();
+    renderCalendarV3();
+    applyLevelTheme();
+    showScreen("contentV3");
+    return;
+  }
+
+  if (!load) {
+    state.level = "";
+    state.month = "";
+    showScreen("home");
   }
 }
 
-// #resources/<level> opens on the month page; teacher-resources.js moves on
-// to the resource page once the sign-in is known (craAuthReady) — or puts
-// #months/<level> in the address for anyone not allowed. No forbidden screen
-// shows even for a moment.
-if ((view === "months" || view === "resources") && hashLevel) {
-  state.level = hashLevel;
-  monthLevelTag.textContent = levelLabel(state.level);
-  applyLevelTheme();
-  showScreen("months");
-}
-
-if (view === "overview") {
-  showScreen("overview");
-}
-
-if (view === "login") {
-  showScreen("login");
-}
-
-if (view === "content" && hashLevel && hashMonth) {
-  state.level = hashLevel;
-  state.month = decodeURIComponent(hashMonth);
-  monthLevelTag.textContent = levelLabel(state.level);
-  updateContentMonthNumber();
-  applyLevelTheme();
-  showScreen("content");
-}
-
-if (view === "content-v2" && hashLevel && hashMonth) {
-  state.level = hashLevel;
-  state.month = decodeURIComponent(hashMonth);
-  monthLevelTag.textContent = levelLabel(state.level);
-  updateContentV2Header();
-  applyLevelTheme();
-  showScreen("contentV2");
-}
-
-if (view === "content-v3" && hashLevel && hashMonth) {
-  state.level = hashLevel;
-  state.month = decodeURIComponent(hashMonth);
-  monthLevelTag.textContent = levelLabel(state.level);
-  updateContentV3Header();
-  renderCalendarV3();
-  applyLevelTheme();
-  showScreen("contentV3");
-}
+openHashScreen({ load: true });
 
 // Resolves once the load-time sign-in (admin or LMS) is known. Scripts loaded
 // after this one (teacher-resources.js) wait on it rather than on timing.
@@ -3122,18 +3262,27 @@ window.craAuthReady = new Promise((resolve) => {
   if (!isAdmin) await restoreLmsSession(); // an admin session supersedes it
   await flagsLoad;
   updateAdminUI();
+  adminRoutesReady = true; // admin addresses may move the screen from now on
   resolveAuthReady();
   await hydrateContent();
   await hydrateBackgrounds();
-  if (view === "admin") {
-    // Mirror openAdmin() so a REFRESH on #admin restores the FULL admin view —
-    // board AND member list (+ default tab). Previously this path rendered only
-    // the board, so the member list stayed blank until openAdmin ran again
-    // (e.g. re-clicking the Admin button), which looked like a slow/late load.
-    // openAdmin() bounces non-admins to the login screen.
-    openAdmin();
+  if (adminRouteOf(window.location.hash)) {
+    // A load or REFRESH on an admin address (D87: #admin/<view>, the
+    // editor's, or the old #admin) restores the FULL admin view — board AND
+    // member list — on that view; adminFollowRoute sends anyone without
+    // rights to the login page (a student home) and rewrites a view the
+    // account may not open to its default one.
+    adminFollowRoute({ reopen: true });
   }
 })();
+
+// For resource-board.js's hashchange listener (the page's one) and tests.
+window.craAdmin = {
+  isRoute: (hash) => Boolean(adminRouteOf(hash)),
+  follow: () => adminFollowRoute(),
+  leave: () => openHashScreen(),
+  frozen: adminFrozen,
+};
 
 // Bridge for background-editor.js (separate classic script) and Playwright.
 window.craBg = {

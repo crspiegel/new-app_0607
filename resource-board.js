@@ -1405,25 +1405,37 @@ function rbLeave() {
   window.location.reload();
 }
 
-// Where the address now points: the board, or out of it (the admin editor
-// calls this once its unsaved uploads are dealt with — F3).
+// Where the address now points (also called by the admin editor once its
+// unsaved work is dealt with — F3): an admin address → app.js (D87); the
+// board; or out of the board / out of the admin screen — the admin screen
+// opens the address's screen as a load does (D87). Moves between the other
+// user screens are not handled here (D88).
 function rbFollowHash() {
-  if (rbParse(window.location.hash)) rbRoute();
-  else rbLeave();
-}
-
-window.addEventListener("hashchange", () => {
-  // The admin's post editor is open: it decides first (F3 — its own
-  // window when uploads or changes would be lost, the address put back on
-  // "stay"). resource-board-admin.js loads after this file.
-  const editor = window.craBoardAdmin;
-  if (editor && editor.hashChanged()) return;
+  const admin = window.craAdmin;
+  if (admin && admin.isRoute(window.location.hash)) {
+    rbZipCancel();
+    admin.follow();
+    return;
+  }
   if (rbParse(window.location.hash)) {
     rbRoute();
     return;
   }
   rbZipCancel();
-  if (document.body.dataset.screen === "board") rbLeave();
+  const screen = document.body.dataset.screen;
+  if (screen === "board") rbLeave();
+  else if (screen === "admin" && admin) admin.leave();
+}
+
+// The page's one hashchange listener. The login-ended window (§5) is up:
+// nothing moves (D87). The admin's post editor is open: it decides first
+// (F3 — its own window when uploads or changes would be lost; "stay" keeps
+// the editor and its address). resource-board-admin.js loads after this file.
+window.addEventListener("hashchange", () => {
+  if (window.craAdmin && window.craAdmin.frozen()) return;
+  const editor = window.craBoardAdmin;
+  if (editor && editor.hashChanged()) return;
+  rbFollowHash();
 });
 
 if (teacherBoardBtn) {
