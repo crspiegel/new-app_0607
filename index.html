@@ -1454,38 +1454,121 @@
                 ></p>
                 <div class="rb-list-mode" id="rbListMode">
                   <div class="adm-box">
-                    <div class="adm-filters">
-                      <div class="adm-filter-group">
-                        <label class="admin-select">
-                          <span>레벨</span>
-                          <select id="rbFilterLevel"></select>
-                        </label>
-                        <label class="admin-select">
+                    <!-- D85 (2026-11-09): level chips · 분류 · status buttons ·
+                         title search (Enter) -->
+                    <div class="rb-filters">
+                      <div
+                        class="rb-level-chips"
+                        id="rbFilterLevel"
+                        role="group"
+                        aria-label="레벨"
+                      >
+                        <button
+                          type="button"
+                          class="rb-chip"
+                          data-rb-level=""
+                          aria-pressed="true"
+                        >
+                          전체
+                        </button>
+                        <button
+                          type="button"
+                          class="rb-chip"
+                          data-rb-level="beginner"
+                          aria-pressed="false"
+                        >
+                          <span class="rb-dot lv-beginner"></span>Beginner
+                        </button>
+                        <button
+                          type="button"
+                          class="rb-chip"
+                          data-rb-level="level-1"
+                          aria-pressed="false"
+                        >
+                          <span class="rb-dot lv-level-1"></span>Level 1
+                        </button>
+                        <button
+                          type="button"
+                          class="rb-chip"
+                          data-rb-level="level-2"
+                          aria-pressed="false"
+                        >
+                          <span class="rb-dot lv-level-2"></span>Level 2
+                        </button>
+                        <button
+                          type="button"
+                          class="rb-chip"
+                          data-rb-level="level-3"
+                          aria-pressed="false"
+                        >
+                          <span class="rb-dot lv-level-3"></span>Level 3
+                        </button>
+                        <button
+                          type="button"
+                          class="rb-chip"
+                          data-rb-level="common"
+                          aria-pressed="false"
+                        >
+                          <span class="rb-dot lv-common"></span>공통
+                        </button>
+                      </div>
+                      <div class="rb-filter-line">
+                        <label class="admin-select rb-cat-filter">
                           <span>분류</span>
                           <select id="rbFilterCat"></select>
                         </label>
-                        <label class="admin-select">
-                          <span>상태</span>
-                          <select id="rbFilterStatus">
-                            <option value="">전체</option>
-                            <option value="public">공개</option>
-                            <option value="hidden">숨김</option>
-                          </select>
-                        </label>
+                        <div
+                          class="rb-seg"
+                          id="rbFilterStatus"
+                          role="group"
+                          aria-label="상태"
+                        >
+                          <button
+                            type="button"
+                            class="rb-seg-btn"
+                            data-rb-status=""
+                            aria-pressed="true"
+                          >
+                            전체
+                          </button>
+                          <button
+                            type="button"
+                            class="rb-seg-btn"
+                            data-rb-status="public"
+                            aria-pressed="false"
+                          >
+                            공개
+                          </button>
+                          <button
+                            type="button"
+                            class="rb-seg-btn"
+                            data-rb-status="hidden"
+                            aria-pressed="false"
+                          >
+                            숨김
+                          </button>
+                        </div>
                       </div>
                       <form class="rb-search" id="rbSearchForm" role="search">
+                        <svg
+                          class="rb-search-icon"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <circle cx="11" cy="11" r="7"></circle>
+                          <path d="m20 20-4-4"></path>
+                        </svg>
                         <input
-                          class="admin-member-input lms-search"
+                          class="admin-member-input rb-search-input"
                           type="search"
                           id="rbSearch"
                           maxlength="100"
                           autocomplete="off"
+                          enterkeyhint="search"
                           placeholder="제목 검색"
                           aria-label="제목 검색"
                         />
-                        <button type="submit" class="adm-btn adm-btn-secondary">
-                          검색
-                        </button>
                       </form>
                     </div>
                     <div class="rb-admin-list" id="rbAdminList"></div>

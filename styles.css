@@ -8494,37 +8494,521 @@ body[data-admin-view="board"]:not([data-board-mode="edit"]) .rb-new-btn {
 .adm-switch input:disabled + .adm-switch-track {
   opacity: 0.6;
 }
-.rb-search {
+/* D85 (2026-11-09): the 교사자료실 post list, one row a post — its own
+   classes (the 회원 · 반 · 지사 tables keep .adm-table). Filters: level chips
+   · 분류 · status buttons · title search (Enter). */
+.rb-filters,
+.rb-filter-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 10px 16px;
 }
-.rb-total {
+.rb-level-chips {
+  display: flex;
+  flex: 1 1 100%; /* a line of their own; 분류 · 상태 · 검색 under them */
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rb-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid #c3c4c7;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--adm-text);
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rb-chip:hover {
+  border-color: var(--adm-text);
+}
+.rb-chip[aria-pressed="true"] {
+  border-color: var(--adm-text);
+  background: var(--adm-text);
+  color: #fff;
+}
+.rb-dot {
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.rb-chip .rb-dot {
+  width: 8px;
+  height: 8px;
+}
+.rb-dot.lv-beginner {
+  background: #e0a800;
+}
+.rb-dot.lv-level-1 {
+  background: #ff4b4b;
+}
+.rb-dot.lv-level-2 {
+  background: #1cb0f6;
+}
+.rb-dot.lv-level-3 {
+  background: #ce82ff;
+}
+.rb-dot.lv-common {
+  background: #8c8f94;
+}
+.rb-seg {
+  display: inline-flex;
+  flex: none;
+}
+.rb-seg-btn {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--adm-field-line);
+  background: #fff;
+  color: var(--adm-text);
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rb-seg-btn + .rb-seg-btn {
+  margin-left: -1px;
+}
+.rb-seg-btn:first-child {
+  border-radius: 4px 0 0 4px;
+}
+.rb-seg-btn:last-child {
+  border-radius: 0 4px 4px 0;
+}
+.rb-seg-btn:hover {
+  background: var(--adm-accent-soft);
+}
+.rb-seg-btn[aria-pressed="true"] {
+  position: relative; /* its border over the neighbours' */
+  border-color: var(--adm-accent);
+  background: var(--adm-accent);
+  color: #fff;
+}
+.rb-search {
+  position: relative;
+  margin-left: auto;
+}
+.rb-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--adm-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.rb-search-input {
+  width: 220px;
+  max-width: 100%;
+  padding-left: 34px;
+}
+/* 개수 줄: "전체 N개" left, the order right */
+.rb-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+.rb-total,
+.rb-sort-note {
   margin: 0;
   color: var(--adm-muted);
   font-size: 13px;
 }
+.rb-total {
+  color: var(--adm-text);
+  font-weight: 700;
+}
+/* The list is a size container: a box too narrow for the table (phones,
+   tablets, a narrow PC window) gets the row list below. On top of the boxes
+   under it, so an open [⋯] menu is never covered. */
 .rb-admin-list {
+  position: relative;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow-x: auto;
+  container-type: inline-size;
 }
-.rb-table .rb-col-pin {
-  width: 48px;
+@supports not (container-type: inline-size) {
+  .rb-admin-list {
+    overflow-x: auto;
+  }
+}
+.rb-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 14px;
+}
+.rb-table th[scope="col"] {
+  height: 38px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--adm-line);
+  background: #f6f7f7;
+  color: var(--adm-muted);
+  font-weight: 700;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+.rb-table th.rb-col-pin {
+  width: 34px;
+  padding: 0;
+}
+.rb-table th.rb-col-level {
+  width: 118px;
+}
+.rb-table th.rb-col-cat {
+  width: 150px;
+}
+.rb-table th.rb-col-num {
+  width: 64px;
+  text-align: right;
+}
+.rb-table th.rb-col-date {
+  width: 96px; /* "2025.11.02" whole (84px in the design) */
+  text-align: right;
+}
+.rb-table th.rb-col-manage {
+  width: 176px;
+}
+.rb-table tbody td,
+.rb-table tbody th {
+  height: 50px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #ececec;
+  color: var(--adm-text);
+  font-weight: 400;
+  text-align: left;
+  vertical-align: middle;
+}
+.rb-table .rb-col-num,
+.rb-table .rb-col-date {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.rb-table tbody td.rb-col-pin {
+  padding: 0;
   text-align: center;
 }
-.rb-table tr.is-pinned td {
-  background: #fcf9e8;
+@media (hover: hover) {
+  /* a mouse only (a phone's tap would leave the row tinted) */
+  .rb-table tbody tr:not(.adm-empty-row):hover {
+    background: #f6f9fc;
+  }
+}
+.rb-table tr.is-pinned {
+  background: #fdf9ec;
+}
+.rb-table tr.is-last-pinned > * {
+  border-bottom-color: #e6d9a8;
 }
 .rb-pin-icon {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   fill: none;
-  stroke: #b32d2e;
+  stroke: #b26200;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  vertical-align: middle;
+}
+/* the title: one line, "…" when long (the whole title in its tooltip) */
+.rb-title-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.rb-title {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--adm-text);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rb-title:hover {
+  color: var(--adm-accent);
+  text-decoration: underline;
+}
+.rb-table tr.is-hidden-post .rb-title {
+  color: #646970;
+}
+.rb-hidden-tag {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid #c3c4c7;
+  border-radius: 3px;
+  background: #f6f7f7;
+  color: var(--adm-muted);
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 18px;
+}
+.rb-col-level .rb-dot {
+  margin-right: 6px;
+}
+.rb-level-name {
+  font-weight: 600;
+  font-size: 13px;
+  vertical-align: middle;
+}
+.rb-table .bd-cat {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-admin);
+}
+.rb-m-meta {
+  display: none; /* the phone row's "첨부 N · 조회 N · " */
+}
+.rb-clip-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -2px;
+}
+.rb-table .rb-col-files.is-zero {
+  color: #646970;
+}
+.rb-col-files.is-zero .rb-clip-icon {
+  stroke: #a7aaad;
+}
+/* 관리: [수정] · 보기 · [⋯] → 삭제… */
+.rb-manage {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
+.rb-edit-btn {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--adm-accent);
+  border-radius: 3px;
+  background: #fff;
+  color: var(--adm-accent);
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rb-edit-btn:hover {
+  background: var(--adm-accent-soft);
+}
+.rb-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--adm-muted);
+  cursor: pointer;
+}
+.rb-icon-btn:hover,
+.rb-more[aria-expanded="true"] {
+  background: var(--adm-accent-soft);
+  color: var(--adm-accent);
+}
+.rb-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.rb-icon-more {
+  width: 18px;
+  height: 18px;
+  stroke-width: 3;
+}
+.rb-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  padding: 4px 0;
+  border: 1px solid var(--adm-line);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+.rb-menu[hidden] {
+  display: none;
+}
+.rb-menu.is-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+.rb-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--adm-text);
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rb-menu-item:hover {
+  background: var(--adm-accent-soft);
+}
+.rb-menu-del {
+  color: var(--adm-danger);
+  font-weight: 700;
+}
+.rb-menu-del[data-armed],
+.rb-menu-del[data-armed]:hover {
+  background: var(--adm-danger);
+  color: #fff;
+}
+.rb-menu-view {
+  display: none; /* the phone row's 보기 */
+}
+/* The row list (a box under 880px): line 1 = [pin] [숨김] title, line 2 =
+   level · category · "첨부 N · 조회 N · 11.02", [수정] [⋯] at the right
+   (44px). 보기 moves into the [⋯] menu. */
+@container (max-width: 879.98px) {
+  .rb-table,
+  .rb-table tbody {
+    display: block;
+  }
+  .rb-table thead {
+    display: none;
+  }
+  .rb-table tbody tr {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    min-height: 66px;
+    padding: 10px 124px 10px 12px;
+    border-bottom: 1px solid #ececec;
+  }
+  .rb-table tbody tr.adm-empty-row {
+    display: block;
+    padding: 0;
+  }
+  .rb-table tbody tr > * {
+    display: block;
+    height: auto;
+    padding: 0;
+    border: 0;
+  }
+  .rb-table tr.is-last-pinned {
+    border-bottom-color: #e6d9a8;
+  }
+  .rb-table tbody td.rb-col-pin {
+    flex: none;
+    line-height: 0;
+  }
+  .rb-table tbody td.rb-col-pin:empty {
+    display: none;
+  }
+  .rb-table tbody th.rb-col-title {
+    flex: 1 1 calc(100% - 28px);
+    min-width: 0;
+  }
+  .rb-table tbody .rb-col-level,
+  .rb-table tbody .rb-col-cat,
+  .rb-table tbody .rb-col-num,
+  .rb-table tbody .rb-col-date {
+    flex: none;
+    color: var(--adm-muted);
+    font-size: 13px;
+  }
+  .rb-table .bd-cat {
+    min-height: 24px;
+    padding: 1px 8px;
+    font-size: 12px;
+  }
+  /* 첨부 · 조회 · 날짜 = one group (it moves to a line of its own as a whole
+     when the row is narrow) */
+  .rb-table tbody td.rb-col-files,
+  .rb-table tbody td.rb-col-views {
+    display: none;
+  }
+  .rb-table tbody td.rb-col-date {
+    white-space: nowrap;
+  }
+  .rb-m-meta {
+    display: inline;
+  }
+  .rb-table tbody td.rb-col-manage {
+    position: absolute;
+    top: 0;
+    right: 10px;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+  }
+  .rb-manage {
+    gap: 6px;
+  }
+  .rb-edit-btn {
+    height: 44px;
+    min-width: 58px;
+    font-size: 14px;
+  }
+  .rb-view {
+    display: none;
+  }
+  .rb-more {
+    width: 44px;
+    height: 44px;
+    border: 1px solid #c3c4c7;
+  }
+  .rb-menu-view {
+    display: flex;
+  }
+  .rb-menu-item {
+    min-height: 44px;
+    font-size: 14px;
+  }
 }
 .rb-admin-pager {
   display: flex;
@@ -9010,8 +9494,9 @@ legend.rb-ed-panel-title + * {
   min-height: 44px;
   font-size: 15px;
 }
-/* just registered / edited: the list row lights up for a moment */
-.rb-table tr.is-just-saved td {
+/* just registered / edited: the list row lights up for a moment (D85: the
+   row, so the phone row list lights up whole too) */
+.rb-table tr.is-just-saved {
   animation: rb-just-saved 2.4s ease-out;
 }
 @keyframes rb-just-saved {
@@ -9021,7 +9506,7 @@ legend.rb-ed-panel-title + * {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .rb-table tr.is-just-saved td {
+  .rb-table tr.is-just-saved {
     animation: none;
     background: #fff1a8;
   }
@@ -9061,8 +9546,53 @@ legend.rb-ed-panel-title + * {
   }
 }
 @media (max-width: 781px) {
-  .rb-table .rb-col-pin {
-    width: auto;
+  /* D85 filters on a phone: the level chips scroll sideways, 분류 and the
+     status buttons share a line, the search box is full width under them */
+  .rb-filters {
+    flex-direction: column;
+    flex-wrap: nowrap; /* one line: the chips row is the box's width */
+    align-items: stretch;
+    gap: 10px;
+  }
+  .rb-level-chips {
+    flex: none;
+    flex-wrap: nowrap;
+    margin: 0 -14px;
+    padding: 0 14px 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .rb-level-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .rb-chip {
+    height: 36px;
+  }
+  .rb-filter-line {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+  .rb-cat-filter {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .rb-cat-filter span {
+    flex: none;
+    white-space: nowrap;
+  }
+  .rb-cat-filter select {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+  .rb-seg-btn {
+    height: 36px;
+    padding: 0 12px;
+  }
+  .rb-search {
+    margin-left: 0;
+  }
+  .rb-search-input {
+    width: 100%;
   }
   .rb-file {
     grid-template-columns: 36px 22px 34px minmax(0, 1fr) 44px;

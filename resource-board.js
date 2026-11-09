@@ -159,6 +159,8 @@ const RB_ICONS = {
     "M10 12h4",
   ],
   info: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z", "M12 16v-4", "M12 8h.01"],
+  // D85: the admin list's [⋯] (three dots, drawn with a wide round line)
+  more: ["M5 12h.01", "M12 12h.01", "M19 12h.01"],
 };
 
 const boardListView = document.querySelector("#boardListView");

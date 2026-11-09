@@ -7,9 +7,10 @@
    The top admin only (ADMIN_VIEWS); every write is an RPC that checks
    is_admin() again (supabase/migration.sql "Resource board").
 
-   - The list (그림 05): pinned first, filters (level · category · status),
-     title search, 20 a page; 수정 · 보기 (the teachers' page, new tab) ·
-     삭제 (two presses — its files go from Storage too).
+   - The list (그림 05; D85 2026-11-09 one row a post): pinned first,
+     filters (level chips · category · status buttons), title search (Enter),
+     20 a page; 수정 (or the title) · 보기 (the teachers' page, new tab) ·
+     [⋯] → 삭제… (two presses — its files go from Storage too).
    - 자료실 설정: the board switch (B12, site_settings
      resource_board_enabled) and the categories (B5: rename, ↑ ↓, add, delete
      when empty). The 배너 tab's 레벨별 자료실 switch (T1) lives here too.
@@ -218,15 +219,37 @@ function rbaEl(tag, className, text) {
   return el;
 }
 
-function rbaDate(iso) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("en-CA", {
+// A day in Seoul time → { y, m, d } ("2026", "11", "02").
+function rbaSeoulDay(date) {
+  const day = {};
+  new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Seoul",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(date);
+  })
+    .formatToParts(date)
+    .forEach(({ type, value }) => {
+      if (type === "year") day.y = value;
+      if (type === "month") day.m = value;
+      if (type === "day") day.d = value;
+    });
+  return day;
+}
+
+// 등록일 (D85): this year's posts "11.02", older ones "2025.11.02" (Seoul
+// time); <time datetime> keeps the whole day.
+function rbaDate(iso, now = new Date()) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const { y, m, d } = rbaSeoulDay(date);
+  const time = rbaEl(
+    "time",
+    "",
+    y === rbaSeoulDay(now).y ? `${m}.${d}` : `${y}.${m}.${d}`,
+  );
+  time.dateTime = `${y}-${m}-${d}`;
+  return time;
 }
 
 async function rbaAccessToken() {
@@ -402,23 +425,149 @@ function rbaShowMode(mode) {
   }
 }
 
-function rbaCategoryName(id) {
-  const category = rbaCategories.find((c) => Number(c.id) === Number(id));
-  return category ? category.name : "-";
+function rbaCategory(id) {
+  return rbaCategories.find((c) => Number(c.id) === Number(id)) || null;
+}
+
+// The level chips and the status buttons show rbaState (aria-pressed); the
+// category list comes with every list answer.
+function rbaSyncFilters() {
+  rbaFilterLevel.querySelectorAll(".rb-chip").forEach((chip) => {
+    chip.setAttribute(
+      "aria-pressed",
+      String(chip.dataset.rbLevel === rbaState.level),
+    );
+  });
+  rbaFilterStatus.querySelectorAll(".rb-seg-btn").forEach((button) => {
+    button.setAttribute(
+      "aria-pressed",
+      String(button.dataset.rbStatus === rbaState.status),
+    );
+  });
+  rbaFilterCat.value = rbaState.cat;
 }
 
 function rbaFillFilters() {
-  fillSelect(rbaFilterLevel, [
-    ["", "전체"],
-    ...RBA_LEVELS.map(([key]) => [key, RBA_LEVEL_SHORT[key]]),
-  ]);
   fillSelect(rbaFilterCat, [
     ["", "전체"],
     ...rbaCategories.map((c) => [String(c.id), c.name]),
   ]);
-  rbaFilterLevel.value = rbaState.level;
-  rbaFilterCat.value = rbaState.cat;
-  rbaFilterStatus.value = rbaState.status;
+  rbaSyncFilters();
+}
+
+/* -- one row a post (D85): [pin] · title · level · category · files · views ·
+   date · 수정 · 보기 · [⋯] → 삭제… -- */
+
+const RBA_COLUMNS = [
+  ["rb-col-pin", "고정"],
+  ["rb-col-title", "제목"],
+  ["rb-col-level", "레벨"],
+  ["rb-col-cat", "분류"],
+  ["rb-col-num", "첨부"],
+  ["rb-col-num", "조회"],
+  ["rb-col-date", "등록일"],
+  ["rb-col-manage", "관리"],
+];
+const RBA_SORT_NOTE = "고정 글 먼저 · 최근 등록순"; // = board_admin_list's order
+let rbaMenuOpen = null; // { button, menu, row } — one [⋯] menu at a time
+
+function rbaCell(className, ...content) {
+  const td = rbaEl("td", className);
+  td.append(...content);
+  return td;
+}
+
+function rbaCloseMenu({ focus = false } = {}) {
+  const open = rbaMenuOpen;
+  if (!open) return;
+  rbaMenuOpen = null;
+  open.menu.hidden = true;
+  open.menu.classList.remove("is-up");
+  open.button.setAttribute("aria-expanded", "false");
+  open.row.classList.remove("is-menu-open");
+  if (focus && open.button.isConnected) open.button.focus();
+}
+
+function rbaToggleMenu(button, menu) {
+  const same = rbaMenuOpen && rbaMenuOpen.button === button;
+  rbaCloseMenu({ focus: same });
+  if (same) return;
+  const row = button.closest("tr");
+  menu.hidden = false;
+  button.setAttribute("aria-expanded", "true");
+  row.classList.add("is-menu-open");
+  rbaMenuOpen = { button, menu, row };
+  // no room under the button (the window's last rows): it opens upward
+  const below = window.innerHeight - button.getBoundingClientRect().bottom;
+  if (below < menu.offsetHeight + 8) menu.classList.add("is-up");
+  const first = [...menu.querySelectorAll(".rb-menu-item")].find(
+    (el) => el.getClientRects().length > 0,
+  );
+  if (first) first.focus();
+}
+
+// 삭제… = the list's two presses, as before: the first arms it for a few
+// seconds ("한 번 더 누르면 삭제"), the second deletes.
+function rbaDeleteItem(item) {
+  const button = makeButton("rb-menu-item rb-menu-del", "삭제…");
+  let disarm = 0;
+  button.addEventListener("click", () => {
+    if (button.dataset.armed) {
+      window.clearTimeout(disarm);
+      rbaCloseMenu();
+      rbaDeletePost(item.id);
+      return;
+    }
+    button.dataset.armed = "1";
+    button.textContent = "한 번 더 누르면 삭제";
+    disarm = window.setTimeout(() => {
+      delete button.dataset.armed;
+      button.textContent = "삭제…";
+    }, 4000);
+  });
+  return button;
+}
+
+function rbaViewLink(item, className, text) {
+  const link = rbaEl("a", className, text);
+  link.href = `${window.location.pathname}#board/${item.id}`;
+  link.target = "_blank";
+  link.rel = "noopener";
+  return link;
+}
+
+function rbaManageCell(item) {
+  const edit = makeButton("rb-edit-btn", "수정", () => rbaOpenEditor(item.id));
+  edit.setAttribute("aria-label", `${item.title} 수정`);
+  const view = rbaViewLink(item, "rb-icon-btn rb-view");
+  view.setAttribute("aria-label", `${item.title} 사용자 화면에서 보기 (새 탭)`);
+  view.title = "사용자 화면에서 보기 (새 탭)";
+  view.append(rbSvg("rb-icon", "link"));
+  const more = makeButton("rb-icon-btn rb-more", "");
+  more.setAttribute("aria-label", `${item.title} 더 보기`);
+  more.setAttribute("aria-expanded", "false");
+  more.title = "더 보기";
+  more.append(rbSvg("rb-icon rb-icon-more", "more"));
+  const menu = rbaEl("div", "rb-menu");
+  menu.id = `rbMenu-${item.id}`;
+  menu.hidden = true;
+  more.setAttribute("aria-controls", menu.id);
+  // on a phone 보기 moves in here (the row keeps 수정 and [⋯])
+  const menuView = rbaViewLink(
+    item,
+    "rb-menu-item rb-menu-view",
+    "사용자 화면에서 보기",
+  );
+  menuView.setAttribute(
+    "aria-label",
+    `${item.title} 사용자 화면에서 보기 (새 탭)`,
+  );
+  menuView.addEventListener("click", () => rbaCloseMenu({ focus: true }));
+  menu.append(menuView, rbaDeleteItem(item));
+  more.addEventListener("click", () => rbaToggleMenu(more, menu));
+  const box = rbaEl("div", "rb-manage");
+  box.append(edit, view, more, menu);
+  return rbaCell("rb-col-manage", box);
 }
 
 function rbaRow(item) {
@@ -426,56 +575,80 @@ function rbaRow(item) {
   row.dataset.id = item.id;
   if (item.pinned) row.classList.add("is-pinned");
   if (!item.published) row.classList.add("is-hidden-post");
-  const pin = makeCell("공지");
-  pin.classList.add("rb-col-pin");
+  const pin = rbaCell("rb-col-pin");
   if (item.pinned) {
-    pin.append(rbSvg("rb-pin-icon", "pin"), rbaEl("span", "bd-sr", "고정"));
+    pin.append(rbSvg("rb-pin-icon", "pin"), rbaEl("span", "bd-sr", "고정 글"));
   }
-  const edit = makeButton("adm-link", "수정", () => rbaOpenEditor(item.id));
-  edit.setAttribute("aria-label", `${item.title} 수정`);
-  const view = rbaEl("a", "adm-link", "보기");
-  view.href = `${window.location.pathname}#board/${item.id}`;
-  view.target = "_blank";
-  view.rel = "noopener";
-  view.setAttribute("aria-label", `${item.title} 보기 (새 탭)`);
-  const remove = makeDeleteButton("adm-link adm-link-danger", () =>
-    rbaDeletePost(item.id),
+  // the title: a row head; pressing it = [수정] (the mouse's way — the
+  // keyboard has [수정] right after it, so it is not a Tab stop of its own)
+  const title = rbaEl("th", "rb-col-title");
+  title.scope = "row";
+  const line = rbaEl("div", "rb-title-line");
+  if (!item.published) line.append(rbaEl("span", "rb-hidden-tag", "숨김"));
+  const open = makeButton("rb-title", item.title, () => rbaOpenEditor(item.id));
+  open.title = item.title;
+  open.tabIndex = -1;
+  line.append(open);
+  title.append(line);
+  const category = rbaCategory(item.category);
+  const files = Number(item.files) || 0;
+  const filesCell = rbaCell(
+    `rb-col-num rb-col-files${files ? "" : " is-zero"}`,
+    rbSvg("rb-clip-icon", "clip"),
+    String(files),
   );
-  const { td } = primaryCell("제목", item.title, [edit, view, remove]);
-  const status = rbaEl(
-    "span",
-    item.published ? "adm-badge" : "adm-badge is-off",
-    item.published ? "공개" : "숨김",
+  // the phone row shows "첨부 3 · 조회 64 · 11.02" as one group in the date
+  // cell (the table has its column heads and hides it)
+  const dateCell = rbaCell(
+    "rb-col-date",
+    rbaEl("span", "rb-m-meta", `첨부 ${files} · 조회 ${item.views} · `),
+    rbaDate(item.created_at),
   );
   row.append(
     pin,
-    td,
-    makeCell("분류", rbaCategoryName(item.category)),
-    makeCell("레벨", RBA_LEVEL_SHORT[item.level] || item.level),
-    makeCell("첨부", String(item.files)),
-    makeCell("조회", String(item.views)),
-    makeCell("상태", status),
-    makeCell("등록일", rbaDate(item.created_at)),
+    title,
+    rbaCell(
+      "rb-col-level",
+      rbaEl("span", `rb-dot lv-${item.level}`),
+      rbaEl("span", "rb-level-name", RBA_LEVEL_SHORT[item.level] || item.level),
+    ),
+    rbaCell(
+      "rb-col-cat",
+      category
+        ? rbaEl("span", `bd-cat cat-${category.color}`, category.name)
+        : "-",
+    ),
+    filesCell,
+    rbaCell("rb-col-num rb-col-views", String(item.views)),
+    dateCell,
+    rbaManageCell(item),
   );
   return row;
 }
 
 function rbaRenderList(data) {
-  const table = rbaEl("table", "adm-table rb-table");
+  rbaCloseMenu();
+  const table = rbaEl("table", "rb-table");
   const head = document.createElement("thead");
   const headRow = document.createElement("tr");
-  ["공지", "제목", "분류", "레벨", "첨부", "조회", "상태", "등록일"].forEach(
-    (name, i) => {
-      const th = rbaEl("th", i === 0 ? "rb-col-pin" : "", name);
-      th.scope = "col";
-      headRow.append(th);
-    },
-  );
+  RBA_COLUMNS.forEach(([className, name]) => {
+    const th = rbaEl("th", className);
+    th.scope = "col";
+    // the pin column's head is for screen readers only (its cells: an icon)
+    th.append(className === "rb-col-pin" ? rbaEl("span", "bd-sr", name) : name);
+    headRow.append(th);
+  });
   head.append(headRow);
   const body = document.createElement("tbody");
   const items = Array.isArray(data.items) ? data.items : [];
   if (items.length) {
-    body.append(...items.map(rbaRow));
+    const rows = items.map(rbaRow);
+    // the line under the last pinned row is a little darker (the pinned
+    // group vs the rest)
+    const pinned = rows.filter((row) => row.classList.contains("is-pinned"));
+    if (pinned.length)
+      pinned[pinned.length - 1].classList.add("is-last-pinned");
+    body.append(...rows);
   } else {
     const row = rbaEl("tr", "adm-empty-row");
     const td = rbaEl(
@@ -490,8 +663,13 @@ function rbaRenderList(data) {
     body.append(row);
   }
   table.append(head, body);
-  const caption = rbaEl("p", "rb-total", `전체 ${data.total}개`);
-  rbaList.replaceChildren(caption, table);
+  // 개수 줄: "전체 N개" and, at the right, the order the list comes in
+  const count = rbaEl("div", "rb-list-head");
+  count.append(
+    rbaEl("p", "rb-total", `전체 ${data.total}개`),
+    rbaEl("p", "rb-sort-note", RBA_SORT_NOTE),
+  );
+  rbaList.replaceChildren(count, table);
 
   rbaPager.replaceChildren();
   if (data.pages > 1) {
@@ -590,16 +768,62 @@ async function rbaDeletePost(id) {
   rbaLoad();
 }
 
-[rbaFilterLevel, rbaFilterCat, rbaFilterStatus].forEach((select) => {
-  if (!select) return;
-  select.addEventListener("change", () => {
-    rbaState.level = rbaFilterLevel.value;
-    rbaState.cat = rbaFilterCat.value;
-    rbaState.status = rbaFilterStatus.value;
-    rbaState.page = 1;
-    rbaLoad();
+// A filter changed → page 1 again, the same board_admin_list arguments as
+// before D85 (level · category · status · q).
+function rbaSetFilter(key, value) {
+  if (rbaState[key] === value) return;
+  rbaState[key] = value;
+  rbaState.page = 1;
+  rbaSyncFilters();
+  rbaLoad();
+}
+
+if (rbaFilterLevel) {
+  rbaFilterLevel.addEventListener("click", (event) => {
+    const chip = event.target.closest(".rb-chip");
+    if (chip) rbaSetFilter("level", chip.dataset.rbLevel);
   });
-});
+  rbaFilterStatus.addEventListener("click", (event) => {
+    const button = event.target.closest(".rb-seg-btn");
+    if (button) rbaSetFilter("status", button.dataset.rbStatus);
+  });
+  rbaFilterCat.addEventListener("change", () =>
+    rbaSetFilter("cat", rbaFilterCat.value),
+  );
+}
+
+// The [⋯] menu closes on Esc (the focus back on [⋯]), on a press outside it
+// (back on [⋯] too unless that press was on something that takes the focus)
+// and when Tab leaves it.
+if (rbaList) {
+  document.addEventListener("keydown", (event) => {
+    if (!rbaMenuOpen || event.key !== "Escape") return;
+    event.preventDefault();
+    rbaCloseMenu({ focus: true });
+  });
+  document.addEventListener(
+    "click",
+    (event) => {
+      const open = rbaMenuOpen;
+      if (!open) return;
+      const { target } = event;
+      if (open.menu.contains(target) || open.button.contains(target)) return;
+      const takesFocus = target.closest(
+        "button, a[href], input, select, textarea, [tabindex]",
+      );
+      rbaCloseMenu({ focus: !takesFocus });
+    },
+    true,
+  );
+  rbaList.addEventListener("focusout", (event) => {
+    const open = rbaMenuOpen;
+    const next = event.relatedTarget;
+    if (!open || !next) return; // focus to nowhere: the click above decides
+    if (open.menu.contains(next) || open.button === next) return;
+    rbaCloseMenu();
+  });
+}
+
 if (rbaSearchForm) {
   rbaSearchForm.addEventListener("submit", (event) => {
     event.preventDefault();

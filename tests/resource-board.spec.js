@@ -588,7 +588,7 @@ test("board on a phone: cards, chips that slide sideways, file buttons as icons 
 
 /* ---- Admin (B3-B8, B12, T1) ------------------------------------------------ */
 
-test("board admin: the list — pinned first, filters, 20 a page; delete asks twice and its files go from Storage (그림 05, B8)", async ({
+test("board admin: the list — pinned first, filters, 20 a page; delete asks twice and its files go from Storage (그림 05, B8, D85)", async ({
   page,
 }, info) => {
   desktopOnly(info);
@@ -600,24 +600,29 @@ test("board admin: the list — pinned first, filters, 20 a page; delete asks tw
   const rows = page.locator("#rbAdminList tbody tr");
   await expect(rows).toHaveCount(13);
   await expect(rows.nth(0)).toHaveClass(/is-pinned/);
-  await expect(rows.nth(2).locator(".adm-row-title")).toHaveText(
+  await expect(rows.nth(2).locator(".rb-title")).toHaveText(
     "숨긴 글 (준비 중)",
   );
-  await expect(rows.nth(2).locator(".adm-badge")).toHaveText("숨김");
-  await page.locator("#rbFilterStatus").selectOption("hidden");
+  await expect(rows.nth(2).locator(".rb-hidden-tag")).toHaveText("숨김");
+  await page.locator('#rbFilterStatus [data-rb-status="hidden"]').click();
   await expect(rows).toHaveCount(1);
-  await page.locator("#rbFilterStatus").selectOption("");
-  await page.locator("#rbFilterLevel").selectOption("common");
+  await page.locator('#rbFilterStatus [data-rb-status=""]').click();
+  await page.locator('#rbFilterLevel [data-rb-level="common"]').click();
   await expect(rows).toHaveCount(3);
-  await page.locator("#rbFilterLevel").selectOption("");
+  await page.locator('#rbFilterLevel [data-rb-level=""]').click();
+  await expect(rows).toHaveCount(13);
   // 보기 = the teachers' page in a new tab
   await expect(rows.nth(0).getByRole("link", { name: /보기/ })).toHaveAttribute(
     "href",
     new RegExp(`#board/${pid(1)}$`),
   );
-  // delete: two presses; the post's files go from Storage
+  // delete (D85: in the row's [⋯] menu): two presses; the post's files go
+  // from Storage
   const target = rows.filter({ hasText: "2026 수료 상장 양식" });
-  await target.getByRole("button", { name: "삭제" }).click();
+  await target
+    .getByRole("button", { name: "2026 수료 상장 양식 더 보기" })
+    .click();
+  await target.getByRole("button", { name: "삭제…" }).click();
   await target.getByRole("button", { name: "한 번 더 누르면 삭제" }).click();
   await expect(page.locator("#rbAdminStatus")).toHaveText("삭제했어요.");
   await expect(rows).toHaveCount(12);
@@ -2228,6 +2233,646 @@ test("board admin editor: editing a post keeps its attachments by id; one taken 
   expect(sent.removed).toEqual([takenOut.path]);
 });
 
+/* ---- D85 관리자 교사자료실 글 목록 정돈 (2026-11-09) ------------------------- */
+
+const RB_LIST = "#rbAdminList tbody tr";
+const cssOf = (locator, prop) =>
+  locator.evaluate((el, p) => getComputedStyle(el)[p], prop);
+// A box's edges, readable outside the page.
+const edges = (locator) =>
+  locator.evaluate((el) => {
+    const b = el.getBoundingClientRect();
+    return {
+      top: b.top,
+      bottom: b.bottom,
+      left: b.left,
+      right: b.right,
+      width: b.width,
+      height: b.height,
+    };
+  });
+// The sample posts + one from last year and one with a very long title.
+function d85Posts() {
+  const lastYear = new Date().getFullYear() - 1;
+  return [
+    ...samplePosts(),
+    {
+      id: pid(41),
+      title: `${lastYear} 겨울방학 특강 자료`,
+      body: "",
+      level: "common",
+      category: 2,
+      pinned: false,
+      published: true,
+      views: 342,
+      created_at: `${lastYear}-11-03T02:00:00Z`,
+      attachments: [file("겨울방학_특강.pdf")],
+    },
+    {
+      id: pid(42),
+      title: `${"아주 긴 제목 — ".repeat(12)}끝`,
+      body: "",
+      level: "level-2",
+      category: 5,
+      pinned: false,
+      published: true,
+      views: 7,
+      created_at: `${lastYear}-10-01T02:00:00Z`,
+      attachments: [],
+    },
+  ];
+}
+// Today in Seoul as "MM.DD".
+function seoulToday() {
+  const [, m, d] = new Date(Date.now() + 9 * 3600000)
+    .toISOString()
+    .slice(0, 10)
+    .split("-");
+  return `${m}.${d}`;
+}
+
+test("board admin list (D85): one row a post — pin · title · level · category · 첨부 · 조회 · 등록일 · 관리; pinned and hidden marks; this year 11.02, older 2025.11.02; the title opens the editor", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await stubBoard(page, { role: "admin", posts: d85Posts() });
+  await openAdminBoard(page);
+  await page.mouse.move(1, 1);
+  const table = page.locator("#rbAdminList table");
+  await expect(table.locator("thead th")).toHaveText([
+    "고정",
+    "제목",
+    "레벨",
+    "분류",
+    "첨부",
+    "조회",
+    "등록일",
+    "관리",
+  ]);
+  // '공지' and '상태' columns are gone; the pin head is for screen readers
+  await expect(table.locator("thead .rb-col-pin .bd-sr")).toHaveText("고정");
+  const widths = await table
+    .locator("thead th")
+    .evaluateAll((ths) =>
+      ths.map((th) => Math.round(th.getBoundingClientRect().width)),
+    );
+  expect([widths[0], ...widths.slice(2)]).toEqual([
+    34, 118, 150, 64, 64, 96, 176,
+  ]);
+  expect(widths[1]).toBeGreaterThan(300);
+  const head = table.locator("thead th").nth(1);
+  expect(await cssOf(head, "backgroundColor")).toBe("rgb(246, 247, 247)");
+  expect(await cssOf(head, "fontSize")).toBe("12px");
+  expect(Math.round((await edges(head)).height)).toBe(38);
+  await expect(page.locator("#rbAdminList .rb-total")).toHaveText("전체 15개");
+  await expect(page.locator("#rbAdminList .rb-sort-note")).toHaveText(
+    "고정 글 먼저 · 최근 등록순",
+  );
+
+  // one line each (about 50px) with 수정 · 보기 · ⋯ inside — a very long
+  // title too, cut with "…"
+  const rows = page.locator(RB_LIST);
+  await expect(rows).toHaveCount(15);
+  const look = await rows.evaluateAll((list) =>
+    list.map((row) => {
+      const r = row.getBoundingClientRect();
+      const inside = [
+        ...row.querySelectorAll(".rb-edit-btn, .rb-view, .rb-more"),
+      ].every((el) => {
+        const b = el.getBoundingClientRect();
+        return b.height > 0 && b.top >= r.top && b.bottom <= r.bottom;
+      });
+      const title = row.querySelector(".rb-title");
+      return {
+        h: Math.round(r.height),
+        inside,
+        long: title.title.startsWith("아주 긴 제목"),
+        cut: title.scrollWidth > title.clientWidth,
+        ellipsis: getComputedStyle(title).textOverflow,
+      };
+    }),
+  );
+  look.forEach(({ h, inside, ellipsis }) => {
+    expect(h).toBeGreaterThanOrEqual(50);
+    expect(h).toBeLessThanOrEqual(52);
+    expect(inside).toBe(true);
+    expect(ellipsis).toBe("ellipsis");
+  });
+  expect(look.filter((r) => r.long)).toEqual([
+    expect.objectContaining({ cut: true }),
+  ]);
+
+  // pinned: the pin (read "고정 글"), a light yellow row, a darker line under
+  // the last pinned row
+  await expect(rows.nth(0).locator(".rb-col-pin")).toHaveText("고정 글");
+  await expect(rows.nth(0).locator(".rb-pin-icon")).toBeVisible();
+  await expect(page.locator(`${RB_LIST} .rb-pin-icon`)).toHaveCount(2);
+  await expect(page.locator(`${RB_LIST}.is-last-pinned`)).toHaveCount(1);
+  await expect(rows.nth(1)).toHaveClass(/is-last-pinned/);
+  expect(await cssOf(rows.nth(0), "backgroundColor")).toBe(
+    "rgb(253, 249, 236)",
+  );
+  expect(await cssOf(rows.nth(2), "backgroundColor")).toBe("rgba(0, 0, 0, 0)");
+  expect(
+    await cssOf(rows.nth(1).locator("td").first(), "borderBottomColor"),
+  ).toBe("rgb(230, 217, 168)");
+  expect(
+    await cssOf(rows.nth(0).locator("td").first(), "borderBottomColor"),
+  ).toBe("rgb(236, 236, 236)");
+  expect(await cssOf(rows.nth(0).locator(".rb-pin-icon"), "stroke")).toBe(
+    "rgb(178, 98, 0)",
+  );
+  // hidden: [숨김] before the title, the title grey
+  const hidden = rows.nth(2);
+  await expect(hidden.locator(".rb-hidden-tag")).toHaveText("숨김");
+  await expect(page.locator(`${RB_LIST} .rb-hidden-tag`)).toHaveCount(1);
+  expect(await cssOf(hidden.locator(".rb-title"), "color")).toBe(
+    "rgb(100, 105, 112)",
+  );
+  expect(await cssOf(rows.nth(3).locator(".rb-title"), "color")).toBe(
+    "rgb(29, 35, 39)",
+  );
+
+  // level: a dot + the name; category: the settings box's own pill
+  const dots = await page
+    .locator(`${RB_LIST} .rb-col-level`)
+    .evaluateAll((cells) =>
+      Object.fromEntries(
+        cells.map((c) => [
+          c.textContent,
+          getComputedStyle(c.querySelector(".rb-dot")).backgroundColor,
+        ]),
+      ),
+    );
+  expect(dots).toEqual({
+    Beginner: "rgb(224, 168, 0)",
+    "Level 1": "rgb(255, 75, 75)",
+    "Level 2": "rgb(28, 176, 246)",
+    "Level 3": "rgb(206, 130, 255)",
+    공통: "rgb(140, 143, 148)",
+  });
+  const pill = rows.nth(0).locator(".rb-col-cat .bd-cat");
+  await expect(pill).toHaveText("월간교육안");
+  await expect(pill).toHaveClass("bd-cat cat-sky");
+  const setting = page.locator("#rbCatList .bd-cat", { hasText: "월간교육안" });
+  for (const prop of ["backgroundColor", "color", "fontWeight"]) {
+    expect(await cssOf(pill, prop)).toBe(await cssOf(setting, prop));
+  }
+
+  // numbers and dates: right, same-width digits; the clip; 0 files paler
+  for (const cell of [".rb-col-files", ".rb-col-views", ".rb-col-date"]) {
+    const td = rows.nth(0).locator(cell);
+    expect(await cssOf(td, "textAlign")).toBe("right");
+    expect(await cssOf(td, "fontVariantNumeric")).toBe("tabular-nums");
+  }
+  await expect(rows.nth(0).locator(".rb-col-files")).toHaveText("10");
+  await expect(rows.nth(0).locator(".rb-col-views")).toHaveText("64");
+  await expect(rows.nth(0).locator(".rb-clip-icon")).toBeVisible();
+  await expect(rows.nth(0).locator(".rb-col-files")).not.toHaveClass(/is-zero/);
+  await expect(hidden.locator(".rb-col-files")).toHaveClass(/is-zero/);
+  expect(await cssOf(hidden.locator(".rb-col-files"), "color")).toBe(
+    "rgb(100, 105, 112)",
+  );
+  const lastYear = new Date().getFullYear() - 1;
+  await expect(hidden.locator(".rb-col-date time")).toHaveText(seoulToday());
+  const old = rows
+    .filter({ hasText: `${lastYear} 겨울방학 특강 자료` })
+    .locator(".rb-col-date time");
+  await expect(old).toHaveText(`${lastYear}.11.03`);
+  await expect(old).toHaveAttribute("datetime", `${lastYear}-11-03`);
+  // the year is Seoul's: 23:59 on 12/31 is last year, 00:00 on 1/1 this one
+  expect(
+    await page.evaluate(() =>
+      [
+        ["2025-12-31T14:59:00Z", "2026-03-01T00:00:00Z"],
+        ["2025-12-31T15:00:00Z", "2026-03-01T00:00:00Z"],
+        ["2026-11-02T03:00:00Z", "2026-12-31T15:30:00Z"],
+      ].map(([iso, now]) => {
+        const time = rbaDate(iso, new Date(now));
+        return [time.textContent, time.dateTime];
+      }),
+    ),
+  ).toEqual([
+    ["2025.12.31", "2025-12-31"],
+    ["01.01", "2026-01-01"],
+    ["2026.11.02", "2026-11-02"],
+  ]);
+
+  // 관리: [수정] · 보기 (new tab) · [⋯], named with the title
+  const title = "Level 1 월간교육안 (3월~12월)";
+  const first = rows.nth(0);
+  const edit = first.getByRole("button", { name: `${title} 수정` });
+  await expect(edit).toHaveText("수정");
+  const view = first.getByRole("link", {
+    name: `${title} 사용자 화면에서 보기 (새 탭)`,
+  });
+  await expect(view).toHaveAttribute("target", "_blank");
+  await expect(view).toHaveAttribute("href", new RegExp(`#board/${pid(1)}$`));
+  const more = first.getByRole("button", { name: `${title} 더 보기` });
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  expect(Math.round((await edges(edit)).height)).toBe(30);
+  expect(await cssOf(edit, "borderTopColor")).toBe("rgb(31, 102, 168)");
+  for (const icon of [view, more]) {
+    const b = await edges(icon);
+    expect([Math.round(b.width), Math.round(b.height)]).toEqual([32, 30]);
+  }
+
+  // the title = [수정] for the mouse (not a Tab stop of its own: [수정] is)
+  const open = rows.nth(3).locator(".rb-title");
+  await expect(open).toHaveAttribute("tabindex", "-1");
+  await expect(open).toHaveAttribute(
+    "title",
+    "11월 핵심문장 스크립트 (Book 1 · Book 2)",
+  );
+  await open.click();
+  await expect(page.locator("#adminTitle")).toHaveText("교사자료실 글 수정");
+  await expect(page.locator("#rbEdTitle")).toHaveValue(
+    "11월 핵심문장 스크립트 (Book 1 · Book 2)",
+  );
+});
+
+test("board admin list (D85): filters — level chips and status buttons (aria-pressed), 분류 list, search on Enter: board_admin_list gets the same arguments as before, from page 1 again", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  await page.setViewportSize({ width: 1366, height: 900 });
+  // 25 posts = two pages of 20
+  const extra = Array.from({ length: 12 }, (_, i) => ({
+    id: pid(60 + i),
+    title: `추가 자료 ${i + 1}`,
+    body: "",
+    level: "level-2",
+    category: 1,
+    pinned: false,
+    published: true,
+    views: i,
+    created_at: `2025-06-${String(i + 1).padStart(2, "0")}T03:00:00Z`,
+    attachments: [],
+  }));
+  const sent = await stubBoard(page, {
+    role: "admin",
+    posts: [...samplePosts(), ...extra],
+  });
+  await openAdminBoard(page);
+  const lists = () => sent.rpc.filter((r) => r.name === "board_admin_list");
+  const args = () => lists().at(-1).args;
+  const pressed = (locator) =>
+    locator.evaluateAll((list) =>
+      list.map((b) => b.getAttribute("aria-pressed")),
+    );
+  const chips = page.locator("#rbFilterLevel .rb-chip");
+  const seg = page.locator("#rbFilterStatus .rb-seg-btn");
+  await expect(page.locator("#rbFilterLevel")).toHaveAttribute("role", "group");
+  await expect(page.locator("#rbFilterLevel")).toHaveAttribute(
+    "aria-label",
+    "레벨",
+  );
+  await expect(page.locator("#rbFilterStatus")).toHaveAttribute(
+    "aria-label",
+    "상태",
+  );
+  await expect(chips).toHaveText([
+    "전체",
+    "Beginner",
+    "Level 1",
+    "Level 2",
+    "Level 3",
+    "공통",
+  ]);
+  await expect(chips.nth(0).locator(".rb-dot")).toHaveCount(0);
+  await expect(chips.locator(".rb-dot")).toHaveCount(5);
+  await expect(seg).toHaveText(["전체", "공개", "숨김"]);
+  expect(await pressed(chips)).toEqual([
+    "true",
+    "false",
+    "false",
+    "false",
+    "false",
+    "false",
+  ]);
+  expect(await pressed(seg)).toEqual(["true", "false", "false"]);
+  expect(args()).toEqual({
+    p_level: null,
+    p_category: null,
+    p_status: null,
+    p_q: null,
+    p_page: 1,
+  });
+  // the pager as before: page 2, then a chip → page 1 again with the level
+  await page
+    .locator("#rbAdminPager")
+    .getByRole("button", { name: "2쪽" })
+    .click();
+  await expect(page.locator(RB_LIST)).toHaveCount(5);
+  expect(args().p_page).toBe(2);
+  await chips.nth(3).click();
+  await expect(chips.nth(3)).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(args).toEqual({
+    p_level: "level-2",
+    p_category: null,
+    p_status: null,
+    p_q: null,
+    p_page: 1,
+  });
+  expect(await pressed(chips)).toEqual([
+    "false",
+    "false",
+    "false",
+    "true",
+    "false",
+    "false",
+  ]);
+  // the same chip again: nothing new is asked
+  const before = lists().length;
+  await chips.nth(3).click();
+  await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
+  expect(lists()).toHaveLength(before);
+  await seg.nth(1).click();
+  await expect.poll(args).toEqual({
+    p_level: "level-2",
+    p_category: null,
+    p_status: "public",
+    p_q: null,
+    p_page: 1,
+  });
+  expect(await pressed(seg)).toEqual(["false", "true", "false"]);
+  await page.locator("#rbFilterCat").selectOption({ label: "월간교육안" });
+  await expect.poll(args).toEqual({
+    p_level: "level-2",
+    p_category: 1,
+    p_status: "public",
+    p_q: null,
+    p_page: 1,
+  });
+  await expect(page.locator(RB_LIST)).toHaveCount(13);
+  // the search: Enter (no [검색] button), trimmed as before
+  await expect(page.locator("#rbSearchForm button")).toHaveCount(0);
+  await page.locator("#rbSearch").fill("  월간  ");
+  await page.locator("#rbSearch").press("Enter");
+  await expect.poll(args).toEqual({
+    p_level: "level-2",
+    p_category: 1,
+    p_status: "public",
+    p_q: "월간",
+    p_page: 1,
+  });
+  await expect(page.locator(RB_LIST)).toHaveCount(1);
+  // no match: the same sentence as before, across all 8 columns
+  await page.locator("#rbSearch").fill("없는 제목");
+  await page.locator("#rbSearch").press("Enter");
+  const empty = page.locator("#rbAdminList .admin-member-empty");
+  await expect(empty).toHaveText("이 조건에 맞는 글이 없어요.");
+  await expect(empty).toHaveAttribute("colspan", "8");
+
+  // the look: chips 34px pills (on = dark), the status buttons 32px (on =
+  // blue), the search box 220px with its magnifier
+  await page.mouse.move(1, 1);
+  const on = chips.nth(3);
+  expect(await cssOf(on, "backgroundColor")).toBe("rgb(29, 35, 39)");
+  expect(await cssOf(on, "color")).toBe("rgb(255, 255, 255)");
+  expect(await cssOf(chips.nth(0), "borderTopColor")).toBe(
+    "rgb(195, 196, 199)",
+  );
+  expect(await cssOf(chips.nth(0), "backgroundColor")).toBe(
+    "rgb(255, 255, 255)",
+  );
+  expect(Math.round((await edges(on)).height)).toBe(34);
+  const dot = await edges(on.locator(".rb-dot"));
+  expect([dot.width, dot.height]).toEqual([8, 8]);
+  expect(await cssOf(seg.nth(1), "backgroundColor")).toBe("rgb(31, 102, 168)");
+  expect(await cssOf(seg.nth(1), "color")).toBe("rgb(255, 255, 255)");
+  expect(Math.round((await edges(seg.nth(1))).height)).toBe(32);
+  expect(Math.round((await edges(page.locator("#rbSearch"))).width)).toBe(220);
+  await expect(page.locator("#rbSearchForm .rb-search-icon")).toBeVisible();
+});
+
+test("board admin list (D85): [⋯] — one menu at a time, its first item focused; Esc, a press outside and Tab out close it (the focus back on [⋯] for Esc and an empty spot); 삭제… = the two presses as before", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  await page.setViewportSize({ width: 1366, height: 900 });
+  const sent = await stubBoard(page, { role: "admin" });
+  await openAdminBoard(page);
+  const rows = page.locator(RB_LIST);
+  const more = (n) => rows.nth(n).locator(".rb-more");
+  const menu = (n) => rows.nth(n).locator(".rb-menu");
+  await expect(page.locator(".rb-menu:visible")).toHaveCount(0);
+  await more(0).click();
+  await expect(more(0)).toHaveAttribute("aria-expanded", "true");
+  await expect(more(0)).toHaveAttribute(
+    "aria-controls",
+    await menu(0).getAttribute("id"),
+  );
+  await expect(menu(0)).toBeVisible();
+  // on a PC only 삭제… is in it (보기 has its own icon in the row)
+  await expect(menu(0).locator(".rb-menu-item:visible")).toHaveText(["삭제…"]);
+  const del0 = menu(0).getByRole("button", { name: "삭제…" });
+  await expect(del0).toBeFocused();
+  const box = await edges(menu(0));
+  expect(box.width).toBeGreaterThanOrEqual(120);
+  expect(box.width).toBeLessThan(140);
+  expect(await cssOf(menu(0), "boxShadow")).toBe(
+    "rgba(0, 0, 0, 0.12) 0px 6px 18px 0px",
+  );
+  expect(await cssOf(del0, "color")).toBe("rgb(179, 45, 46)");
+  expect(await cssOf(del0, "fontWeight")).toBe("700");
+  expect(Math.round((await edges(del0)).height)).toBe(34);
+  // over the rows under it (nothing covers it)
+  expect(
+    await del0.evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      return (
+        document
+          .elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)
+          .closest(".rb-menu-del") === el
+      );
+    }),
+  ).toBe(true);
+
+  // Esc: closed, the focus back on [⋯]
+  await page.keyboard.press("Escape");
+  await expect(menu(0)).toBeHidden();
+  await expect(more(0)).toHaveAttribute("aria-expanded", "false");
+  await expect(more(0)).toBeFocused();
+  // the keyboard: Enter on [⋯] opens it, the first item focused
+  await page.keyboard.press("Enter");
+  await expect(menu(0)).toBeVisible();
+  await expect(del0).toBeFocused();
+  // another row's [⋯] (one the open menu does not cover): this one closes,
+  // that one opens — one at a time
+  await more(3).click();
+  await expect(menu(0)).toBeHidden();
+  await expect(menu(3)).toBeVisible();
+  await expect(page.locator(".rb-menu:visible")).toHaveCount(1);
+  // a press on an empty spot outside: closed, the focus back on [⋯]
+  await page.locator("#rbAdminList .rb-sort-note").click();
+  await expect(menu(3)).toBeHidden();
+  await expect(more(3)).toBeFocused();
+  // a press on something that takes the focus: closed, the focus stays there
+  await more(1).click();
+  await expect(menu(1)).toBeVisible();
+  await page.locator("#rbSearch").click();
+  await expect(menu(1)).toBeHidden();
+  await expect(page.locator("#rbSearch")).toBeFocused();
+  // Tab out of the menu: closed, on to the next row's [수정]
+  await more(2).click();
+  await expect(menu(2).locator(".rb-menu-del")).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(menu(2)).toBeHidden();
+  await expect(rows.nth(3).locator(".rb-edit-btn")).toBeFocused();
+  // [⋯] again closes it
+  await more(2).click();
+  await expect(menu(2)).toBeVisible();
+  await more(2).click();
+  await expect(menu(2)).toBeHidden();
+
+  // 삭제…: the first press arms it (the menu stays open), the second deletes
+  const target = rows.filter({ hasText: "2026 수료 상장 양식" });
+  await target.locator(".rb-more").click();
+  const del = target.locator(".rb-menu-del");
+  await del.click();
+  await expect(del).toHaveText("한 번 더 누르면 삭제");
+  await expect(target.locator(".rb-menu")).toBeVisible();
+  expect(await cssOf(del, "backgroundColor")).toBe("rgb(179, 45, 46)");
+  expect(sent.rpc.filter((r) => r.name === "board_post_delete")).toEqual([]);
+  await del.click();
+  await expect(page.locator("#rbAdminStatus")).toHaveText("삭제했어요.");
+  await expect(rows).toHaveCount(12);
+  expect(
+    sent.rpc.filter((r) => r.name === "board_post_delete").map((r) => r.args),
+  ).toEqual([{ p_id: pid(8) }]);
+  expect(sent.removed).toHaveLength(2);
+
+  // the window's last row: the menu opens upward (no room under it)
+  await page.setViewportSize({ width: 1366, height: 600 });
+  const last = rows.last();
+  await last.evaluate((row) => row.scrollIntoView({ block: "end" }));
+  await last.locator(".rb-more").click();
+  await expect(last.locator(".rb-menu")).toHaveClass(/is-up/);
+  const up = await edges(last.locator(".rb-menu"));
+  expect(up.top).toBeGreaterThanOrEqual(0);
+  expect(up.bottom).toBeLessThanOrEqual(600);
+});
+
+test("board admin list on a phone (D85): a row list — the title line, then level · category · '첨부 N · 조회 N · date'; [수정] and [⋯] 44px at the right, 보기 in the [⋯] menu; chips slide sideways, 분류 + 상태 on one line, the search full width; the table again on a wide enough box", async ({
+  page,
+}, info) => {
+  desktopOnly(info);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await stubBoard(page, { role: "admin" });
+  await openAdminBoard(page);
+  await expect(page.locator("#rbAdminList thead")).toBeHidden();
+  const rows = page.locator(RB_LIST);
+  await expect(rows).toHaveCount(13);
+  const row = rows.nth(0);
+  await expect(row.locator(".rb-col-date")).toHaveText(
+    /^첨부 10 · 조회 64 · \d\d\.\d\d$/,
+  );
+  await expect(row.locator(".rb-col-files")).toBeHidden();
+  await expect(row.locator(".rb-col-views")).toBeHidden();
+  await expect(row.locator(".rb-view")).toBeHidden();
+  for (let n = 0; n < 13; n += 1) {
+    const r = rows.nth(n);
+    const [title, level, cat, date, edit, more, whole] = await Promise.all(
+      [
+        ".rb-title",
+        ".rb-col-level",
+        ".rb-col-cat",
+        ".rb-col-date",
+        ".rb-edit-btn",
+        ".rb-more",
+      ]
+        .map((s) => edges(r.locator(s)))
+        .concat(edges(r)),
+    );
+    // line 1 the title, then level · category, the counts as one piece
+    expect(level.top).toBeGreaterThanOrEqual(title.bottom - 1);
+    expect(
+      Math.abs(cat.top + cat.height / 2 - (level.top + level.height / 2)),
+    ).toBeLessThan(4);
+    expect(date.top).toBeGreaterThanOrEqual(level.top - 4);
+    expect(date.height).toBeLessThan(24);
+    // the buttons at the right, 44px, never over the texts
+    expect(Math.round(edit.height)).toBe(44);
+    expect([Math.round(more.width), Math.round(more.height)]).toEqual([44, 44]);
+    expect(whole.right - more.right).toBeLessThanOrEqual(12);
+    for (const text of [title, level, cat, date]) {
+      expect(text.right).toBeLessThanOrEqual(edit.left);
+    }
+  }
+  // pinned and hidden marks on the title line
+  const pin = await edges(row.locator(".rb-pin-icon"));
+  const title0 = await edges(row.locator(".rb-title"));
+  expect(
+    Math.abs(pin.top + pin.height / 2 - (title0.top + title0.height / 2)),
+  ).toBeLessThan(4);
+  await expect(rows.nth(2).locator(".rb-hidden-tag")).toBeVisible();
+  await page.mouse.move(1, 1);
+  expect(await cssOf(rows.nth(0), "backgroundColor")).toBe(
+    "rgb(253, 249, 236)",
+  );
+  // [⋯]: 보기 (new tab) first, then 삭제… — 44px each
+  await row.locator(".rb-more").click();
+  const items = row.locator(".rb-menu .rb-menu-item");
+  await expect(items).toHaveText(["사용자 화면에서 보기", "삭제…"]);
+  await expect(items.nth(0)).toBeFocused();
+  await expect(items.nth(0)).toHaveAttribute("target", "_blank");
+  await expect(items.nth(0)).toHaveAttribute(
+    "href",
+    new RegExp(`#board/${pid(1)}$`),
+  );
+  for (const i of [0, 1]) {
+    expect(Math.round((await edges(items.nth(i))).height)).toBe(44);
+  }
+  await page.keyboard.press("Escape");
+  await expect(row.locator(".rb-menu")).toBeHidden();
+
+  // the filters: chips slide sideways (36px), 분류 + 상태 on one line, the
+  // search box the box's width
+  const chips = page.locator("#rbFilterLevel");
+  expect(
+    await chips.evaluate((el) => [
+      getComputedStyle(el).overflowX,
+      el.scrollWidth > el.clientWidth,
+    ]),
+  ).toEqual(["auto", true]);
+  expect(
+    Math.round((await edges(chips.locator(".rb-chip").first())).height),
+  ).toBe(36);
+  const cat = await edges(page.locator("#rbFilterCat"));
+  const status = await edges(page.locator("#rbFilterStatus"));
+  expect(
+    Math.abs(cat.top + cat.height / 2 - (status.top + status.height / 2)),
+  ).toBeLessThan(4);
+  expect(
+    (await edges(page.locator(".rb-cat-filter span"))).height,
+  ).toBeLessThan(24);
+  const search = await edges(page.locator("#rbSearch"));
+  const list = await edges(page.locator("#rbAdminList"));
+  expect(Math.abs(search.width - list.width)).toBeLessThan(2);
+  expect(search.top).toBeGreaterThan(status.bottom);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+
+  // the list follows its box's width: a tablet and a narrow PC window get the
+  // rows, a wide enough box the table — never wider than the window
+  for (const [w, rowList] of [
+    [768, true],
+    [1024, true],
+    [1180, false],
+    [1366, false],
+  ]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    if (rowList) await expect(page.locator("#rbAdminList thead")).toBeHidden();
+    else await expect(page.locator("#rbAdminList thead")).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(w);
+  }
+});
+
 /* ---- 수정 1차 (PM brief 2026-11-04): F1-F4, R1 ----------------------------- */
 
 const PRETENDARD = "Pretendard Variable";
@@ -3765,13 +4410,20 @@ test("board font: 나눔스퀘어라운드's Korean face takes only the letters 
 const ENDED_TITLE = "로그인이 끝났어요.";
 const ENDED_TEXT = "다시 로그인한 뒤 이어서 해 주세요.";
 
-// Another tab of the same browser logs out with the header's button.
+// Another tab of the same browser logs out with the header's button. Its Log
+// out is over when the button goes away (sign-out done: the stored login
+// removed, the other tabs told) — only then is the tab closed. (D85 test fix,
+// 2026-11-09: the old wait was "the home page shows", true before the click
+// too, so the tab was often closed before supabase-js had told this one —
+// 10 of 12 tries in a check — and the window never came.)
 async function logOutInAnotherTab(page, role) {
   const other = await page.context().newPage();
   await stubBoard(other, { role });
   await other.goto("/");
-  await other.locator("#logoutBtn").click();
-  await expect(other.locator("#homeScreen")).toHaveClass(/screen-active/);
+  const logout = other.locator("#logoutBtn");
+  await expect(logout).toBeVisible();
+  await logout.click();
+  await expect(logout).toBeHidden();
   await other.close();
 }
 
@@ -3813,12 +4465,21 @@ test("login alive: no window — while working, and on this tab's own Log out (�
   desktopOnly(info);
   await stubBoard(page, { role: "admin" });
   await openAdminBoard(page);
+  // the SIGNED_OUT events this tab hears, counted after the app's own
+  // listener (registered first, so it has run whenever the count goes up)
+  await page.evaluate(() => {
+    window.signedOutHeard = 0;
+    sb.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") window.signedOutHeard += 1;
+    });
+  });
   await page.locator('.admin-menu-btn[data-admin-view="banner"]').click();
-  await page.waitForTimeout(500);
+  await expect(page.locator("#teacherResToggle")).toBeChecked();
   await expect(page.locator("#loginEndedModal")).toBeHidden();
   await page.locator("#adminLogoutBtn").click();
   await expect(page.locator("#homeScreen")).toHaveClass(/screen-active/);
-  await page.waitForTimeout(300);
+  // this tab's own SIGNED_OUT has been heard — and still no window
+  await page.waitForFunction(() => window.signedOutHeard > 0);
   await expect(page.locator("#loginEndedModal")).toBeHidden();
 });
 
