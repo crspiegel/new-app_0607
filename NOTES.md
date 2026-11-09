@@ -1427,6 +1427,46 @@ noreferrer">`(클릭 처리는 계속 `button.bd-att-dl`만). 새 종류의 설�
 - 테스트 함정: 바가 나타날 때 0.15초 올라오기(transform) 중엔 `boundingBox`가 12px 어긋난다 → `getAnimations()`의 `finished`를
   기다리거나 계산된 `animationName`으로 확인. 사진 도구 `docs/worker-briefs/2026-11-09-board-pickbar-sticky-screenshots.mjs`.
 
+### 관리자 교사자료실 글 목록 정돈 (`2026-11-09`, PM 지시서 D85)
+
+- **`data-level` 금지(정적 HTML):** `app.js`가 시작할 때 문서의 모든 `[data-level]`에 "그 레벨 월 화면으로" 클릭을 붙인다
+  (`document.querySelectorAll("[data-level]")`). 레벨 칩에 `data-level`을 쓰면 누르는 순간 관리자 화면을 떠난다 → 칩은
+  `data-rb-level`, 상태 버튼은 `data-rb-status`. 새 정적 버튼에 `data-level`·`data-view`를 쓰지 말 것(JS로 나중에 만든 요소는 해당 없음).
+- **다른 관리자 표와 분리:** `.adm-table`·`primaryCell`·`makeCell`·`makeDeleteButton`(`lms-admin.js`, 회원·반·지사·일괄 등록이
+  씀)을 이 목록은 안 쓴다 — `.rb-table`과 `rb-*` 클래스만. 그래서 `.adm-table`의 781px 아래 "접기·화살표" 규칙도 안 걸린다.
+  `.rb-files`는 이미 글쓰기 화면의 첨부 상자 → 목록 칸은 `rb-col-files`.
+- **표 ↔ 줄 목록은 목록 상자 폭으로:** PC 표는 고정 칸만 702px(+제목)이라 1024 창(사이드 메뉴 170px)에도 안 들어간다 → 가로
+  스크롤 대신 `.rb-admin-list { container-type: inline-size }` + `@container (max-width: 879.98px)`로 줄 목록(휴대폰·태블릿·좁은
+  PC 창). 컨테이너 쿼리를 모르는 브라우저는 표 + 가로 스크롤(`@supports not`). 컨테이너는 안쪽 `position: fixed`의 기준 상자가
+  된다(layout containment) — 이 안에 fixed를 넣지 말 것. 휴대폰 필터 줄은 화면 폭(781px)으로.
+- **⋯ 메뉴:** 관리 칸 안 absolute. 목록 상자 `position: relative; z-index: 2` — 아래 설정 상자의 `.adm-switch`(relative)가 메뉴를
+  덮지 않게. 창 아래 자리가 없으면 위로(`is-up`). 닫기 = Esc(포커스 ⋯로) · 바깥 click(capture; 그 자리가 포커스 받는 곳이면
+  그대로, 빈 곳이면 ⋯로) · focusout(Tab으로 나감). 휴대폰은 보기 아이콘 대신 메뉴 첫 항목(`.rb-menu-view`, PC `display: none`) →
+  "첫 항목 포커스"는 `getClientRects()`로 보이는 것. 삭제 두 번 누르기는 `makeDeleteButton`과 같은 흐름을 `rbaDeleteItem`이
+  "삭제…" 글자로 따로 가짐.
+- **줄 바탕은 `tr`에:** 고정 줄 노랑·마우스 올림·F4 빛남을 `tr`에 준다(셀 배경이면 줄 목록에서 칸마다 조각). 마우스 올림은
+  `@media (hover: hover)` 안 — 휴대폰은 누른 줄이 계속 칠해져 있다.
+- **휴대폰 함정:** ① 세로 flex에 `flex-wrap: wrap`이 있으면 줄 폭이 내용(칩 전체 폭)으로 정해져 페이지가 390보다 넓어짐 → 휴대폰은
+  `nowrap`. ② 390에서는 오른쪽 버튼(118px) 때문에 레벨·분류·"첨부·조회·날짜"가 한 줄에 다 안 들어감 → "첨부 N · 조회 N · 날짜"를
+  날짜 칸 하나(`.rb-m-meta` + `<time>`, `nowrap`)로 묶어 통째로 다음 줄로(구분점이 줄 앞에 오지 않게). 테스트에서 날짜 칸
+  `toHaveText`는 숨은 묶음 글자까지 읽음 → `.rb-col-date time`.
+- **등록일:** `formatToParts`로 서울 연·월·일, 올해 = 지금 서울 연도(`rbaDate(iso, now)`; 12/31 23:59 KST = 지난해).
+- 테스트 함정: 열린 ⋯ 메뉴가 바로 아래 줄의 ⋯를 덮는다 → "하나만 열림"은 덮이지 않는 줄로. 사진 도구
+  `docs/worker-briefs/2026-11-09-admin-board-list-tidy-screenshots.mjs`.
+
+### "다른 탭 로그아웃" 테스트가 흔들리던 원인 (`2026-11-09`, D85 지시서 §5)
+
+- **원인(테스트):** 도우미 `logOutInAnotherTab`가 다른 탭에서 [로그아웃]을 누른 뒤 "홈 화면이 보임"을 기다리고 그 탭을 닫았는데,
+  그 탭은 처음부터 홈 화면이라 **누르기 전부터 참인 조건**이었다. supabase-js의 로그아웃(탭 사이 잠금 → `/auth/v1/logout` →
+  저장된 로그인 지움 → 다른 탭에 BroadcastChannel로 SIGNED_OUT)이 끝나기 전에 탭이 닫히면 알림이 안 가 창이 안 뜬다. 확인:
+  같은 순서 12번 모두 그 순간 그 탭에 로그인이 남아 있었고 10번은 창이 안 떴다(PC 상태·메모리에 따라 비율이 달라 11/08부터 "가끔").
+- **고침(테스트만):** 그 탭의 [로그아웃] 버튼이 사라질 때까지 기다린 뒤 닫는다(`logOut`이 signOut을 마친 뒤 버튼을 숨김) → 15/15,
+  §5 단독 10번 연속 10/10. "로그인 살아 있음" 테스트의 고정 대기(500·300ms)도 조건으로(배너 탭 스위치가 읽힘 · 이 탭의
+  SIGNED_OUT을 들은 뒤 — 앱의 리스너가 먼저 등록돼 먼저 돈다).
+- **앱 문제 아님:** 실제로도 [로그아웃]을 누르자마자 그 탭을 닫으면 그 탭의 로그아웃이 끝나지 않아 로그인이 남는다 — 다른 탭도
+  로그인 상태 그대로라 어긋남이 없다. `app.js` 변경 없음.
+- 교훈: 누른 뒤의 결과를 기다릴 때는 누르기 전에도 참인 조건을 쓰지 말 것.
+
 ### Supabase 라이브러리 버전 고정 (`2026-11-08`, PM 결정 D83)
 
 - `index.html`의 supabase-js 주소 `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2` → **`@2.119.0`**(그때 `@2`가 실제로

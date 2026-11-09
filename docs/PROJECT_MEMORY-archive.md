@@ -5,6 +5,13 @@
 > updated to the current `D:\_TPS` root). The live, short status now lives in `PROJECT_MEMORY.md`.
 > Read this only when you need past history, rationale, or old session logs.
 
+## Entries moved out of PROJECT_MEMORY.md (`2026-11-09` D85, verbatim)
+
+> Moved to keep PROJECT_MEMORY.md under 6,000 (D85 line added). Live state then: `49bf605`.
+
+- (under **교사자료실 게시판**)
+  - **D79** 첨부 50개 · **D80** 구글 시트·문서·슬라이드 링크 → 엑셀·워드·PPT로 받기 — live `11/08`. NOTES "첨부 50개".
+
 ## Entries moved out of PROJECT_MEMORY.md (`2026-11-09`, verbatim)
 
 > Moved to keep PROJECT_MEMORY.md under 6,000 (D84 line added). Live state then: `c056fd4`.

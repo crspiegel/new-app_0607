@@ -77,6 +77,21 @@ For this project, use Duolingo ABC only as a style reference for color, spacing,
   zipping: "압축하는 중… n / N개" in the count's place (800), "창을 닫지 말아 주세요" `#d6e9f8` 13px, a 6px bar
   (radius 99px) `#8fd4fb` on `#3f7db3`, 260px on a PC / the words' line on a phone; [선택 해제] dims (0.55)
   like the 받기 buttons.
+- **관리자 교사자료실 글 목록 (D85, 2026-11-09, PM canvas "관리자 교사자료실 글 목록 정돈 시안" A안 PC · 휴대폰;
+  admin face and `--adm-*`; its own `.rb-*` classes — the 회원 · 반 · 지사 tables keep `.adm-table`):** head row
+  38px `#f6f7f7`, 12px 700 `--adm-muted` · rows min 50px, line `#ececec`, hover `#f6f9fc` (mouse only) ·
+  pinned row `#fdf9ec`, the last one's line `#e6d9a8`, pin `#b26200` 16px · [숨김] 12px 700, border `#c3c4c7`
+  on `#f6f7f7`, `--adm-muted`; a hidden title `#646970` · title 14px 700, hover `--adm-accent` + underline ·
+  level dot 9px (Beginner `#e0a800`, L1 `#ff4b4b`, L2 `#1cb0f6`, L3 `#ce82ff`, 공통 `#8c8f94`), name 13px
+  600 · 분류 = `.bd-cat cat-<color>` · columns 34 · rest · 118 · 150 · 64 · 64 · **96** (등록일 — 84 cut
+  "2025.11.02") · 176 px, numbers `tabular-nums` right; 0 files `#646970` · [수정] 30px (phone 44px), 1px
+  `--adm-accent`, 13px 700 on white · 보기 / [⋯] 32×30 icons `--adm-muted`, hover `--adm-accent-soft` · menu
+  ≥120px, white, `--adm-line`, `0 6px 18px rgba(0,0,0,.12)`, [삭제…] 34px (phone 44px) `--adm-danger` 700
+  (armed: red fill, white) · level chips 34px (phone 36px) pills, off white + `#c3c4c7`, on `--adm-text`
+  fill + white text, an 8px dot (전체 none) · status buttons 32px (phone 36px), `--adm-field-line`, on
+  `--adm-accent` + white · search 220px with a 16px magnifier. Row list (the list's box under 880px): line 1
+  pin · [숨김] · title, line 2 level · pill (12px) · "첨부 N · 조회 N · 11.02" 13px `--adm-muted` (wraps as
+  one piece), [수정] 58×44 + [⋯] 44×44 (1px `#c3c4c7`) at the right.
 - Global hard rule: **no italics anywhere** (`font-style: normal !important` +
   `font-synthesis: none` on `*`, `html`, `body`, `button`).
 

@@ -363,6 +363,22 @@ Its name on every screen (teachers' and admin) is **교사자료실** (no space)
   leaked account or a loop that real teachers never reach. One shared count with 레벨별 자료실 (board rows
   logged as `level='board'`); a ZIP of N files counts N. Admins unlimited. A missing file is not counted.
   When reached, both screens say "오늘 내려받기가 너무 많아 잠시 막혔어요. 관리자에게 문의해 주세요."
+- **Admin list (D85, 2026-11-09):** one row a post — [pin] · 제목 · 레벨 · 분류 · 첨부 · 조회 · 등록일 · 관리
+  (no 공지 / 상태 columns). Pinned = a pin (read "고정 글"), a light yellow row and a darker line under the
+  last pinned one; hidden = a grey [숨김] before a grey title. 레벨 = a color dot + the name; 분류 = the same
+  pill as 교사자료실 설정. 첨부 (clip; 0 paler) · 조회 · 등록일 right-aligned, same-width digits; 등록일 this
+  year `11.02`, older `2025.11.02` (Seoul time, `<time datetime>`). The title is one line ("…", the whole
+  title as its tooltip) and opens the editor like [수정]. 관리 = [수정] · 보기 (new tab, "<제목> 사용자 화면에서
+  보기 (새 탭)") · [⋯] whose menu holds only [삭제…] (the same two presses: "한 번 더 누르면 삭제"); one menu at
+  a time, its first item focused, Esc / a press outside / Tab out close it (Esc and an empty spot put the
+  focus back on [⋯]). Filters: level chips (전체 · Beginner · Level 1-3 · 공통, `aria-pressed`, no counts) ·
+  분류 list · status buttons (전체 · 공개 · 숨김) · title search on Enter; the same `board_admin_list`
+  arguments as before, page 1 again on a change. "전체 N개" + "고정 글 먼저 · 최근 등록순" (the RPC's order).
+  A box too narrow for the table (phones, tablets, a PC window under about 1,150px) shows a row list: the
+  title line, then level · category · "첨부 N · 조회 N · 11.02" (one piece), [수정] and [⋯] 44px at the
+  right, 보기 inside [⋯]. Phone filters: the chips slide sideways, 분류 + 상태 on one line, the search box
+  full width under them. Pager, the just-saved light (F4), empty / refusal sentences and 교사자료실 설정
+  unchanged.
 - **Editor (admin):** title (required, 100), body (optional, 5,000), level (공통 / one level), category,
   공개, 📌 고정. Files are dropped (many at once, name order "3월 < 10월") or picked, uploaded 3 at a
   time with a bar each; refused ones (type, size, empty) are listed in red; rows reorder by dragging
