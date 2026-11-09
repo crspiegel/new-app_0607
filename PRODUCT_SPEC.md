@@ -396,11 +396,13 @@ Its name on every screen (teachers' and admin) is **교사자료실** (no space)
     Back / a changed `#`) with pending uploads shows our window "업로드를 중단하시겠습니까?" / "중단하면
     이번에 올린 파일 N개가 모두 취소돼요. 이미 등록된 파일은 그대로 남아요." / [중단하기] (red) · [계속
     올리기] (focused; also Esc). 중단하기 = stop the uploads, delete all of them from Storage, then go;
-    계속 올리기 = stay (Back: the address is put back). Other unsaved changes ask "수정한 내용을 저장하지
-    않고 나갈까요?". Nothing unsaved = no window. Closing the tab, reloading or another address: the
-    browser's own question (its wording cannot be changed) only while uploads are pending; leaving
-    then deletes them (`pagehide`, keepalive). A forced browser kill can leave files — a read-only
-    check lists them (no delete SQL).
+    계속 올리기 = stay (Back: the editor and its address stay — D87, below). Other unsaved changes ask
+    "수정한 내용을 저장하지 않고 나갈까요?". Nothing unsaved = no window. Closing the tab, reloading or
+    another site: the browser's own question (its wording cannot be changed) while uploads are pending
+    **or anything in the editor changed** (title, body, level, category, 공개, 고정, attachments or their
+    order — D87, 2026-11-09; F3 had uploads only); a change undone, a save or a cancel turns it off;
+    leaving then deletes the uploads (`pagehide`, keepalive). A forced browser kill can leave files — a
+    read-only check lists them (no delete SQL).
 - **Switches (교사자료실 설정, B12 · T1):** `resource_board_enabled` (default off) shows / hides the header
   button and the board for branch / teacher accounts (an address does not open it; posts and files
   stay; the top admin may still preview with a note). The 배너 tab's 레벨별 자료실 switch
@@ -409,7 +411,35 @@ Its name on every screen (teachers' and admin) is **교사자료실** (no space)
 - **Login ended (2차 §5):** if the login ends while the admin screen is open (Log out in another tab,
   an expired session — top admin or a branch / teacher account), a window says "로그인이 끝났어요." / "다시
   로그인한 뒤 이어서 해 주세요." over the locked admin screen (nothing typed vanishes, nothing can be saved)
-  until [로그인 화면으로].
+  until [로그인 화면으로]. While it is up, Back / Forward / a typed address move nothing (D87); [로그인
+  화면으로] also closes an open leave window.
+
+## Admin Addresses (D87, 2026-11-09)
+
+Every admin view has its own address; the 교사자료실 editor has its own too. The old `#admin` and any
+unknown view become the account's default view (the address rewritten, no new history entry).
+
+| Screen              | Address                                                                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Admin views         | `#admin/content` · `#admin/members` · `#admin/classes` · `#admin/branches` · `#admin/bulk` · `#admin/banner` · `#admin/board` |
+| 교사자료실 new post | `#admin/board/new`                                                                                                            |
+| 교사자료실 edit     | `#admin/board/edit/<post id>`                                                                                                 |
+
+- Default view: the top admin `#admin/content`; branch / teacher accounts `#admin/members`.
+- Entering the admin ([Admin] / [My Branch] / [My Class], an admin login) and choosing another menu
+  (also the phone ☰ menu) each leave a new history entry; the same menu again does not.
+- Back / Forward between admin addresses open that view; Back from the first admin view shows the screen
+  before it (home, a month page, a resource page, the login page, the teachers' board) — opened the way a
+  load opens it. Moves between the other user screens are unchanged (D88).
+- A reload opens the address's view; `#admin/board/edit/<id>` opens that post's editor once the sign-in is
+  known (a missing post: the list and "이 글은 이미 지워졌어요."), `#admin/board/new` an empty new post.
+- The editor: opening it adds its entry; Back = the admin 교사자료실 list (our leave window first when
+  something would be lost — [계속 쓰기] keeps the editor and its address, and the next Back asks again).
+  After [등록하기] / [수정 완료] / [취소] one Back goes to the screen before the list. Another admin view
+  or a user screen reached while editing (Back, Forward, a typed address) asks first too (F3).
+- Rights: an address for a view the account may not open becomes its default view; without a sign-in
+  the login page (a student: home) — the admin screen is never drawn, nor before the sign-in is known.
+- The student QR page (`play.html`) and the teachers' board (`#board…`) keep their own address handling.
 
 ## Data Model Direction
 

@@ -5,6 +5,15 @@
 > updated to the current `D:\_TPS` root). The live, short status now lives in `PROJECT_MEMORY.md`.
 > Read this only when you need past history, rationale, or old session logs.
 
+## Entries moved out of PROJECT_MEMORY.md (`2026-11-09` D87, verbatim)
+
+> Moved to keep PROJECT_MEMORY.md under 6,000 (D87 line added). Live state then: `3d397a8`.
+
+- (under **교사자료실 게시판**)
+  - **D83** supabase-js `@2` → `@2.119.0` 고정(`index.html`; 올릴 때 PM 결정). NOTES "버전 고정".
+  - **D84** (live `11/09`) PC 선택 바 sticky(창 아래 16px, 상자 끝에서 멈춤) · 선택 중 맨 위 버튼 [선택한 N개 받기] · 바 진행
+    표시. NOTES "따라다니기".
+
 ## Entries moved out of PROJECT_MEMORY.md (`2026-11-09` D85, verbatim)
 
 > Moved to keep PROJECT_MEMORY.md under 6,000 (D85 line added). Live state then: `49bf605`.

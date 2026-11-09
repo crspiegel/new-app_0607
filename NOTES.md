@@ -1467,6 +1467,33 @@ noreferrer">`(클릭 처리는 계속 `button.bd-att-dl`만). 새 종류의 설�
   로그인 상태 그대로라 어긋남이 없다. `app.js` 변경 없음.
 - 교훈: 누른 뒤의 결과를 기다릴 때는 누르기 전에도 참인 조건을 쓰지 말 것.
 
+### 관리자 메뉴마다 주소 · 뒤로·앞으로·새로고침 · 확인창 확대 (`2026-11-09`, PM 지시서 D87, 근거 D86 조사)
+
+- **주소:** `#admin/<메뉴>`(`adminViewTitles` 키), `#admin/board/new`, `#admin/board/edit/<id>`(UUID만). 옛 `#admin`·모르는 메뉴·그
+  계정이 못 여는 메뉴 = 기본 메뉴로 **바꿔 씀**(replaceState, 기록 추가 없음). 기본 = 최고관리자 content, 지사·선생님 members.
+- **스스로 바꾸는 주소는 `pushState`/`replaceState`만**(hashchange가 안 나서 자기 이동에 다시 반응하지 않음). 들어오기·메뉴 = push,
+  같은 주소면 push 안 함(`adminPush`). `location.hash =`를 쓰는 다른 코드(`setHash`, `rbGo`)는 그대로 — 그 hashchange가 올 때는 이미
+  `showScreen`이 끝나 화면이 관리자가 아니므로 반응 안 함.
+- **hashchange 리스너는 하나**(`resource-board.js`): ① 로그인 끝남 창(§5)이 떠 있으면 아무것도 안 함 ② 편집기가 열려 있으면 편집기가
+  먼저(F3) ③ `rbFollowHash` = 관리자 주소 → `craAdmin.follow`(app.js `adminFollowRoute`) / 교사자료실 → `rbRoute` / 교사자료실에서
+  나감 → `rbLeave` / **관리자에서 나감 → `craAdmin.leave` = `openHashScreen`**(불러올 때 쓰는 화면 열기를 함수로 뺌 — 레벨별 자료실은
+  그때 권한 확인까지). 사용자 화면끼리의 뒤로는 아직 반응 없음(D88).
+- **로그인 확인 전에는 안 움직임:** `adminRoutesReady`(로그인 확인 직후 켜짐). 불러올 때는 hydrate 뒤 `adminFollowRoute({reopen:true})`로
+  관리자 전체를 다시 그림(그 사이 [Admin]을 눌렀어도 콘텐츠 보드가 hydrate된 내용으로).
+- **편집기 기록:** 목록에서 열면 push(+ `rbaListBelow` = 아래가 목록 기록인지), 주소로 열리면(새로고침·뒤로·앞으로·직접 입력) 그 자리.
+  [계속 쓰기] = 편집 주소를 **새로 push**(D86 S1 원인: 예전엔 뒤로가 닿은 기록을 replaceState로 덮어 → 다음 뒤로가 사이트 밖).
+  창이 떠 있는 동안 또 주소가 바뀌면 그 창이 답함(`rbaAnswer`) — 답할 때의 주소 기준. 저장·취소로 닫으면 아래가 목록이면
+  `history.back()`(같은 목록 두 번·편집기 다시 열림 방지), 아니면 그 기록을 목록 주소로 바꿈.
+- 메뉴·[사이트 보기]·[로그아웃]으로 편집기를 떠나면(F3 클릭 경로) 편집 기록이 그 아래에 남는다 → 거기서 뒤로 = 그 글 편집 화면이
+  새로(저장된 내용으로) 열림. 잃는 것은 없어 그대로 둠.
+- **확인창 확대(F3 변경):** `rbaSyncUnload` = 올리는 중 **또는 `rbaChanged()`**. `rbaRenderHead`가 입력·순서·파일 바뀔 때마다 부름.
+  `rbaChanged`는 `ed.start`가 정해지기 전엔 거짓(열리는 중 잘못 켜지지 않게).
+- **§5:** 창이 떠 있으면 주소 반응 0. [로그인 화면으로] → `craBoardAdmin.drop()` → `rbaCancelAsk`(열린 나가기 창을 답 없이(`null`)
+  닫고 포커스 붙잡기 해제) — `then`들은 `null`이면 아무것도 안 함.
+- 테스트 함정: ① PC 크기에서 휴대폰 크기로 바꾼 직후 왼쪽 메뉴가 0.2초 미끄러져 나가는 동안 "보임"이라 ☰를 안 누르게 됨 → 숨을 때까지
+  기다린 뒤 ☰. ② 편집 중 바뀐 것이 있으면 `page.goto`(새 문서)가 브라우저 확인창에 막힘 → 먼저 [취소]→[나가기]. ③ `history.length`로
+  기록 추가 여부 확인. 점검 스크립트 `docs/worker-briefs/2026-11-09-admin-routes-back-recheck.mjs`(D86 경로 그대로).
+
 ### Supabase 라이브러리 버전 고정 (`2026-11-08`, PM 결정 D83)
 
 - `index.html`의 supabase-js 주소 `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2` → **`@2.119.0`**(그때 `@2`가 실제로
