@@ -1473,11 +1473,11 @@ noreferrer">`(클릭 처리는 계속 `button.bd-att-dl`만). 새 종류의 설�
   계정이 못 여는 메뉴 = 기본 메뉴로 **바꿔 씀**(replaceState, 기록 추가 없음). 기본 = 최고관리자 content, 지사·선생님 members.
 - **스스로 바꾸는 주소는 `pushState`/`replaceState`만**(hashchange가 안 나서 자기 이동에 다시 반응하지 않음). 들어오기·메뉴 = push,
   같은 주소면 push 안 함(`adminPush`). `location.hash =`를 쓰는 다른 코드(`setHash`, `rbGo`)는 그대로 — 그 hashchange가 올 때는 이미
-  `showScreen`이 끝나 화면이 관리자가 아니므로 반응 안 함.
+  `showScreen`이 끝나 화면이 관리자가 아니므로 반응 안 함. (D88: `setHash`도 pushState로 바뀜, 아래.)
 - **hashchange 리스너는 하나**(`resource-board.js`): ① 로그인 끝남 창(§5)이 떠 있으면 아무것도 안 함 ② 편집기가 열려 있으면 편집기가
   먼저(F3) ③ `rbFollowHash` = 관리자 주소 → `craAdmin.follow`(app.js `adminFollowRoute`) / 교사자료실 → `rbRoute` / 교사자료실에서
   나감 → `rbLeave` / **관리자에서 나감 → `craAdmin.leave` = `openHashScreen`**(불러올 때 쓰는 화면 열기를 함수로 뺌 — 레벨별 자료실은
-  그때 권한 확인까지). 사용자 화면끼리의 뒤로는 아직 반응 없음(D88).
+  그때 권한 확인까지). (D88: `rbLeave`·`craAdmin.leave` → `craSite.follow` 하나로, 사용자 화면끼리도 반응 — 아래.)
 - **로그인 확인 전에는 안 움직임:** `adminRoutesReady`(로그인 확인 직후 켜짐). 불러올 때는 hydrate 뒤 `adminFollowRoute({reopen:true})`로
   관리자 전체를 다시 그림(그 사이 [Admin]을 눌렀어도 콘텐츠 보드가 hydrate된 내용으로).
 - **편집기 기록:** 목록에서 열면 push(+ `rbaListBelow` = 아래가 목록 기록인지), 주소로 열리면(새로고침·뒤로·앞으로·직접 입력) 그 자리.
@@ -1493,6 +1493,37 @@ noreferrer">`(클릭 처리는 계속 `button.bd-att-dl`만). 새 종류의 설�
 - 테스트 함정: ① PC 크기에서 휴대폰 크기로 바꾼 직후 왼쪽 메뉴가 0.2초 미끄러져 나가는 동안 "보임"이라 ☰를 안 누르게 됨 → 숨을 때까지
   기다린 뒤 ☰. ② 편집 중 바뀐 것이 있으면 `page.goto`(새 문서)가 브라우저 확인창에 막힘 → 먼저 [취소]→[나가기]. ③ `history.length`로
   기록 추가 여부 확인. 점검 스크립트 `docs/worker-briefs/2026-11-09-admin-routes-back-recheck.mjs`(D86 경로 그대로).
+  ④ (D88에서 고침) 앱이 바꿔 쓰는 주소(지워진 글 → `#admin/board`)를 같은 문서에서 `page.goto` 한 뒤 `page.reload()`하면, 앱이 먼저
+  주소를 바꿔 새로고침이 바뀐 주소로 감(전체 실행에서 가끔 실패) → `about:blank`를 먼저 열어 새 문서로 불러옴(새로고침과 같은 열기).
+
+### 사용자 화면 뒤로·앞으로 (`2026-11-09`, PM 지시서 D88, 근거 D86 M4·M5·M6)
+
+- **`setHash`도 `pushState`**(D87 관리자와 같은 방식, hashchange 안 남 → 자기 이동에 다시 반응 안 함). 홈도 새 기록(예전 replaceState).
+  같은 주소면 아무것도 안 함. `{ replace: true }` = 로그인 성공 뒤 홈(로그인 기록을 홈으로 바꿈 — 뒤로 눌러 로그인 칸이 다시 안
+  나오게, 예전 그대로)·`openAdmin`이 학생을 홈으로 돌려보낼 때. ⚠ 그래서 홈 → 로그인 → 성공이면 `/` 기록이 둘 → 그 뒤 첫 뒤로는
+  같은 홈(주소가 같아 화면 변화 없음). 예전부터 같았고 그대로 둠.
+- **hashchange 리스너는 여전히 하나**(`resource-board.js`), 순서: ① §5 창 → ② 교사자료실 편집기(F3) → ③ **배경 편집기**
+  (`window.craBgEdit.hashChanged`, background-editor.js) → ④ `rbFollowHash` = 관리자 → 교사자료실 → **나머지 전부 `craSite.follow`**
+  (= 창 닫기 `closeSiteWindows` + `openHashScreen()`). `rbLeave`·`craAdmin.leave`는 없앰(같은 일을 `openHashScreen`이 함; 예전
+  `rbLeave`는 콘텐츠 주소면 새로고침했음).
+- **`openHashScreen` 실행 중(불러올 때 아님):** `#resources/<레벨>`은 로그인 확인(`adminRoutesReady`) 전이면 월 페이지만(불러올 때와
+  같음 — `teacher-resources.js`의 `craAuthReady.then`이 그때 주소로 마저 처리), 뒤면 그 자리에서 권한 확인(없으면 `#months/<레벨>`로
+  replaceState). 월 페이지로 갈 때 `state.month = ""`.
+- **영상·게임 창 기록:** 열 때 같은 주소로 `pushState({craWindow})`. 뒤로 → `popstate`(hashchange 없음)가 창을 닫음. [닫기]·바깥·Esc는
+  `closeWindowVia` = 그 기록 위면 `history.back()`(popstate가 닫음 — play.js와 같은 방식), 아니면 바로 닫음. 앞으로로 닫힌 창의 기록에
+  닿으면 `history.back()`으로 넘어감(창 다시 안 열림, 다음 뒤로가 헛돌지 않음 — play.js는 그냥 둠). 주소가 바뀌는 popstate·hashchange에도
+  `closeSiteWindows`가 창과 "Coming soon" 안내를 닫음.
+- **⚠ iframe의 페이지 이동도 방문 기록이다(D88에서 찾음, 운영에도 있던 문제):** 게임 창을 닫을 때 `gameFrame.src = ""`, 다시 열 때
+  `src = url` → 그때마다 기록 1개 → 닫은 뒤 뒤로 = 숨은 iframe만 게임으로 되돌아감(화면 변화 없음, 게임이 숨은 채 다시 불러짐).
+  처음 쓰는 iframe(초기 about:blank)에서의 첫 이동만 기록을 안 남긴다 → 닫을 때 **iframe을 새것으로 바꿈**(`freshGameFrame`,
+  `gameFrame`은 `let`). 영상 창은 원래 iframe을 지우고 새로 만들어서 문제 없음. 새 iframe을 쓰는 코드는 이 규칙을 지킬 것.
+- **교사자료실 ZIP:** 예전에는 머리줄 버튼(`location.hash =`)의 hashchange가 `rbZipCancel`을 불렀음 → pushState가 되면서
+  `body[data-screen]` 관찰(교사자료실이 아닌 화면이 되면 취소)로 옮김. 로고·[Admin]으로 나갈 때도 이제 멈춤(예전엔 안 멈췄음).
+- **입력 보호:** 배경 편집기만 사용자 화면에서 열림 — 링크 규칙 그대로(바뀐 것 있으면 막고 상태줄 문구, 없으면 닫고 이동), 뒤로·
+  앞으로도 같게(바뀐 것 있으면 그 주소를 다시 push). 새 확인 창 없음. 관리자 콘텐츠 칸 편집 창(`#adminSlotModal`)은 묻는 방식이 없다 —
+  관리자에서 뒤로 나가면 창이 입력값 그대로 사용자 화면 위에 남고(D87부터 같음) 앞으로 = 관리자로. 그대로 둠.
+- 테스트: `tests/site-routes.spec.js`(9). 같은 문서에서 주소만 바꾸는 `page.goto("/#…")`·`location.hash =`도 이제 화면을 옮긴다(예전엔
+  교사자료실만). 점검 스크립트 `docs/worker-briefs/2026-11-09-site-routes-back-recheck.mjs`(D86 경로, 쉼표로 여러 개: `U,Q`).
 
 ### Supabase 라이브러리 버전 고정 (`2026-11-08`, PM 결정 D83)
 

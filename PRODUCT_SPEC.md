@@ -430,7 +430,7 @@ unknown view become the account's default view (the address rewritten, no new hi
   (also the phone ☰ menu) each leave a new history entry; the same menu again does not.
 - Back / Forward between admin addresses open that view; Back from the first admin view shows the screen
   before it (home, a month page, a resource page, the login page, the teachers' board) — opened the way a
-  load opens it. Moves between the other user screens are unchanged (D88).
+  load opens it. The user screens follow their addresses too (D88, next section).
 - A reload opens the address's view; `#admin/board/edit/<id>` opens that post's editor once the sign-in is
   known (a missing post: the list and "이 글은 이미 지워졌어요."), `#admin/board/new` an empty new post.
 - The editor: opening it adds its entry; Back = the admin 교사자료실 list (our leave window first when
@@ -440,6 +440,42 @@ unknown view become the account's default view (the address rewritten, no new hi
 - Rights: an address for a view the account may not open becomes its default view; without a sign-in
   the login page (a student: home) — the admin screen is never drawn, nor before the sign-in is known.
 - The student QR page (`play.html`) and the teachers' board (`#board…`) keep their own address handling.
+
+## Site Addresses (D88, 2026-11-09)
+
+The user screens follow the address as the admin does (D87): Back / Forward (a phone's swipe back too)
+show that address's screen, never only a new address over the old screen.
+
+| Screen                 | Address                                       |
+| ---------------------- | --------------------------------------------- |
+| Home                   | `/` (no `#`)                                  |
+| Overview               | `#overview`                                   |
+| Month page             | `#months/<level>`                             |
+| Content page           | `#content/<level>/<month>` (also `-v2`/`-v3`) |
+| Resource page (레벨별) | `#resources/<level>`                          |
+| Login                  | `#login`                                      |
+| Teachers' board        | `#board…` (unchanged)                         |
+| Admin                  | `#admin/…` (D87)                              |
+
+- Every move by a button or link (the logo, a level, a month, previous / next month, the home button,
+  Teacher, Login, the resource page and its back button, [사이트 보기], Log out → home) leaves a new history
+  entry — the home page too (it used to overwrite the entry). The same screen again adds none.
+- Kept as overwrites: an old level key (`#months/Level%201`) rewritten in place, an unknown level → home,
+  an address the account may not open after the sign-in check (`#resources/<level>` → `#months/<level>`),
+  and a login arriving on the home page (the login page's entry becomes home, so Back does not show the
+  login form again).
+- A reload opens the address's screen; Back from the site's first screen leaves the site.
+- The video window and the game window each add one entry: Back closes the window only (the screen and
+  the address stay; the video stops, the game unloads) — the student page's rule. [닫기] / the backdrop /
+  Esc go back through that entry, so the next Back is a real one; Forward does not reopen a window.
+- Rights: Back / Forward / a typed address to `#resources/<level>` gets the load's check — before the sign-in
+  is known the month page, then the resource page only for teachers and admins (switch on); anyone else
+  `#months/<level>` (the address rewritten). After Log out, Back never shows a resource page, the board or the
+  admin.
+- The background editor (admin, on a month / content page): Back / Forward with unsaved changes keep the
+  editor, its page and its address with its line "저장하지 않은 변경이 있습니다 — 저장하거나 ✕로 닫아
+  주세요." (its links' rule; no new window); without changes it closes and the move goes on. Reload / close
+  keep the browser's question.
 
 ## Data Model Direction
 
