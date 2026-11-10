@@ -1380,36 +1380,10 @@ function rbRoute() {
   return true;
 }
 
-// Back / Forward out of the board (the app has no other hash listener):
-// home, a month page, a resource page; anything else reloads the address.
-function rbLeave() {
-  const [route, raw] = window.location.hash.slice(1).split("/");
-  if (!route) {
-    showScreen("home");
-    return;
-  }
-  let level = null;
-  try {
-    level = raw ? levelFromAny(decodeURIComponent(raw)) : null;
-  } catch {
-    level = null;
-  }
-  if (route === "months" && level) {
-    showMonthsFor(level);
-    return;
-  }
-  if (route === "resources" && level) {
-    openTeacherResources(level);
-    return;
-  }
-  window.location.reload();
-}
-
 // Where the address now points (also called by the admin editor once its
 // unsaved work is dealt with — F3): an admin address → app.js (D87); the
-// board; or out of the board / out of the admin screen — the admin screen
-// opens the address's screen as a load does (D87). Moves between the other
-// user screens are not handled here (D88).
+// board; any other address = a user screen, opened the way a load opens it
+// (app.js craSite — D88; it closes the video / game window first).
 function rbFollowHash() {
   const admin = window.craAdmin;
   if (admin && admin.isRoute(window.location.hash)) {
@@ -1422,20 +1396,34 @@ function rbFollowHash() {
     return;
   }
   rbZipCancel();
-  const screen = document.body.dataset.screen;
-  if (screen === "board") rbLeave();
-  else if (screen === "admin" && admin) admin.leave();
+  if (window.craSite) window.craSite.follow();
 }
 
-// The page's one hashchange listener. The login-ended window (§5) is up:
-// nothing moves (D87). The admin's post editor is open: it decides first
-// (F3 — its own window when uploads or changes would be lost; "stay" keeps
-// the editor and its address). resource-board-admin.js loads after this file.
+// The page's one hashchange listener (Back / Forward / a typed address — the
+// site's own moves use pushState, D87 · D88), in this order: the
+// login-ended window (§5) is up: nothing moves. The admin's post editor is
+// open: it decides first (F3 — its own window when uploads or changes would
+// be lost; "stay" keeps the editor and its address). The background editor
+// is open: unsaved changes keep it and its address, as its links do (D88).
+// Then rbFollowHash: the admin, the board, a user screen. (A window's own
+// entry — same address — is popstate's, app.js.) resource-board-admin.js
+// loads after this file.
 window.addEventListener("hashchange", () => {
   if (window.craAdmin && window.craAdmin.frozen()) return;
   const editor = window.craBoardAdmin;
   if (editor && editor.hashChanged()) return;
+  const bgEditor = window.craBgEdit;
+  if (bgEditor && bgEditor.hashChanged()) return;
   rbFollowHash();
+});
+
+// Out of the board by a button (the logo, a level, [Admin] … — pushState,
+// no hashchange): a running ZIP stops, as on Back (D81).
+new window.MutationObserver(() => {
+  if (document.body.dataset.screen !== "board") rbZipCancel();
+}).observe(document.body, {
+  attributes: true,
+  attributeFilter: ["data-screen"],
 });
 
 if (teacherBoardBtn) {

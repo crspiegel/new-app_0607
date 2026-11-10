@@ -55,6 +55,7 @@ const bgEdit = {
   saving: false, // guards double-click on save / delete-override
   videoNode: null, // live video preview node — survives canvas rebuilds
   videoNodeUrl: "", // URL the node was built from (rebuild only on change)
+  url: "", // the edited page's address — kept on Back with unsaved changes
 };
 
 function bgLayer() {
@@ -402,6 +403,7 @@ function enterBgEdit() {
   bgEdit.on = true;
   bgEdit.screen = name;
   bgEdit.page = page;
+  bgEdit.url = window.location.href; // the page's address (Back — D88)
   const month = page === "page2" ? state.month : "";
   bgEdit.data = bgDeepCopy(
     window.craBg.getBackgroundEntry(state.level, page, month),
@@ -1009,6 +1011,26 @@ document.addEventListener(
 window.addEventListener("beforeunload", (event) => {
   if (bgEdit.on && bgEdit.dirty) event.preventDefault();
 });
+
+// Back / Forward / a typed address while editing (D88; asked by the page's
+// one hashchange listener, resource-board.js): the links' rule above —
+// unsaved changes keep the editor, its page and its address (a new entry
+// for it, as the board editor's [계속 쓰기] does) with the same line; a
+// clean session closes and the move goes on. No new question window.
+window.craBgEdit = {
+  hashChanged() {
+    if (!bgEdit.on) return false;
+    if (bgEdit.dirty) {
+      window.history.pushState(null, "", bgEdit.url);
+      setBgStatus(
+        "저장하지 않은 변경이 있습니다 — 저장하거나 ✕로 닫아 주세요.",
+      );
+      return true;
+    }
+    exitBgEdit();
+    return false;
+  },
+};
 
 // Admin-screen shortcut: jump to the selected level/month's 페이지2 and start
 // editing right away (work rule: the admin screen mirrors the user screen).

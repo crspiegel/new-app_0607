@@ -180,8 +180,12 @@ test("admin routes (D87 ④): a reload opens the address's view — every menu; 
   await expect(page.locator("#rbEdTitle")).toHaveValue("2026 수료 상장 양식");
   await expect(page.locator("#adminTitle")).toHaveText("교사자료실 글 수정");
   await expect(page).toHaveURL(new RegExp(`${EDIT_8}$`));
+  // A missing post's address is rewritten to #admin/board: opened in the same
+  // document and then reloaded, the app could rewrite it before the reload
+  // (which then opened the plain list) — so it opens as a fresh load, the
+  // same opening a reload does.
+  await page.goto("about:blank");
   await page.goto(`/#admin/board/edit/${pid(99)}`);
-  await page.reload();
   await expect(page.locator("#rbListMode")).toBeVisible();
   await expect(page.locator("#rbAdminStatus")).toHaveText(
     "이 글은 이미 지워졌어요.",

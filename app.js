@@ -544,37 +544,29 @@ function applyLevelTheme() {
   });
 }
 
-function setHash(view) {
-  if (view === "home") {
-    history.replaceState(
-      null,
-      "",
-      window.location.pathname + window.location.search,
-    );
-    return;
-  }
-
+// The address of a user screen: home = no hash.
+function siteHash(view) {
+  if (view === "home") return "";
   if (view === "months" || view === "resources") {
-    window.location.hash = `${view}/${encodeURIComponent(state.level)}`;
-    return;
+    return `#${view}/${encodeURIComponent(state.level)}`;
   }
-
-  if (view === "overview") {
-    window.location.hash = "overview";
-    return;
+  if (view === "overview" || view === "login" || view === "admin") {
+    return `#${view}`;
   }
+  return `#content/${encodeURIComponent(state.level)}/${encodeURIComponent(state.month)}`;
+}
 
-  if (view === "login") {
-    window.location.hash = "login";
-    return;
-  }
-
-  if (view === "admin") {
-    window.location.hash = "admin";
-    return;
-  }
-
-  window.location.hash = `content/${encodeURIComponent(state.level)}/${encodeURIComponent(state.month)}`;
+// Put a user screen's address in the bar (D88). A move by a button or link
+// is a new history entry — the home page too (it used to overwrite the
+// entry) — so Back / Forward retrace it; pushState fires no hashchange, so
+// the page does not react to its own moves. `replace` keeps the entry (a
+// login arriving on the home page). The same address again adds nothing.
+function setHash(view, { replace = false } = {}) {
+  const base = window.location.pathname + window.location.search;
+  const url = base + siteHash(view);
+  if (base + window.location.hash === url) return;
+  if (replace) history.replaceState(null, "", url);
+  else history.pushState(null, "", url);
 }
 
 // Paint (or clear) the two book-cover title cards from the content data for
@@ -997,6 +989,7 @@ function teardownPlayer() {
 function openVideoPlayer(label, source) {
   if (!videoModal) return;
   videoModal.hidden = false;
+  pushWindowEntry("video"); // Back closes the window (D88)
   document.body.classList.add("video-open");
   if (vpTitle) vpTitle.textContent = label || "";
   setVpProgress(0);
@@ -1236,12 +1229,14 @@ function closeVideoPlayer() {
 
 if (videoModal) {
   videoModal.querySelectorAll("[data-vp-close]").forEach((el) => {
-    el.addEventListener("click", closeVideoPlayer);
+    el.addEventListener("click", () =>
+      closeWindowVia("video", closeVideoPlayer),
+    );
   });
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !videoModal.hidden) {
-      closeVideoPlayer();
+      closeWindowVia("video", closeVideoPlayer);
     }
   });
 
@@ -1470,7 +1465,7 @@ if (comingSoonModal) {
    it), Restore returns to 70%, X / Escape closes. */
 const gameModal = document.querySelector("#gameModal");
 const gameModalCard = document.querySelector("#gameModalCard");
-const gameFrame = document.querySelector("#gameFrame");
+let gameFrame = document.querySelector("#gameFrame"); // swapped on close
 const gameMaxBtn = document.querySelector("#gameMax");
 const gameRestoreBtn = document.querySelector("#gameRestore");
 
@@ -1559,15 +1554,30 @@ function setGameMaximized(maximized) {
   fitGameFrame();
 }
 
+// A frame's own page changes are history entries: emptying the frame on
+// close (src = "") and opening the next game in it each added one, so Back
+// only moved the hidden frame (found in D88). Instead the used frame is
+// swapped for a new, empty one — removing it unloads the game (stops
+// audio / loops) — and a game always opens in a frame that has had no page,
+// which leaves no entry.
+function freshGameFrame() {
+  const fresh = gameFrame.cloneNode(false);
+  fresh.removeAttribute("src");
+  gameFrame.replaceWith(fresh);
+  gameFrame = fresh;
+}
+
 function openGameModal(url) {
   if (!gameModal || !gameFrame) return;
   setGameMaximized(false);
+  if (gameFrame.hasAttribute("src")) freshGameFrame();
   gameFrame.src = url;
   document.body.classList.add("game-open");
   // The container has to be visible before it can be measured, so the first
   // fit happens with transitions suppressed — otherwise the card would be seen
   // animating from the CSS fallback size to the computed one on every open.
   gameModal.hidden = false;
+  pushWindowEntry("game"); // Back closes the window (D88)
   gameModalCard.classList.add("game-no-anim");
   fitGameFrame();
   void gameModalCard.offsetWidth; // flush the layout before re-enabling
@@ -1576,7 +1586,7 @@ function openGameModal(url) {
 
 function closeGameModal() {
   if (!gameModal || !gameFrame) return;
-  gameFrame.src = ""; // unload the game (stops audio/loops)
+  freshGameFrame(); // unload the game (stops audio/loops), no history entry
   gameModal.hidden = true;
   document.body.classList.remove("game-open");
 }
@@ -1594,16 +1604,67 @@ function openGameSlot(slot) {
 
 if (gameModal) {
   gameModal.querySelectorAll("[data-game-close]").forEach((el) => {
-    el.addEventListener("click", closeGameModal);
+    el.addEventListener("click", () => closeWindowVia("game", closeGameModal));
   });
   if (gameMaxBtn)
     gameMaxBtn.addEventListener("click", () => setGameMaximized(true));
   if (gameRestoreBtn)
     gameRestoreBtn.addEventListener("click", () => setGameMaximized(false));
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !gameModal.hidden) closeGameModal();
+    if (event.key === "Escape" && !gameModal.hidden) {
+      closeWindowVia("game", closeGameModal);
+    }
   });
 }
+
+/* ---- The windows' history entries (D88, 2026-11-09) ---------------------
+   The video and game windows each leave one history entry when they open
+   (the same address, state { craWindow }), so Back closes the window and
+   moves nothing — the student page's rule (play.js). [닫기] / the backdrop
+   / Esc go back through that entry and popstate does the closing, so the
+   next Back is a real one. Forward onto a closed window's entry steps back
+   over it (the window does not open again). Every other address change
+   goes through the one hashchange listener (resource-board.js), which also
+   closes them (closeSiteWindows) before a user screen opens. */
+let siteWindowEntry = ""; // "video" | "game": that window's entry is current
+
+function pushWindowEntry(kind) {
+  if (siteWindowEntry) return;
+  siteWindowEntry = kind;
+  history.pushState({ craWindow: kind }, "", window.location.href);
+}
+
+function closeWindowVia(kind, close) {
+  const onEntry =
+    siteWindowEntry === kind &&
+    Boolean(history.state) &&
+    history.state.craWindow === kind;
+  siteWindowEntry = "";
+  if (onEntry)
+    history.back(); // popstate (below) closes it
+  else close();
+}
+
+// Close whatever sits on top of a user screen; true if a window was open.
+function closeSiteWindows() {
+  siteWindowEntry = "";
+  let open = false;
+  if (videoModal && !videoModal.hidden) {
+    closeVideoPlayer();
+    open = true;
+  }
+  if (gameModal && !gameModal.hidden) {
+    closeGameModal();
+    open = true;
+  }
+  hideComingSoon();
+  return open;
+}
+
+window.addEventListener("popstate", (event) => {
+  if (closeSiteWindows()) return;
+  if (event.state && event.state.craWindow) history.back();
+});
 
 document.querySelectorAll("[data-level]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -2247,7 +2308,7 @@ async function lmsLogin(id, pw, branchId) {
   }
   updateAdminUI();
   if (loginPassword) loginPassword.value = "";
-  setHash("home");
+  setHash("home", { replace: true }); // the login page's entry (D88)
   showScreen("home");
 }
 
@@ -2312,7 +2373,7 @@ if (loginForm) {
       if (isAdmin) {
         openAdmin();
       } else {
-        setHash("home");
+        setHash("home", { replace: true }); // the login page's entry (D88)
         showScreen("home");
       }
       return;
@@ -2535,7 +2596,7 @@ function openAdmin() {
   const role = adminRole();
   if (!role) {
     if (state.lms) {
-      setHash("home");
+      setHash("home", { replace: true }); // a bounce, as before (D88)
       showScreen("home");
     } else {
       setHash("login");
@@ -3140,10 +3201,11 @@ const LEVEL_VIEWS = [
 ];
 
 // The user screen the address stands for: on a load (`load`), and when Back
-// / Forward / a typed address leaves the admin screen (D87 — the same
-// opening, so the address and the screen agree). #board… is the board's
-// own (resource-board.js); on a load #admin… waits for the sign-in below.
-// Anything else (or nothing) = the home page — on a load it is already up.
+// / Forward / a typed address reaches a user screen (D87 out of the admin,
+// D88 everywhere — the same opening, so the address and the screen agree).
+// #board… is the board's own (resource-board.js); #admin… waits for the
+// sign-in below. Anything else (or nothing) = the home page — on a load it
+// is already up.
 function openHashScreen({ load = false } = {}) {
   const hashParts = window.location.hash.slice(1).split("/");
   const [view, , hashMonth] = hashParts;
@@ -3169,13 +3231,14 @@ function openHashScreen({ load = false } = {}) {
   // on to the resource page once the sign-in is known (craAuthReady) — or
   // puts #months/<level> in the address for anyone not allowed. No
   // forbidden screen shows even for a moment. Later (D87) the sign-in is
-  // known: the same check right here.
+  // known: the same check right here (before that, Back / Forward is a load).
   if ((view === "months" || view === "resources") && hashLevel) {
     state.level = hashLevel;
+    state.month = "";
     monthLevelTag.textContent = levelLabel(state.level);
     applyLevelTheme();
     showScreen("months");
-    if (!load && view === "resources") {
+    if (!load && adminRoutesReady && view === "resources") {
       if (canSeeTeacherResources() && window.craTeacherRes) {
         window.craTeacherRes.open(hashLevel);
       } else {
@@ -3280,8 +3343,18 @@ window.craAuthReady = new Promise((resolve) => {
 window.craAdmin = {
   isRoute: (hash) => Boolean(adminRouteOf(hash)),
   follow: () => adminFollowRoute(),
-  leave: () => openHashScreen(),
   frozen: adminFrozen,
+};
+
+// Back / Forward / a typed address reached a user screen (D88 — the one
+// hashchange listener calls it after the editors, the admin and the
+// board): the windows on top close, then the address's screen opens the
+// way a load opens it (rights included).
+window.craSite = {
+  follow: () => {
+    closeSiteWindows();
+    openHashScreen();
+  },
 };
 
 // Bridge for background-editor.js (separate classic script) and Playwright.
