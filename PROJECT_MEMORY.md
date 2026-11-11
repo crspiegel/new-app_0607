@@ -17,7 +17,7 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`007175d`** (`2026-11-09`: D87; D85 `3d397a8`, below). Older: archive.
+Live = **`628b8fc`** (`2026-11-10`: D88; D87 `007175d`, below). Older: archive.
 
 - **교사자료실 게시판** (briefs `11-03`~`11-07`): live, 게시판 켬, 레벨별 자료실 켜짐. 2차-1 · 2차-2
   (글꼴 `board_font_ko/en`, 로그인 끝남 안내) · 이름 변경 '레벨별 자료실' · D77 나눔스퀘어라운드(굵게 EB) live. NOTES "수정 2차"~.
@@ -25,13 +25,12 @@ Live = **`007175d`** (`2026-11-09`: D87; D85 `3d397a8`, below). Older: archive.
     브라우저(fflate `vendor/`, 동시 3, 200MB, 구글 링크 제외). **D82** 하루 한도 30 → 1,000(두 함수, Edge 함수 그대로).
     운영 SQL `2026-11-08-download-limit-1000-*` `11/09` 반영(verify 10/10). NOTES "모두 받기".
   - **D85** (live `11/09`) 관리자 글 목록 한 줄 표 · ⋯ → 삭제… · 레벨 칩·상태 3칸 + §5 테스트 안정화. NOTES "목록 정돈".
-- **관리자 주소 D87** (live `11/09`) `#admin/<메뉴>`·편집기 주소, 관리자 안 뒤로·앞으로·새로고침, 바뀐 것 있으면 브라우저
-  확인창(F3 변경). NOTES "관리자 메뉴마다 주소".
-- **사용자 화면 뒤로 D88** (local) 사용자 화면도 뒤로·앞으로 = 그 주소 화면, 버튼 이동마다 새 기록(홈도), 영상·게임 창 뒤로 =
-  창만 닫힘. NOTES "사용자 화면 뒤로·앞으로".
+- **관리자 주소 D87** (live `11/09`) `#admin/<메뉴>`·편집기 주소, 뒤로·앞으로·새로고침, 바뀐 것 있으면 확인창(F3). NOTES "관리자 메뉴마다 주소".
+- **사용자 화면 뒤로 D88** (live `11/10`) 뒤로·앞으로 = 그 주소 화면, 버튼 이동마다 새 기록, 영상·게임 창 뒤로 = 창만 닫힘.
+- **관리자 작은 창 D89** (local `11/10`) 칸 편집·회원 수정 창·☰ 메뉴 = 뒤로·앞으로·주소 입력·로그아웃 때 닫힘. NOTES "관리자 작은 창".
 
-- **TPS requests (10/20 meeting)** — review `docs/superpowers/specs/2026-10-22-tps-requests-review.md`,
-  plan `docs/superpowers/plans/2026-10-22-tps-requests-plan.md`. Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"
+- **TPS requests (10/20 meeting)** — review · plan `docs/superpowers/{specs,plans}/2026-10-22-tps-requests-*.md`.
+  Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"
   block (pk `member_id`, scoped RPCs D41–D56, `verify-3b.sql` 347); 3.3 admin screens (`lms-admin.js`), 3.4 Excel
   (`lms-bulk.js`, SheetJS in `vendor/`); live account check done.
   3.5 next: levels CHECKs into `migration.sql` (D37), `members.profile`, sequence grants. Phase 4 (R4) **cancelled** → B.

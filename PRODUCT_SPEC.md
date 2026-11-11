@@ -476,6 +476,11 @@ show that address's screen, never only a new address over the old screen.
   editor, its page and its address with its line "저장하지 않은 변경이 있습니다 — 저장하거나 ✕로 닫아
   주세요." (its links' rule; no new window); without changes it closes and the move goes on. Reload / close
   keep the browser's question.
+- The admin's small windows (D89, 2026-11-10) — the content slot editor and the member editor, and the
+  phone's ☰ admin menu: Back / Forward / a typed address close them the way Esc does (what was typed is
+  dropped; the member editor's password field emptied; no question) and the screen follows the address in
+  the same step. Opening one adds no history entry. Log out and [로그인 화면으로] close them too; while the
+  login-ended window is up nothing moves, the window included. The 교사자료실 editor keeps its own rule (F3).
 
 ## Data Model Direction
 
