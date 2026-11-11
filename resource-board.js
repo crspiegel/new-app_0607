@@ -1383,9 +1383,12 @@ function rbRoute() {
 // Where the address now points (also called by the admin editor once its
 // unsaved work is dealt with — F3): an admin address → app.js (D87); the
 // board; any other address = a user screen, opened the way a load opens it
-// (app.js craSite — D88; it closes the video / game window first).
+// (app.js craSite — D88; it closes the video / game window first). The
+// admin's small windows (slot editor, member editor, the phone's ☰ menu)
+// close first, whichever way the address went (D89).
 function rbFollowHash() {
   const admin = window.craAdmin;
+  if (admin) admin.closeWindows();
   if (admin && admin.isRoute(window.location.hash)) {
     rbZipCancel();
     admin.follow();
@@ -1405,9 +1408,9 @@ function rbFollowHash() {
 // open: it decides first (F3 — its own window when uploads or changes would
 // be lost; "stay" keeps the editor and its address). The background editor
 // is open: unsaved changes keep it and its address, as its links do (D88).
-// Then rbFollowHash: the admin, the board, a user screen. (A window's own
-// entry — same address — is popstate's, app.js.) resource-board-admin.js
-// loads after this file.
+// Then rbFollowHash: the admin's small windows close (D89), then the
+// admin, the board, a user screen. (A window's own entry — same address —
+// is popstate's, app.js.) resource-board-admin.js loads after this file.
 window.addEventListener("hashchange", () => {
   if (window.craAdmin && window.craAdmin.frozen()) return;
   const editor = window.craBoardAdmin;

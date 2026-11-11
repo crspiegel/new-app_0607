@@ -2402,6 +2402,7 @@ async function logOut() {
   isAdmin = false;
   clearLmsSession();
   updateAdminUI();
+  closeAdminWindows(); // one may be open — the keyboard reaches Log out (D89)
   setHash("home");
   showScreen("home");
 }
@@ -2437,6 +2438,7 @@ if (loginEndedGo) {
     const screen = document.querySelector("#adminScreen");
     if (screen) screen.inert = false;
     if (window.craBoardAdmin) window.craBoardAdmin.drop();
+    closeAdminWindows(); // left open under this window (D89)
     isAdmin = false;
     clearLmsSession();
     updateAdminUI();
@@ -2540,6 +2542,22 @@ function adminPush(hash) {
 // The login-ended window (§5) is up: addresses move nothing.
 function adminFrozen() {
   return Boolean(loginEndedModal) && !loginEndedModal.hidden;
+}
+
+/* ---- The admin's small windows and the address (D89, 2026-11-10) --------
+   The content slot editor (below) and the member editor (lms-admin.js adds
+   its own closer) sit over the admin screen. When Back / Forward / a typed
+   address moves the page (resource-board.js rbFollowHash — after the
+   login-ended window and the editors have had their say), they close the
+   way Esc closes them: what was typed is dropped, no question, and opening
+   one adds no history entry. Then the screen follows the address as before
+   (D87 · D88). Log out and [로그인 화면으로] close them too. The phone's ☰
+   admin menu closes as well (a menu choice already closes it). */
+const adminWindowClosers = [];
+
+function closeAdminWindows() {
+  adminWindowClosers.forEach((close) => close());
+  setAdminMenuOpen(false);
 }
 
 // Show what the current admin address says. `reopen` (the load) draws the
@@ -3047,6 +3065,10 @@ if (adminSlotModal) {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !adminSlotModal.hidden) closeSlotEditor();
   });
+  // the address moved, Log out, the login ended (D89 — closeAdminWindows)
+  adminWindowClosers.push(() => {
+    if (!adminSlotModal.hidden) closeSlotEditor();
+  });
 }
 if (adminSlotSave) {
   adminSlotSave.addEventListener("click", () => {
@@ -3344,6 +3366,7 @@ window.craAdmin = {
   isRoute: (hash) => Boolean(adminRouteOf(hash)),
   follow: () => adminFollowRoute(),
   frozen: adminFrozen,
+  closeWindows: closeAdminWindows, // D89
 };
 
 // Back / Forward / a typed address reached a user screen (D88 — the one

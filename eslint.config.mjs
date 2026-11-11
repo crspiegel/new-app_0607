@@ -252,6 +252,7 @@ export default [
         state: "readonly",
         adminRole: "readonly",
         adminViewOpeners: "readonly",
+        adminWindowClosers: "readonly",
       },
     },
     rules: {

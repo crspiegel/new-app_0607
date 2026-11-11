@@ -641,6 +641,11 @@ if (memberEditModal) {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !memberEditModal.hidden) closeMemberEditor();
   });
+  // the address moved, Log out, the login ended — closed as Esc closes it,
+  // the password field emptied (D89, app.js closeAdminWindows)
+  adminWindowClosers.push(() => {
+    if (!memberEditModal.hidden) closeMemberEditor();
+  });
 }
 if (memberEditSave) memberEditSave.addEventListener("click", saveMemberEdit);
 if (memberEditSuggest) {
