@@ -5,6 +5,27 @@
 > updated to the current `D:\_TPS` root). The live, short status now lives in `PROJECT_MEMORY.md`.
 > Read this only when you need past history, rationale, or old session logs.
 
+## Entries moved out of PROJECT_MEMORY.md (`2026-11-13` D90, verbatim)
+
+> Moved to keep PROJECT_MEMORY.md under 6,000 (D90 line added). Live state then: `b3130e5`.
+
+- (under **교사자료실 게시판**)
+  - **D81** (live `11/09`) 글 상세: 파일 2개+ → [전체 선택]·[모두 받기 (ZIP)]·줄마다 체크·선택 바(휴대폰 아래 고정). ZIP은
+    브라우저(fflate `vendor/`, 동시 3, 200MB, 구글 링크 제외). **D82** 하루 한도 30 → 1,000(두 함수, Edge 함수 그대로).
+    운영 SQL `2026-11-08-download-limit-1000-*` `11/09` 반영(verify 10/10). NOTES "모두 받기".
+  - **D85** (live `11/09`) 관리자 글 목록 한 줄 표 · ⋯ → 삭제… · 레벨 칩·상태 3칸 + §5 테스트 안정화. NOTES "목록 정돈".
+- (in **⏳ In-progress work**, folded into one "뒤로·앞으로" line)
+  - **관리자 주소 D87** (live `11/09`) `#admin/<메뉴>`·편집기 주소, 뒤로·앞으로·새로고침, 바뀐 것 있으면 확인창(F3). NOTES "관리자 메뉴마다 주소".
+  - **사용자 화면 뒤로 D88** (live `11/10`) 뒤로·앞으로 = 그 주소 화면, 버튼 이동마다 새 기록, 영상·게임 창 뒤로 = 창만 닫힘.
+  - **관리자 작은 창 D89** (live `11/11`) 칸 편집·회원 수정 창·☰ 메뉴 = 뒤로·앞으로·주소 입력·로그아웃 때 닫힘. NOTES "관리자 작은 창".
+- (under **PM decisions (`2026-10-31`, D36–D40)**)
+  - **D37** levels rename done (above). 3.5 merges the same CHECKs into `migration.sql`: same names, skip if present.
+  - **D38** Supabase Pro (+ Spend Cap): the user's decision; the user switches in the dashboard — no worker part.
+    (Done: Pro since `2026-11-11`.)
+- (under **Standing rules**, replaced by the Pro line)
+  - Supabase is on the **Free plan**; the egress **grace period is spent** — the next overage is an
+    immediate 402. Local dev is offline by default (`craDevLive(true)` to go live); QA stubs Storage.
+
 ## Entries moved out of PROJECT_MEMORY.md (`2026-11-09` D87, verbatim)
 
 > Moved to keep PROJECT_MEMORY.md under 6,000 (D87 line added). Live state then: `3d397a8`.

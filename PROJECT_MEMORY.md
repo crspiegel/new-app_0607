@@ -17,17 +17,15 @@ History, old backlog, open questions → `docs/PROJECT_MEMORY-archive.md`. Doc m
 
 ## ⏳ In-progress work
 
-Live = **`628b8fc`** (`2026-11-10`: D88; D87 `007175d`, below). Older: archive.
+Live = **`b3130e5`** (`2026-11-11`: D89; D88 `628b8fc`, below). Older: archive.
 
 - **교사자료실 게시판** (briefs `11-03`~`11-07`): live, 게시판 켬, 레벨별 자료실 켜짐. 2차-1 · 2차-2
   (글꼴 `board_font_ko/en`, 로그인 끝남 안내) · 이름 변경 '레벨별 자료실' · D77 나눔스퀘어라운드(굵게 EB) live. NOTES "수정 2차"~.
-  - **D81** (live `11/09`) 글 상세: 파일 2개+ → [전체 선택]·[모두 받기 (ZIP)]·줄마다 체크·선택 바(휴대폰 아래 고정). ZIP은
-    브라우저(fflate `vendor/`, 동시 3, 200MB, 구글 링크 제외). **D82** 하루 한도 30 → 1,000(두 함수, Edge 함수 그대로).
-    운영 SQL `2026-11-08-download-limit-1000-*` `11/09` 반영(verify 10/10). NOTES "모두 받기".
-  - **D85** (live `11/09`) 관리자 글 목록 한 줄 표 · ⋯ → 삭제… · 레벨 칩·상태 3칸 + §5 테스트 안정화. NOTES "목록 정돈".
-- **관리자 주소 D87** (live `11/09`) `#admin/<메뉴>`·편집기 주소, 뒤로·앞으로·새로고침, 바뀐 것 있으면 확인창(F3). NOTES "관리자 메뉴마다 주소".
-- **사용자 화면 뒤로 D88** (live `11/10`) 뒤로·앞으로 = 그 주소 화면, 버튼 이동마다 새 기록, 영상·게임 창 뒤로 = 창만 닫힘.
-- **관리자 작은 창 D89** (local `11/10`) 칸 편집·회원 수정 창·☰ 메뉴 = 뒤로·앞으로·주소 입력·로그아웃 때 닫힘. NOTES "관리자 작은 창".
+  D81 ZIP · D82 하루 1,000 · D85 목록 정돈 live `11/09` (archive).
+- **뒤로·앞으로** D87 관리자 주소 · D88 사용자 화면(영상·게임 창 뒤로 = 창만 닫힘) · D89 관리자 작은 창 — live `11/09`~`11/11`
+  (archive; spec "Admin / Site Addresses", NOTES).
+- **학생 활동 기록 D90** (local `11/13`, 기록만) 학생(role 3)의 로그인·그날 첫 접속·영상/게임 창(재생 초·90% = 끝까지·게임 보인 초)
+  → 표 `student_activity`(학생 1명 하루 200줄까지). 운영 SQL 대기. 보기 화면 = D91(시안 먼저). NOTES "학생 활동 기록".
 
 - **TPS requests (10/20 meeting)** — review · plan `docs/superpowers/{specs,plans}/2026-10-22-tps-requests-*.md`.
   Phase 1, 2A, 2B, 3A, **3B live**: "LMS (Phase 3B)"
@@ -47,8 +45,7 @@ Live = **`628b8fc`** (`2026-11-10`: D88; D87 `007175d`, below). Older: archive.
 
 - **D36** Live SQL = **one `DO` block** (a failure undoes all; re-run safe). Guide: click inside the editor
   before Run; answer Supabase's "destructive operation" prompt.
-- **D37** levels rename done (above). 3.5 merges the same CHECKs into `migration.sql`: same names, skip if present.
-- **D38** Supabase Pro (+ Spend Cap): the user's decision; the user switches in the dashboard — no worker part.
+- **D37** 3.5 merges the levels CHECKs into `migration.sql`: same names, skip if present.
 - **D39** After a push the PM may pre-approve live GETs: only static files changed in that push and served
   live, byte comparison, max 5. Every other live request = per-request approval.
 - **D40** Student QR checks use the real QR address first: `play.tps-education.com/q/...`.
@@ -57,8 +54,8 @@ Live = **`628b8fc`** (`2026-11-10`: D88; D87 `007175d`, below). Older: archive.
 
 - Supabase Auth **sign-ups are off on purpose** (`2026-10-06`, bot accounts) — don't re-enable.
   Admins: dashboard Add user + `public.admins` row; admin ids contain `@`.
-- Supabase is on the **Free plan**; the egress **grace period is spent** — the next overage is an
-  immediate 402. Local dev is offline by default (`craDevLive(true)` to go live); QA stubs Storage.
+- Supabase is on the **Pro plan** (`2026-11-11`, spend cap on). The usage savers stay: 10 MB a file, Drive
+  links for big files, 1,000 downloads a day. Local dev is offline by default (`craDevLive(true)`); QA stubs Storage.
 
 ## How we work
 

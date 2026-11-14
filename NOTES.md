@@ -1548,6 +1548,44 @@ noreferrer">`(클릭 처리는 계속 `button.bd-att-dl`만). 새 종류의 설�
 - **올릴 때:** PM 결정 → 새 버전으로 `npm.cmd run qa`(테스트도 이 주소를 jsDelivr에서 그대로 받는다) → `index.html` 한 줄만 바꿔
   커밋. 버전은 npm 레지스트리(`npm view @supabase/supabase-js dist-tags`)에서 확인.
 
+## 학생 활동 기록 — 1단계 기록만 (`2026-11-13`, PM 지시서 D90)
+
+- **대상(D90-1):** LMS 학생(role 3)이 로그인한 선생님 사이트만. 관리자·지사·선생님·비로그인·학생 QR 페이지(`play.js`)는 기록 안 함.
+  보는 화면은 D91(시안 먼저). 스펙 "Student Activity Log".
+- **서버(`migration.sql` "Student activity" 블록):** 표 `student_activity`(RLS 켬·정책 0·anon/authenticated 표·시퀀스 권한 회수, 회원
+  삭제 시 cascade) · 함수 `student_activity_start`(창 열 때 줄 1개, id 반환) / `_save`(초 저장) — 둘 다 누구나 부를 수 있지만 **누구인지는
+  `lms_member()`(x-lms-token)로만** 정하고 학생이 아니면 아무것도 안 함(오류 없음) · 내부 `_note`(로그인·첫 접속 줄) / `_room`(하루 200줄).
+  `lms_login`·`lms_session`은 학생일 때 `_note` 한 줄만 더함 — **자기 `begin … exception when others then null; end;` 안에서**(기록이
+  실패해도 로그인 답이 그대로, D90-9). 반환값은 그대로(운영 사본 PGlite로 같은 답 확인).
+- **잠금(보안 검토 L1·L2 반영):** `_start`·`_note`는 하루 개수를 세기 전에 학생별 잠금 `pg_advisory_xact_lock(7306, …)`(동시에 수백 번 불러도
+  200을 못 넘게 — 내려받기 기록과 같은 방식). `_note`는 `set lock_timeout = '250ms'` — 더 기다려야 하면 `lock_not_available`이 나고
+  로그인 함수의 예외 블록이 잡아 그 줄만 건너뜀(`exception when others`는 `query_canceled`(문장 시간 초과)는 못 잡으므로 기다림 자체를
+  짧게 끊음).
+- **⚠ D91(보기 화면)에서 `label`(버튼 이름)은 브라우저가 보낸 글자 그대로 저장된 것 — 화면에는 반드시 `textContent`로만**(보안 검토 M1:
+  학생 토큰을 가진 사람이 `<img onerror=…>` 같은 글자를 넣을 수 있음, 관리자 화면에서 실행되면 위험). 재생 초·길이도 브라우저가 알려 준
+  값(서버 상한으로 제한) — 보고서에서는 "학생 기기가 알려 준 값"으로 다룰 것(L3).
+- **⚠ D91: 출판사 영상 페이지 줄(`video_kind = 'page'`)은 "열었음 + 창이 보인 초"만 있고 `completed`는 빈칸 — 화면에는 "측정 불가"로
+  표시**(빅웨이브 결정 11/13: 기록은 그대로 둠). 하루 상한은 200줄(같은 날 2,000 → 200으로 낮춤).
+- **값 검사:** 레벨 4·월 10·교재 1/2·칸 키 `^[A-Za-z0-9-]{1,20}$`·영상 종류 3(`vimeo`·`youtube`·`page`) 밖이면 줄 안 만듦. 저장은 자기
+  영상·게임 줄만, 음수·빈 값 무시, 큰 값 유지(`greatest`), 재생 초·화면 초 ≤ (지금 − 시작) + 10초, 길이·위치 ≤ 6시간, 화면 초 ≤ 2시간.
+  `completed` = 생성 열(재생 × 10 ≥ 길이 × 9, 길이 모르면 NULL) — 기준이 바뀌면 열만 다시 만들면 전부 다시 계산된다.
+- **⚠ PL/pgSQL `IF … THEN` 조건 안의 `CASE … THEN … END`는 괄호로 감쌀 것.** 안 감싸면 IF가 CASE의 첫 THEN에서 끝난 줄 알고
+  "syntax error at end of input"(줄 번호 없음). `student_activity_start`의 영상 종류 검사가 그래서 `(case … end)`.
+- **사이트(`app.js` "Student activity log"):** `openVideoPlayer`·`openGameModal`이 `activityOpen` → 시작 요청은 기다리지 않음(창이 먼저).
+  닫기는 `closeVideoPlayer`·`closeGameModal` 맨 앞의 `activityClose` 하나로 모든 길([닫기]·덮개·Esc·뒤로(D88)·다른 화면·주소(D89)·
+  로그아웃)이 같은 마지막 저장을 낸다(시작 답이 아직이면 답 뒤에). 30초마다(바뀐 값이 있을 때만)·탭 숨김·`pagehide` 때도 저장 —
+  숨김·떠날 때만 `fetch keepalive`(일부 브라우저가 keepalive + CORS 사전 요청을 못 하면 그 마지막 몇 초만 빠짐). 요청은 `window.fetch` +
+  `x-lms-token`(창을 연 때의 토큰 — 로그아웃 뒤 다른 계정 토큰으로 가지 않게).
+- **재생 초 재는 법:** 플레이어가 알려 주는 위치(Vimeo `timeupdate`, YouTube 250ms 확인)의 **앞으로 간 만큼**을 더하되, 그만큼 시계도
+  흘렀을 때만(`위치 증가 ≤ 시계 × 1.5 + 0.5초`) — 멈춤 = 위치 그대로라 0, 건너뛰기 = 시계보다 너무 빨라 제외, 뒤로 가서 다시 보기 = 다시
+  셈. "가장 멀리 본 위치"도 이렇게 실제로 지나간 곳만(건너뛰어 도착한 곳은 그 뒤 재생해야 셈). 출판사 영상 페이지(`page`)와 게임은
+  플레이어를 못 물어봐서 **창이 화면에 보인 초**(탭 숨김 제외).
+- **테스트:** `tests/student-activity-sql.spec.js`(PGlite 4) · `tests/student-activity.spec.js`(사이트 11 — Playwright `page.clock`으로
+  시계를 멈추고 가짜 Vimeo·YouTube가 그 시계에 맞춰 재생; 운영 Supabase 차단) · 운영 REST를 쓰는 `smoke.spec.js`의 "학생이 게임 열기"
+  테스트는 기록 요청을 그 자리에서 답하게 함(운영에 안 나가게). 읽기 전용 점검 `supabase/lms/verify-student-activity.sql`(16행).
+- **⚠ 작업 트리 백업을 PowerShell `git diff … | Out-File -Encoding ascii`로 만들면 한글·`—` 같은 글자가 `?`로 바뀌고 줄 끝이 CRLF가 되어
+  `git apply`가 실패한다(11/13 한 번 — 같은 편집을 다시 해서 복구).** 패치는 `git diff --output=<파일>`로 만들 것.
+
 ## 요일 슬롯 게임 URL (`2026-10-22`, R1)
 
 - **비-Vimeo http(s) 호스트는 기본이 `kind:"page"`(출판사 페이지 iframe)이고, 게임은 `GAME_HOSTS`에 있는

@@ -482,6 +482,32 @@ show that address's screen, never only a new address over the old screen.
   the same step. Opening one adds no history entry. Log out and [로그인 화면으로] close them too; while the
   login-ended window is up nothing moves, the window included. The 교사자료실 editor keeps its own rule (F3).
 
+## Student Activity Log (D90, 2026-11-13 — step 1: record only)
+
+TPS (meeting 2026-11-12) wants teachers and branches to see what their students did. Step 1 only records;
+the views (an admin 'student activity' menu, the member detail) come in step 2 (D91, design first). No
+screen changes anything: a student sees, waits for and reads exactly what it did before.
+
+- **Who:** only an LMS **student** (role 3) signed in on the teacher site. Admins, branch accounts, teachers,
+  visitors and the student QR page (`play.html`, no sign-in) are never recorded.
+- **What** (table `student_activity`, one row each):
+  - `login` — every successful student login (written by `lms_login` itself);
+  - `visit` — the first page load of a day (KST) with the sign-in kept, when that day has no login / visit
+    row yet (written by `lms_session`);
+  - `video` / `game` — every window opened, from any path (weekday slot, toolbar button, a weekday slot
+    holding a game): level, month, book (1 / 2, empty when the slot belongs to both books), slot key, the
+    button's name, the video kind (`vimeo` / `youtube` / `page` = a framed publisher page) and the time.
+- **Seconds** (the page saves every 30 s, when the window closes — any way — and when the page is hidden or
+  left): Vimeo / YouTube in our player → seconds really played (pauses and skips forward left out, replays
+  counted), the video's length, the furthest point played; **watched to the end** = played ≥ 90 % of the
+  length (kept with its inputs, so the rule can change later). A game or a framed publisher page (no
+  player to ask) → seconds the window was on screen (a hidden tab not counted, 2 h at most per window).
+- **Kept:** rows are never deleted on their own; deleting the student account deletes its rows.
+- **Not collected:** IP, device, browser, place.
+- **Safety:** the server decides who from the sign-in (never from the browser), accepts only the site's own
+  values, caps every number (played ≤ seconds since the window opened + 10, lengths ≤ 6 h) and keeps the
+  larger of two saves; at most 200 rows a student a day. A failing log is silent and never holds a window.
+
 ## Data Model Direction
 
 Future implementation should separate content data from rendering logic.
@@ -700,3 +726,5 @@ The site should be considered ready only when:
 - No italic text appears anywhere.
 - Buttons are readable, large, and animated.
 - Images are optimized and lazy-loaded where appropriate.
+- A signed-in student's logins, first visits and video / game windows are recorded (D90); nobody else's;
+  the record never changes or delays what the student sees.
