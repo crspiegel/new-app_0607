@@ -50,6 +50,12 @@ SQL Editor는 마지막 결과 표만 보여 준다. 여기 SQL 파일은 모두
   D82(2026-11-08, 하루 내려받기 한도 30 → 1,000 — `teacher_resource_issue`·`board_attachment_issue`)도 두 점검
   (`verify-teacher-resources.sql`·이 파일)은 그대로다(한도 숫자는 보지 않음) — 그 반영의 verify DO가 둘을 9·10번으로 실행하고,
   한도는 시험 계정으로 31번째·1,000번째·그다음을 불러 확인한다.
+- `verify-student-activity.sql` — (2026-11-13 학생 활동 기록 D90) 읽기 전용(카탈로그 select 하나). 표 `student_activity`(RLS 켬·정책 0·
+  anon/authenticated 표·열·시퀀스 권한 없음, 뷰 없음), 회원 삭제 cascade, 색인 2개, `completed` 생성 열(90%), 값 규칙, 함수 4개 실행 권한
+  (`student_activity_start`·`_save` = anon·authenticated / `_note`·`_room` = 내부)·SECURITY DEFINER·search_path, `lms_login`·`lms_session`이
+  자기 예외 블록 안에서 기록, 이 표를 쓰는 다른 함수 없음, 하루 상한 앞 학생별 잠금(7306)·로그인 쪽 기다림 250ms. 기대 = 17행,
+  `SUMMARY` `16 / 16`·`true`. 운영 반영(precheck·apply·verify DO
+  3개, 로컬 안내문)의 verify가 이 점검을 1번으로 블록 안에서 그대로 실행한다. 로컬 검사 = `tests/student-activity-sql.spec.js`.
 - `fix-create-member-overload.sql` — 운영에만 있던 `create_member` 5인자 오버로드(`p_profile jsonb` 기본값) 삭제.
   기본값 있는 인자가 붙은 오버로드는 기존 4인자 호출을 모호하게 만든다(SQL `42725`, 관리자 '회원 저장' REST `PGRST203`).
 - `00-precheck-3b.sql` — (3B) 읽기 전용 한 문장. 역할·지사별 회원 수, 테스트 계정 존재, 기본 키, members에 기대는 외래 키·뷰·

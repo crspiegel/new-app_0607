@@ -1402,6 +1402,11 @@ test("a signed-in student (LMS role 3) plays a weekday game — no block", async
       json: { role: 3, branch_id: "b-hq", branch_name: "TPS 본사" },
     }),
   );
+  // D90: a student's game window is logged — answered here, so this suite
+  // never sends the log call to the live project (tests/student-activity.spec.js).
+  await page.route("**/rest/v1/rpc/student_activity_*", (route) =>
+    route.fulfill({ json: null }),
+  );
   await page.route(/^https:\/\/book-english-games\.vercel\.app\//, (route) =>
     route.fulfill({
       contentType: "text/html",

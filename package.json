@@ -10,7 +10,7 @@
     "format:check": "prettier --check index.html play.html board.css styles.css nanum-square-round.css play.css video-source.js board-view.js play.js app.js background-editor.js hero-banner.js teacher-resources.js resource-board.js resource-board-admin.js lms-admin.js lms-bulk.js scripts tests *.md",
     "check": "npm run check:assets && npm run lint && npm run format:check",
     "test:e2e": "node scripts/run-playwright.mjs",
-    "test:sql": "playwright test tests/lms-sql.spec.js tests/lms-3b-sql.spec.js tests/lms-3b-concurrency.spec.js tests/levels-sql.spec.js tests/teacher-resources-sql.spec.js tests/resource-board-sql.spec.js --project=desktop",
+    "test:sql": "playwright test tests/lms-sql.spec.js tests/lms-3b-sql.spec.js tests/lms-3b-concurrency.spec.js tests/levels-sql.spec.js tests/teacher-resources-sql.spec.js tests/resource-board-sql.spec.js tests/student-activity-sql.spec.js --project=desktop",
     "qa": "npm run check && npm run test:e2e",
     "qr:list": "node scripts/make-qr-list.mjs",
     "covers:sync": "node scripts/sync-covers.mjs"

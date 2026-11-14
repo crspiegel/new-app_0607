@@ -689,6 +689,15 @@ begin
   update public.members
      set last_login_at = now()
    where member_id = (v_hit ->> 'member_id')::uuid;
+  -- D90 (2026-11-13): a student's login goes into the activity log — in its
+  -- own block, so a failure there never changes this answer.
+  if (v_hit ->> 'role')::int = 3 then
+    begin
+      perform public.student_activity_note((v_hit ->> 'member_id')::uuid, 'login');
+    exception when others then
+      null;
+    end;
+  end if;
 
   return jsonb_build_object(
     'status', 'ok',
@@ -702,6 +711,8 @@ $$;
 
 -- Page-load check (D10c): valid token → slide expiry 30 days, touch
 -- last_seen_at, return {role, branch_id, branch_name, display_name}; else NULL.
+-- D90 (2026-11-13): a student's first page load of a KST day without a login
+-- or visit row yet goes into the activity log (the answer stays the same).
 create or replace function public.lms_session()
 returns jsonb
 language plpgsql
@@ -726,10 +737,18 @@ begin
      and m.member_id = s.member_id
      and m.active
      and b.active
-  returning m.role, b.id as branch_id, b.name as branch_name, m.display_name
+  returning m.role, b.id as branch_id, b.name as branch_name, m.display_name,
+            m.member_id
     into r;
   if not found then
     return null;
+  end if;
+  if r.role = 3 then
+    begin
+      perform public.student_activity_note(r.member_id, 'visit');
+    exception when others then
+      null;
+    end;
   end if;
   return jsonb_build_object('role', r.role, 'branch_id', r.branch_id,
                             'branch_name', r.branch_name, 'display_name', r.display_name);
@@ -1511,8 +1530,8 @@ begin
 end;
 $$;
 
--- D47: only the top admin deletes (sessions, class rows and download log go
--- with the member; a class it taught keeps no teacher).
+-- D47: only the top admin deletes (sessions, class rows, download log and the
+-- D90 activity log go with the member; a class it taught keeps no teacher).
 create or replace function public.lms_member_delete(p_member_id uuid)
 returns jsonb
 language plpgsql
@@ -3442,6 +3461,238 @@ grant execute on function public.board_attachment_issue(uuid, uuid) to service_r
 
 notify pgrst, 'reload schema';
 -- ==== end Resource board ====
+
+-- ============================================================================
+-- Student activity (D90, 2026-11-13) — step 1: record only (the views = D91)
+-- ----------------------------------------------------------------------------
+-- Safe to re-run. Needs the LMS blocks above. What an LMS STUDENT (role 3)
+-- does on the teacher site while signed in (D90-1): a 'login' row for every
+-- successful lms_login, a 'visit' row for the first lms_session of a KST day
+-- with no login / visit row yet (D90-2), and one row per video or game
+-- window opened, which the page fills with seconds while it is open
+-- (D90-3..6). Admins, branch accounts, teachers, visitors and the student QR
+-- page are never logged. No IP, device, browser or place (D90-8). Rows are
+-- kept — they go only with the member (on delete cascade, D90-7). The
+-- browser never decides who: every function takes the x-lms-token's member
+-- (lms_member()) and answers anyone else with nothing — never an error, so
+-- a failing log never changes what the student sees (D90-9).
+-- RLS on, no policies, no grants: only the functions below read or write it.
+-- ============================================================================
+create table if not exists public.student_activity (
+  id           bigint generated always as identity primary key,
+  member_id    uuid not null references public.members (member_id) on delete cascade,
+  kind         text not null check (kind in ('login', 'visit', 'video', 'game')),
+  level        text,
+  month        text,
+  book         smallint check (book in (1, 2)),
+  slot         text,
+  label        text,
+  video_kind   text check (video_kind in ('vimeo', 'youtube', 'page')),
+  started_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  -- Vimeo / YouTube in our player: seconds really played (pauses and skips
+  -- forward left out, replays counted), the length, the furthest point played
+  played_sec   int check (played_sec >= 0 and played_sec <= 21600),
+  duration_sec int check (duration_sec >= 0 and duration_sec <= 21600),
+  max_pos_sec  int check (max_pos_sec >= 0 and max_pos_sec <= 21600),
+  -- D90-5: watched to the end = played ≥ 90 % of the length (re-computed if
+  -- the rule changes — the inputs are kept). NULL until a length is known.
+  completed    boolean generated always as (
+                 case when kind = 'video' and duration_sec > 0
+                      then coalesce(played_sec, 0) * 10 >= duration_sec * 9 end) stored,
+  -- a game, or a framed video page (no player to ask): seconds on screen
+  visible_sec  int check (visible_sec >= 0 and visible_sec <= 21600)
+);
+create index if not exists student_activity_member_idx
+  on public.student_activity (member_id, started_at);
+create index if not exists student_activity_started_idx
+  on public.student_activity (started_at);
+alter table public.student_activity enable row level security;
+revoke all on public.student_activity from anon, authenticated;
+revoke all on sequence public.student_activity_id_seq from anon, authenticated;
+
+-- Room left under the per-student cap: 200 rows a KST day, then nothing
+-- more is written that day (no error). Internal.
+create or replace function public.student_activity_room(p_member_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $$
+  select count(*) < 200
+    from (select 1
+            from public.student_activity a
+           where a.member_id = p_member_id
+             and a.started_at >= date_trunc('day', now() at time zone 'Asia/Seoul')
+                                 at time zone 'Asia/Seoul'
+           limit 200) s;
+$$;
+
+-- The login / first-visit row (called by lms_login / lms_session inside
+-- their own exception block). Students only; a 'visit' only when the member
+-- has no login or visit row yet today (KST). One member at a time (the same
+-- lock as student_activity_start), so two page loads at once still make one
+-- row and parallel calls cannot pass the day's cap. A lock or row wait longer
+-- than 250 ms raises lock_not_available, which the callers' block catches —
+-- the row is skipped, the login answer never waits on the log. Internal.
+create or replace function public.student_activity_note(p_member_id uuid, p_kind text)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+set lock_timeout = '250ms'
+as $$
+begin
+  if p_kind is null or p_kind not in ('login', 'visit')
+     or not exists (select 1 from public.members m
+                     where m.member_id = p_member_id and m.role = 3) then
+    return;
+  end if;
+  perform pg_advisory_xact_lock(7306, hashtext(p_member_id::text));
+  if p_kind = 'visit' then
+    if exists (select 1 from public.student_activity a
+                where a.member_id = p_member_id
+                  and a.kind in ('login', 'visit')
+                  and a.started_at >= date_trunc('day', now() at time zone 'Asia/Seoul')
+                                      at time zone 'Asia/Seoul') then
+      return;
+    end if;
+  end if;
+  if not public.student_activity_room(p_member_id) then
+    return;
+  end if;
+  insert into public.student_activity (member_id, kind) values (p_member_id, p_kind);
+end;
+$$;
+
+-- A video or game window opened by the signed-in student: one row, its id
+-- back (the page then saves its seconds with student_activity_save). Video
+-- kinds: 'vimeo' / 'youtube' (our player — played seconds) or 'page' (a
+-- framed video page — seconds on screen); a game has none. NULL — nothing
+-- written — for anyone else, a value outside the site's own (levels, months,
+-- book 1/2, a slot key) or the day's 200 rows.
+create or replace function public.student_activity_start(
+  p_kind text, p_level text, p_month text, p_book int, p_slot text,
+  p_label text, p_video_kind text
+)
+returns bigint
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_member uuid;
+  v_id     bigint;
+begin
+  select m.member_id into v_member
+    from public.lms_member() m
+   where m.role = 3
+   limit 1;
+  if v_member is null
+     or coalesce(p_kind not in ('video', 'game'), true)
+     or coalesce(p_level not in ('beginner', 'level-1', 'level-2', 'level-3'), true)
+     or coalesce(p_month not in ('March', 'April', 'May', 'June', 'July', 'August',
+                                 'September', 'October', 'November', 'December'), true)
+     or coalesce(p_book not in (1, 2), false)
+     or coalesce(p_slot !~ '^[A-Za-z0-9-]{1,20}$', false)
+     -- (in brackets: an IF condition otherwise ends at the CASE's first THEN)
+     or (case when p_kind = 'video'
+              then coalesce(p_video_kind not in ('vimeo', 'youtube', 'page'), true)
+              else p_video_kind is not null end) then
+    return null;
+  end if;
+  -- one student at a time before the day's count: parallel calls cannot pass it
+  perform pg_advisory_xact_lock(7306, hashtext(v_member::text));
+  if not public.student_activity_room(v_member) then
+    return null;
+  end if;
+  insert into public.student_activity
+         (member_id, kind, level, month, book, slot, label, video_kind,
+          played_sec, visible_sec)
+  values (v_member, p_kind, p_level, p_month, p_book, p_slot,
+          nullif(left(btrim(p_label), 120), ''), p_video_kind,
+          case when p_video_kind in ('vimeo', 'youtube') then 0 end,
+          case when p_kind = 'game' or p_video_kind = 'page' then 0 end)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+-- The seconds of an open window (the page saves every 30 s, at close and
+-- when the page is left — D90-4, D90-6). Only the caller's own video / game
+-- rows; a value only grows (the larger one is kept); a missing or negative
+-- value changes nothing. Vimeo / YouTube rows: played (≤ the seconds since
+-- the row started + 10), length and furthest point (≤ 6 h). Game and framed
+-- page rows: seconds on screen (≤ the seconds since the start + 10, ≤ 2 h
+-- per window, D90-6). Anything else: nothing, no error.
+create or replace function public.student_activity_save(
+  p_id bigint, p_played_sec numeric default null, p_duration_sec numeric default null,
+  p_max_pos_sec numeric default null, p_visible_sec numeric default null
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_member  uuid;
+  r         record;
+  v_elapsed numeric;
+begin
+  select m.member_id into v_member
+    from public.lms_member() m
+   where m.role = 3
+   limit 1;
+  if v_member is null or p_id is null then
+    return;
+  end if;
+  select a.id, a.kind, a.video_kind, a.started_at into r
+    from public.student_activity a
+   where a.id = p_id
+     and a.member_id = v_member
+     and a.kind in ('video', 'game')
+     for update;
+  if not found then
+    return;
+  end if;
+  v_elapsed := floor(extract(epoch from now() - r.started_at)) + 10;
+  if r.video_kind in ('vimeo', 'youtube') then
+    update public.student_activity a
+       set played_sec   = greatest(a.played_sec,
+                            case when p_played_sec >= 0
+                                 then least(floor(p_played_sec), v_elapsed, 21600) end),
+           duration_sec = greatest(a.duration_sec,
+                            case when p_duration_sec >= 0
+                                 then least(round(p_duration_sec), 21600) end),
+           max_pos_sec  = greatest(a.max_pos_sec,
+                            case when p_max_pos_sec >= 0
+                                 then least(floor(p_max_pos_sec), 21600) end),
+           updated_at   = now()
+     where a.id = r.id;
+  else
+    update public.student_activity a
+       set visible_sec = greatest(a.visible_sec,
+                           case when p_visible_sec >= 0
+                                then least(floor(p_visible_sec), v_elapsed, 7200) end),
+           updated_at  = now()
+     where a.id = r.id;
+  end if;
+end;
+$$;
+
+revoke execute on function public.student_activity_room(uuid) from public, anon, authenticated;
+revoke execute on function public.student_activity_note(uuid, text) from public, anon, authenticated;
+revoke execute on function public.student_activity_start(text, text, text, int, text, text, text) from public;
+grant execute on function public.student_activity_start(text, text, text, int, text, text, text) to anon, authenticated;
+revoke execute on function public.student_activity_save(bigint, numeric, numeric, numeric, numeric) from public;
+grant execute on function public.student_activity_save(bigint, numeric, numeric, numeric, numeric) to anon, authenticated;
+
+notify pgrst, 'reload schema';
+-- ==== end Student activity ====
 
 -- ============================================================================
 -- AFTER running the above: register your first admin.

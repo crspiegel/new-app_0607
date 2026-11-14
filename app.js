@@ -821,10 +821,10 @@ function openSlot(slot, label) {
   // toolbar Game button: the game modal, never the video window.
   const parsed = parseVideoSource(url);
   if (parsed && parsed.kind === "game") {
-    openGameModal(parsed.url);
+    openGameModal(parsed.url, { slot, label });
     return;
   }
-  openVideoPlayer(label, url);
+  openVideoPlayer(label, url, slot);
 }
 
 function formatTime(seconds) {
@@ -986,7 +986,8 @@ function teardownPlayer() {
   if (videoPlayerCard) videoPlayerCard.classList.remove("vp-external");
 }
 
-function openVideoPlayer(label, source) {
+// `slot` names the content slot for the D90 activity log (null = not a slot).
+function openVideoPlayer(label, source, slot = null) {
   if (!videoModal) return;
   videoModal.hidden = false;
   pushWindowEntry("video"); // Back closes the window (D88)
@@ -1004,6 +1005,14 @@ function openVideoPlayer(label, source) {
 
   const parsed = parseVideoSource(source);
   if (!parsed) return; // empty is handled by openSlot, but stay safe
+  activityOpen("video", {
+    slot,
+    label,
+    videoKind:
+      parsed.kind === "youtube" || parsed.kind === "vimeo"
+        ? parsed.kind
+        : "page",
+  });
   if (parsed.kind === "youtube") {
     mountYouTube(parsed.id);
   } else if (parsed.kind === "page" || parsed.kind === "game") {
@@ -1048,6 +1057,7 @@ function mountVimeo(parsed) {
     })
     .catch(() => {});
   player.on("timeupdate", (data) => {
+    activitySample(data.seconds, data.duration); // D90
     vpDuration = data.duration || vpDuration;
     if (!vpDragging) {
       vpCurrentSeconds = data.seconds || 0;
@@ -1199,6 +1209,7 @@ function mountYouTube(videoId) {
       const dur = yt.getDuration() || vpDuration;
       vpDuration = dur;
       const cur = yt.getCurrentTime() || 0;
+      activitySample(cur, dur); // D90
       vpCurrentSeconds = cur;
       if (dur > 0) setVpProgress((cur / dur) * 100);
       setVpTimes(cur, dur);
@@ -1211,6 +1222,7 @@ function mountYouTube(videoId) {
 
 function closeVideoPlayer() {
   if (!videoModal) return;
+  activityClose(); // D90: the window's last save
   if (document.fullscreenElement) {
     document.exitFullscreen().catch(() => {});
   }
@@ -1567,8 +1579,10 @@ function freshGameFrame() {
   gameFrame = fresh;
 }
 
-function openGameModal(url) {
+// `info` { slot, label } names the content slot for the D90 activity log.
+function openGameModal(url, info = {}) {
   if (!gameModal || !gameFrame) return;
+  activityOpen("game", info);
   setGameMaximized(false);
   if (gameFrame.hasAttribute("src")) freshGameFrame();
   gameFrame.src = url;
@@ -1586,6 +1600,7 @@ function openGameModal(url) {
 
 function closeGameModal() {
   if (!gameModal || !gameFrame) return;
+  activityClose(); // D90: the window's last save
   freshGameFrame(); // unload the game (stops audio/loops), no history entry
   gameModal.hidden = true;
   document.body.classList.remove("game-open");
@@ -1594,12 +1609,16 @@ function closeGameModal() {
 // Same as videos: an empty slot shows the coming-soon popup. `slot` is a
 // game-kind toolbar slot ("game" / "game2").
 function openGameSlot(slot) {
-  const url = getVideoUrl(state.level, state.month, slot || "game");
+  const key = slot || "game";
+  const url = getVideoUrl(state.level, state.month, key);
   if (!url) {
     showComingSoon();
     return;
   }
-  openGameModal(url);
+  openGameModal(url, {
+    slot: key,
+    label: getSlotLabel(state.level, state.month, key),
+  });
 }
 
 if (gameModal) {
@@ -1616,6 +1635,200 @@ if (gameModal) {
     }
   });
 }
+
+/* ---- Student activity log (D90, 2026-11-13) -----------------------------
+   A signed-in LMS STUDENT (role 3) — never an admin, branch account,
+   teacher or visitor — leaves one row per video / game window it opens
+   (student_activity_start), and the window's seconds go into that row
+   (student_activity_save): every 30 s while it is open, when it closes (any
+   way — [닫기], the backdrop, Esc, Back, another screen or address, D88 /
+   D89, Log out) and when the page is hidden or left (fetch keepalive, which
+   outlives the page). Vimeo / YouTube in our player: the seconds really
+   played = the position's forward steps that keep pace with the clock (a
+   pause adds nothing, a skip forward is too fast to count, a replay counts
+   again), the length and the furthest point played. A game or a framed
+   video page (no player to ask): the seconds the window was on screen (a
+   hidden tab not counted, 2 h at most). The server decides who (the
+   x-lms-token), checks and caps every value, and writes the login / first
+   visit rows itself. Logging never waits and never shows: the window opens
+   first and every failure is ignored (D90-9). The student QR page
+   (play.js) logs nothing. */
+const ACTIVITY_SAVE_MS = 30000;
+const ACTIVITY_SCREEN_MAX = 7200; // a game / framed page: 2 h per window
+let activity = null; // the open window's record, or null
+
+function activityWanted() {
+  return (
+    Boolean(sb && LMS_TOKEN_REST && lmsToken) &&
+    !isAdmin &&
+    state.lms != null &&
+    Number(state.lms.role) === 3
+  );
+}
+
+// One RPC, the token the window opened with (never a later account's).
+// keepalive = the request survives the page being closed.
+function activityRpc(name, args, token, keepalive = false) {
+  return window.fetch(`${LMS_TOKEN_REST}rpc/${name}`, {
+    method: "POST",
+    keepalive,
+    headers: {
+      apikey: window.SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${window.SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      "x-lms-token": token,
+    },
+    body: JSON.stringify(args),
+  });
+}
+
+// The book a slot belongs to on this level (1 / 2), or null when the slot is
+// shown with both books (Good Morning / Good Bye on Level 1-3).
+function activityBook(level, slot) {
+  const books = bookLayout(level).filter((entry) =>
+    bookSlotKeys(level, entry.book).includes(slot),
+  );
+  return books.length === 1 ? books[0].book : null;
+}
+
+// kind "video" | "game"; info { slot, label, videoKind: "vimeo" | "youtube"
+// | "page" } (videos only).
+function activityOpen(kind, { slot = null, label = "", videoKind = null }) {
+  activityClose(); // a row still open (not expected): finish it first
+  if (!activityWanted()) return;
+  const now = window.performance.now();
+  const rec = {
+    measure:
+      videoKind === "vimeo" || videoKind === "youtube" ? "play" : "screen",
+    token: lmsToken,
+    id: null,
+    played: 0,
+    duration: 0,
+    maxPos: 0,
+    lastPos: 0,
+    lastAt: now,
+    shown: 0,
+    shownSince: document.visibilityState === "hidden" ? null : now,
+    sent: "",
+    timer: null,
+    ready: Promise.resolve(),
+  };
+  activity = rec;
+  try {
+    rec.ready = activityRpc(
+      "student_activity_start",
+      {
+        p_kind: kind,
+        p_level: state.level || null,
+        p_month: state.month || null,
+        p_book: slot ? activityBook(state.level, slot) : null,
+        p_slot: slot || null,
+        p_label: label || null,
+        p_video_kind: kind === "video" ? videoKind : null,
+      },
+      rec.token,
+    )
+      .then((res) => (res.ok ? res.json() : null))
+      .then((id) => {
+        if (Number.isSafeInteger(id) && id > 0) rec.id = id;
+      })
+      .catch(() => {});
+  } catch {
+    /* no row: nothing to fill */
+  }
+  rec.timer = window.setInterval(() => activitySave(rec), ACTIVITY_SAVE_MS);
+}
+
+// A position report from our player (Vimeo timeupdate / the YouTube poll).
+function activitySample(position, duration) {
+  const rec = activity;
+  if (!rec || rec.measure !== "play") return;
+  const now = window.performance.now();
+  if (Number.isFinite(duration) && duration > 0) rec.duration = duration;
+  if (!Number.isFinite(position)) return;
+  const step = position - rec.lastPos;
+  const clock = (now - rec.lastAt) / 1000;
+  if (step > 0 && step <= clock * 1.5 + 0.5) {
+    rec.played += step;
+    if (position > rec.maxPos) rec.maxPos = position;
+  }
+  rec.lastPos = position;
+  rec.lastAt = now;
+}
+
+// Fold the on-screen time so far into `shown` and stop the clock.
+function activityStopShown(rec) {
+  if (rec.shownSince == null) return;
+  rec.shown += (window.performance.now() - rec.shownSince) / 1000;
+  rec.shownSince = null;
+}
+
+function activityValues(rec) {
+  if (rec.measure === "play") {
+    return {
+      p_played_sec: Math.floor(rec.played),
+      p_duration_sec: rec.duration > 0 ? Math.round(rec.duration) : null,
+      p_max_pos_sec: Math.floor(rec.maxPos),
+    };
+  }
+  const running =
+    rec.shownSince == null
+      ? 0
+      : (window.performance.now() - rec.shownSince) / 1000;
+  return {
+    p_visible_sec: Math.floor(
+      Math.min(rec.shown + running, ACTIVITY_SCREEN_MAX),
+    ),
+  };
+}
+
+// Send the row's values when they changed since the last send.
+function activitySave(rec, { keepalive = false } = {}) {
+  if (!rec.id) return; // not started (yet): nothing to fill
+  const values = activityValues(rec);
+  const key = JSON.stringify(values);
+  if (key === rec.sent) return;
+  rec.sent = key;
+  try {
+    activityRpc(
+      "student_activity_save",
+      { p_id: rec.id, ...values },
+      rec.token,
+      keepalive,
+    ).catch(() => {});
+  } catch {
+    /* ignore */
+  }
+}
+
+// The window closed (every close path ends in closeVideoPlayer /
+// closeGameModal): the last save goes out — after the start answer when that
+// is still on its way.
+function activityClose() {
+  const rec = activity;
+  if (!rec) return;
+  activity = null;
+  window.clearInterval(rec.timer);
+  activityStopShown(rec);
+  if (rec.id) activitySave(rec);
+  else rec.ready.then(() => activitySave(rec));
+}
+
+// A hidden tab stops the on-screen clock and saves (keepalive: a phone may
+// never come back to this page); the page being left saves as well.
+document.addEventListener("visibilitychange", () => {
+  const rec = activity;
+  if (!rec) return;
+  if (document.visibilityState === "hidden") {
+    activityStopShown(rec);
+    activitySave(rec, { keepalive: true });
+  } else if (rec.shownSince == null) {
+    rec.shownSince = window.performance.now();
+  }
+});
+window.addEventListener("pagehide", () => {
+  if (activity) activitySave(activity, { keepalive: true });
+});
 
 /* ---- The windows' history entries (D88, 2026-11-09) ---------------------
    The video and game windows each leave one history entry when they open
@@ -2391,6 +2604,7 @@ if (loginForm) {
 // Log out — the site header's button and the admin top bar's do the same.
 let loggingOut = false; // this tab's own Log out — not "the login ended"
 async function logOut() {
+  activityClose(); // D90: a window left open saves while the token still works
   loggingOut = true;
   try {
     // LMS first (needs the header; the token dies server-side), then Auth.
